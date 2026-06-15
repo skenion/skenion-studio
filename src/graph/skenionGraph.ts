@@ -39,7 +39,7 @@ export function createGraphNodeFromDefinition(
   definition: NodeDefinitionManifestV01,
   existingNodes: GraphNodeV01[]
 ): GraphNodeV01 {
-  const baseId = definition.id.split(".").at(-1) ?? "node";
+  const baseId = definition.id.split(".").pop() || "node";
   let index = existingNodes.length + 1;
   let id = `${baseId}_${index}`;
   const existingIds = new Set(existingNodes.map((node) => node.id));
@@ -175,7 +175,7 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
   if (!result.ok) {
     return {
       ok: false,
-      message: result.errors[0] ?? "Connection is not compatible with the Skenion graph contract."
+      message: result.errors[0]!
     };
   }
 
