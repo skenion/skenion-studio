@@ -1,0 +1,36 @@
+{
+  "name": "skenion-studio",
+  "version": "0.1.0",
+  "description": "Mantine and React Flow studio shell for Skenion graphs",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "ci": "pnpm run lint && pnpm run build",
+    "dev": "vite --host 127.0.0.1",
+    "lint": "eslint .",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@mantine/core": "^9.3.1",
+    "@mantine/hooks": "^9.3.1",
+    "@skenion/contracts": "file:.deps/skenion-contracts/packages/ts",
+    "@xyflow/react": "^12.11.0",
+    "lucide-react": "^1.18.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
+    "vite": "^8.0.16"
+  },
+  "packageManager": "pnpm@10.12.4"
+}

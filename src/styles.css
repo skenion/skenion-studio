@@ -1,0 +1,176 @@
+:root {
+  color: #1f2933;
+  background: #f3f5f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+}
+
+.studio-toolbar {
+  height: 58px;
+  padding: 0 14px;
+  border-bottom: 1px solid #dde2e8;
+  background: #ffffff;
+}
+
+.studio-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #1f2933;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1f2933;
+  font-weight: 900;
+}
+
+.studio-main {
+  position: relative;
+  height: calc(100vh - 58px);
+  min-height: 540px;
+  background: #eef2f5;
+}
+
+.studio-alert {
+  position: absolute;
+  z-index: 20;
+  top: 12px;
+  left: 50%;
+  width: min(720px, calc(100% - 32px));
+  transform: translateX(-50%);
+  box-shadow: 0 10px 28px rgb(31 41 51 / 12%);
+}
+
+.panel-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.palette-scroll,
+.inspector-scroll {
+  height: calc(100vh - 132px);
+}
+
+.palette-node {
+  height: 52px;
+  padding-inline: 10px;
+  text-align: left;
+}
+
+.flow-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.skenion-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.react-flow__node-skenion {
+  width: 238px;
+}
+
+.canvas-node {
+  position: relative;
+  width: 238px;
+  min-height: 132px;
+  overflow: hidden;
+  border: 1px solid #cdd5df;
+  border-left: 4px solid var(--node-accent);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgb(31 41 51 / 10%);
+}
+
+.canvas-node.is-selected {
+  border-color: #1c7ed6;
+  box-shadow:
+    0 0 0 2px rgb(28 126 214 / 22%),
+    0 12px 30px rgb(31 41 51 / 12%);
+}
+
+.canvas-node-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 58px;
+  gap: 10px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.canvas-node-ports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.port-column {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.port-row {
+  position: relative;
+  min-height: 24px;
+  min-width: 0;
+}
+
+.port-column-output .port-label {
+  text-align: right;
+}
+
+.port-label {
+  min-width: 0;
+}
+
+.port-type {
+  display: block;
+  max-width: 100%;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #ffffff;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.ports-table th,
+.ports-table td {
+  padding: 8px 6px;
+}
+
+@media (max-width: 900px) {
+  .studio-main {
+    height: 620px;
+  }
+
+  .palette-scroll,
+  .inspector-scroll {
+    height: 360px;
+  }
+}
