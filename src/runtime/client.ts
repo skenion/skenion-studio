@@ -2,7 +2,8 @@ import type {
   RuntimeApiResponse,
   RuntimeHealth,
   RuntimeInfo,
-  RuntimeProjectPayload
+  RuntimeProjectPayload,
+  RuntimeSessionResponse
 } from "./types";
 
 export const DEFAULT_RUNTIME_URL =
@@ -16,6 +17,12 @@ export interface RuntimeClient {
   validateProject: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   buildPlan: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   runProject: (project: RuntimeProjectPayload, frames: number) => Promise<RuntimeApiResponse>;
+  getSession: () => Promise<RuntimeSessionResponse>;
+  loadSession: (project: RuntimeProjectPayload) => Promise<RuntimeSessionResponse>;
+  validateSession: () => Promise<RuntimeSessionResponse>;
+  planSession: () => Promise<RuntimeSessionResponse>;
+  runSession: (frames: number) => Promise<RuntimeSessionResponse>;
+  clearSession: () => Promise<RuntimeSessionResponse>;
 }
 
 export interface RuntimeClientOptions {
@@ -44,7 +51,29 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       postRuntimeResponse(fetchImpl, baseUrl, "/v0/run", {
         ...project,
         frames
-      })
+      }),
+    getSession: () =>
+      requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "GET" }, isRuntimeSessionResponse),
+    loadSession: (project) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/load", project),
+    validateSession: () =>
+      requestJson<RuntimeSessionResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/validate",
+        { method: "POST" },
+        isRuntimeSessionResponse
+      ),
+    planSession: () =>
+      requestJson<RuntimeSessionResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/plan",
+        { method: "POST" },
+        isRuntimeSessionResponse
+      ),
+    runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/run", { frames }),
+    clearSession: () =>
+      requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
   };
 }
 
@@ -75,6 +104,27 @@ async function postRuntimeResponse(
       method: "POST"
     },
     isRuntimeApiResponse
+  );
+}
+
+async function postRuntimeSessionResponse(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  path: string,
+  body: unknown
+): Promise<RuntimeSessionResponse> {
+  return requestJson<RuntimeSessionResponse>(
+    fetchImpl,
+    baseUrl,
+    path,
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    },
+    isRuntimeSessionResponse
   );
 }
 
@@ -136,6 +186,21 @@ function isRuntimeApiResponse(value: unknown): value is RuntimeApiResponse {
   );
 }
 
+function isRuntimeSessionResponse(value: unknown): value is RuntimeSessionResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    typeof value.loaded === "boolean" &&
+    (typeof value.graphId === "string" || value.graphId === null) &&
+    (typeof value.graphRevision === "string" || value.graphRevision === null) &&
+    typeof value.sessionRevision === "number" &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic) &&
+    (value.plan === null || isRecord(value.plan)) &&
+    (value.report === null || isRecord(value.report))
+  );
+}
+
 function isRuntimeDiagnostic(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -147,4 +212,3 @@ function isRuntimeDiagnostic(value: unknown): boolean {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
-

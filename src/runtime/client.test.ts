@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createRuntimeClient, normalizeRuntimeUrl, RuntimeClientError } from "./client";
-import type { RuntimeProjectPayload } from "./types";
+import type { RuntimeProjectPayload, RuntimeSessionResponse } from "./types";
 
 const project = {
   graph: {
@@ -76,6 +76,70 @@ describe("runtime client", () => {
     expect(calls[0][0]).toBe("http://runtime.local/v0/validate");
     expect(calls[1][0]).toBe("http://runtime.local/v0/plan");
     expect(JSON.parse(String(calls[2][1].body))).toMatchObject({ frames: 2 });
+  });
+
+  it("calls runtime session endpoints", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(sessionResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+
+    await client.getSession();
+    await client.loadSession(project);
+    await client.validateSession();
+    await client.planSession();
+    await client.runSession(2);
+    await client.clearSession();
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(calls[0]).toEqual(["http://runtime.local/v0/session", { method: "GET" }]);
+    expect(calls[1][0]).toBe("http://runtime.local/v0/session/load");
+    expect(JSON.parse(String(calls[1][1].body))).toEqual(project);
+    expect(calls[2]).toEqual(["http://runtime.local/v0/session/validate", { method: "POST" }]);
+    expect(calls[3]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
+    expect(calls[4][0]).toBe("http://runtime.local/v0/session/run");
+    expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
+    expect(calls[5]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+  });
+
+  it("accepts empty runtime session responses", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          sessionResponse({
+            loaded: false,
+            graphId: null,
+            graphRevision: null,
+            sessionRevision: 0
+          })
+        )
+      ) as typeof fetch
+    });
+
+    await expect(client.getSession()).resolves.toMatchObject({
+      loaded: false,
+      graphId: null,
+      graphRevision: null
+    });
+  });
+
+  it("accepts runtime session responses with plan and report objects", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          sessionResponse({
+            plan: { graphId: "test" },
+            report: { graphId: "test", frameCount: 2 }
+          } as Partial<RuntimeSessionResponse>)
+        )
+      ) as typeof fetch
+    });
+
+    await expect(client.runSession(2)).resolves.toMatchObject({
+      plan: { graphId: "test" },
+      report: { frameCount: 2 }
+    });
   });
 
   it("accepts runtime responses with plan and report objects", async () => {
@@ -169,7 +233,46 @@ describe("runtime client", () => {
     });
     await expect(invalidDiagnosticClient.validateProject(project)).rejects.toThrow("unsupported response shape");
   });
+
+  it("rejects unsupported runtime session response shapes", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ok: true,
+          diagnostics: [],
+          plan: null,
+          report: null
+        })
+      ) as typeof fetch
+    });
+
+    await expect(client.getSession()).rejects.toThrow("unsupported response shape");
+  });
+
+  it("rejects non-object runtime session responses", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () => jsonResponse(null)) as typeof fetch
+    });
+
+    await expect(client.getSession()).rejects.toThrow("unsupported response shape");
+  });
 });
+
+function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): RuntimeSessionResponse {
+  return {
+    ok: true,
+    loaded: true,
+    graphId: "test",
+    graphRevision: "1",
+    sessionRevision: 1,
+    diagnostics: [],
+    plan: null,
+    report: null,
+    ...overrides
+  };
+}
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {

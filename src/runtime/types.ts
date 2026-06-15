@@ -83,11 +83,36 @@ export interface RuntimeApiResponse {
   report: RuntimeDummyExecutionReport | null;
 }
 
-export type RuntimeResultKind = "validate" | "plan" | "run";
+export interface RuntimeSessionResponse {
+  ok: boolean;
+  loaded: boolean;
+  graphId: string | null;
+  graphRevision: string | null;
+  sessionRevision: number;
+  diagnostics: RuntimeDiagnostic[];
+  plan: RuntimePlan | null;
+  report: RuntimeDummyExecutionReport | null;
+}
+
+export interface RuntimeSessionRunRequest {
+  frames: number;
+}
+
+export type RuntimeResultKind =
+  | "validate"
+  | "plan"
+  | "run"
+  | "session"
+  | "loadSession"
+  | "validateSession"
+  | "planSession"
+  | "runSession"
+  | "clearSession";
+
+export type RuntimeActionResponse = RuntimeApiResponse | RuntimeSessionResponse;
 
 export interface RuntimeActionResult {
   kind: RuntimeResultKind;
-  response: RuntimeApiResponse;
+  response: RuntimeActionResponse;
   receivedAt: string;
 }
-

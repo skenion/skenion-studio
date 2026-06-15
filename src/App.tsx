@@ -19,12 +19,18 @@ import {
 } from "./graph/skenionGraph";
 import { createRuntimeClient, DEFAULT_RUNTIME_URL, RuntimeClientError } from "./runtime/client";
 import { createRuntimeProjectPayload } from "./runtime/payload";
+import {
+  nextLoadedGraphFingerprint,
+  runtimeGraphFingerprint,
+  runtimeSessionIsSynced
+} from "./runtime/sessionSync";
 import type {
   RuntimeActionResult,
   RuntimeApiResponse,
   RuntimeConnectionStatus,
   RuntimeInfo,
-  RuntimeResultKind
+  RuntimeResultKind,
+  RuntimeSessionResponse
 } from "./runtime/types";
 
 export default function App() {
@@ -40,8 +46,20 @@ export default function App() {
   const [runtimeFrames, setRuntimeFrames] = useState(2);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
   const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
+  const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
+  const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const runtimeProject = useMemo(() => createRuntimeProjectPayload(graph, nodeRegistry), [graph]);
+  const currentGraphFingerprint = useMemo(
+    () => runtimeGraphFingerprint(graph.id, graph.revision),
+    [graph.id, graph.revision]
+  );
+  const runtimeSessionSynced = runtimeSessionIsSynced(
+    runtimeStatus,
+    runtimeSession,
+    currentGraphFingerprint,
+    lastLoadedGraphFingerprint
+  );
   const selectedNode = useMemo(
     () => graph.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [graph.nodes, selectedNodeId]
@@ -135,10 +153,14 @@ export default function App() {
         throw new RuntimeClientError("Runtime health check returned not-ok.");
       }
       const info = await client.getRuntimeInfo();
+      const session = await client.getSession();
       setRuntimeInfo(info);
+      setRuntimeSession(session);
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeInfo(null);
+      setRuntimeSession(null);
+      setLastLoadedGraphFingerprint(null);
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime connection failed.");
     } finally {
@@ -160,6 +182,37 @@ export default function App() {
         receivedAt: new Date().toISOString()
       });
       setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function runRuntimeSessionAction(
+    kind: RuntimeResultKind,
+    action: () => Promise<RuntimeSessionResponse>
+  ) {
+    setRuntimeBusyAction(kind);
+    setRuntimeError(null);
+    try {
+      const response = await action();
+      setRuntimeSession(response);
+      setRuntimeResult({
+        kind,
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+      if (kind === "loadSession") {
+        setLastLoadedGraphFingerprint((current) =>
+          nextLoadedGraphFingerprint(current, response, currentGraphFingerprint)
+        );
+      }
+      if (kind === "clearSession" && response.ok) {
+        setLastLoadedGraphFingerprint(null);
+      }
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
@@ -227,13 +280,35 @@ export default function App() {
               frames={runtimeFrames}
               info={runtimeInfo}
               result={runtimeResult}
+              session={runtimeSession}
+              sessionSynced={runtimeSessionSynced}
               status={runtimeStatus}
               url={runtimeUrl}
+              onClearSession={() =>
+                runRuntimeSessionAction("clearSession", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).clearSession()
+                )
+              }
               onConnect={connectRuntime}
               onFramesChange={setRuntimeFrames}
+              onLoadSession={() =>
+                runRuntimeSessionAction("loadSession", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).loadSession(runtimeProject)
+                )
+              }
               onPlan={() =>
                 runRuntimeAction("plan", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).buildPlan(runtimeProject)
+                )
+              }
+              onPlanSession={() =>
+                runRuntimeSessionAction("planSession", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).planSession()
+                )
+              }
+              onRefreshSession={() =>
+                runRuntimeSessionAction("session", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).getSession()
                 )
               }
               onRun={() =>
@@ -241,16 +316,28 @@ export default function App() {
                   createRuntimeClient({ baseUrl: runtimeUrl }).runProject(runtimeProject, runtimeFrames)
                 )
               }
+              onRunSession={() =>
+                runRuntimeSessionAction("runSession", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).runSession(runtimeFrames)
+                )
+              }
               onUrlChange={(nextUrl) => {
                 setRuntimeUrl(nextUrl);
                 setRuntimeStatus("disconnected");
                 setRuntimeInfo(null);
                 setRuntimeResult(null);
+                setRuntimeSession(null);
+                setLastLoadedGraphFingerprint(null);
                 setRuntimeError(null);
               }}
               onValidate={() =>
                 runRuntimeAction("validate", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).validateProject(runtimeProject)
+                )
+              }
+              onValidateSession={() =>
+                runRuntimeSessionAction("validateSession", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).validateSession()
                 )
               }
             />
