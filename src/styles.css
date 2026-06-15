@@ -60,8 +60,19 @@ body {
 }
 
 .palette-scroll,
-.inspector-scroll {
+.aside-scroll {
   height: calc(100vh - 132px);
+}
+
+.runtime-panel {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.runtime-json {
+  max-height: 180px;
+  overflow: auto;
+  font-size: 11px;
 }
 
 .palette-node {
@@ -170,7 +181,7 @@ body {
   }
 
   .palette-scroll,
-  .inspector-scroll {
+  .aside-scroll {
     height: 360px;
   }
 }

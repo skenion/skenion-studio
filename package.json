@@ -7,10 +7,11 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
-    "ci": "pnpm run lint && pnpm run build",
+    "ci": "pnpm run lint && pnpm run test && pnpm run build",
     "dev": "vite --host 127.0.0.1",
     "lint": "eslint .",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run src/runtime/client.test.ts"
   },
   "dependencies": {
     "@mantine/core": "^9.3.1",
@@ -30,7 +31,8 @@
     "globals": "^17.6.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
   },
   "packageManager": "pnpm@10.12.4"
 }

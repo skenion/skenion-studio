@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Code, Divider, Group, ScrollArea, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, Code, Divider, Group, Stack, Table, Text } from "@mantine/core";
 import { Trash2 } from "lucide-react";
 import type { GraphDocumentV01, GraphNodeV01, ValidationResult } from "@skenion/contracts";
 import { typeLabel, type ConnectionCheck } from "../graph/skenionGraph";
@@ -30,8 +30,7 @@ export function InspectorPanel({
         </Text>
       </div>
 
-      <ScrollArea className="inspector-scroll" offsetScrollbars>
-        <Stack gap="md">
+      <Stack gap="md">
           <Alert color={validation.ok ? "green" : "red"} radius="sm" variant="light">
             <Text fw={700} size="sm">
               {validation.ok ? "Graph contract valid" : "Graph contract invalid"}
@@ -114,8 +113,7 @@ export function InspectorPanel({
               Select a node or edge on the canvas.
             </Text>
           )}
-        </Stack>
-      </ScrollArea>
+      </Stack>
     </Stack>
   );
 }

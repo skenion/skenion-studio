@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { Alert, AppShell, Group, Text } from "@mantine/core";
+import { Alert, AppShell, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
 import type { GraphDocumentV01, GraphNodeV01 } from "@skenion/contracts";
 import { GraphCanvas } from "./components/GraphCanvas";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { PalettePanel } from "./components/PalettePanel";
+import { RuntimePanel } from "./components/RuntimePanel";
 import { StudioToolbar } from "./components/StudioToolbar";
 import { nodeRegistry } from "./data/registry";
 import { sampleGraph } from "./data/sampleGraph";
@@ -16,6 +17,15 @@ import {
   type ConnectionCheck,
   type ViewPositions
 } from "./graph/skenionGraph";
+import { createRuntimeClient, DEFAULT_RUNTIME_URL, RuntimeClientError } from "./runtime/client";
+import { createRuntimeProjectPayload } from "./runtime/payload";
+import type {
+  RuntimeActionResult,
+  RuntimeApiResponse,
+  RuntimeConnectionStatus,
+  RuntimeInfo,
+  RuntimeResultKind
+} from "./runtime/types";
 
 export default function App() {
   const [graph, setGraph] = useState<GraphDocumentV01>(sampleGraph);
@@ -23,7 +33,15 @@ export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [runtimeUrl, setRuntimeUrl] = useState(DEFAULT_RUNTIME_URL);
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeConnectionStatus>("disconnected");
+  const [runtimeBusyAction, setRuntimeBusyAction] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [runtimeFrames, setRuntimeFrames] = useState(2);
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
+  const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
   const validation = useMemo(() => validateGraph(graph), [graph]);
+  const runtimeProject = useMemo(() => createRuntimeProjectPayload(graph, nodeRegistry), [graph]);
   const selectedNode = useMemo(
     () => graph.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [graph.nodes, selectedNodeId]
@@ -46,11 +64,13 @@ export default function App() {
     }));
     setSelectedNodeId(node.id);
     setConnectionCheck(null);
+    setRuntimeResult(null);
   }
 
   function updateGraph(nextGraph: GraphDocumentV01) {
     setGraph(nextGraph);
     setConnectionCheck(null);
+    setRuntimeResult(null);
   }
 
   async function importGraph(file: File | null) {
@@ -71,6 +91,7 @@ export default function App() {
       setPositions({});
       setImportError(null);
       setConnectionCheck(null);
+      setRuntimeResult(null);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Graph import failed.");
     }
@@ -94,11 +115,57 @@ export default function App() {
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
     setImportError(null);
     setConnectionCheck(null);
+    setRuntimeResult(null);
   }
 
   function removeNode(node: GraphNodeV01) {
     setGraph((currentGraph) => applyPatch(currentGraph, { type: "removeNode", nodeId: node.id }));
     setSelectedNodeId(null);
+    setRuntimeResult(null);
+  }
+
+  async function connectRuntime() {
+    setRuntimeBusyAction("connect");
+    setRuntimeStatus("connecting");
+    setRuntimeError(null);
+    try {
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const health = await client.getHealth();
+      if (!health.ok) {
+        throw new RuntimeClientError("Runtime health check returned not-ok.");
+      }
+      const info = await client.getRuntimeInfo();
+      setRuntimeInfo(info);
+      setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeInfo(null);
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime connection failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function runRuntimeAction(
+    kind: RuntimeResultKind,
+    action: () => Promise<RuntimeApiResponse>
+  ) {
+    setRuntimeBusyAction(kind);
+    setRuntimeError(null);
+    try {
+      const response = await action();
+      setRuntimeResult({
+        kind,
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
   }
 
   return (
@@ -152,13 +219,50 @@ export default function App() {
       </AppShell.Main>
 
       <AppShell.Aside p="md">
-        <InspectorPanel
-          connectionCheck={connectionCheck}
-          graph={graph}
-          node={selectedNode}
-          onRemoveNode={removeNode}
-          validation={validation}
-        />
+        <ScrollArea className="aside-scroll" offsetScrollbars>
+          <Stack gap="md">
+            <RuntimePanel
+              busyAction={runtimeBusyAction}
+              error={runtimeError}
+              frames={runtimeFrames}
+              info={runtimeInfo}
+              result={runtimeResult}
+              status={runtimeStatus}
+              url={runtimeUrl}
+              onConnect={connectRuntime}
+              onFramesChange={setRuntimeFrames}
+              onPlan={() =>
+                runRuntimeAction("plan", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).buildPlan(runtimeProject)
+                )
+              }
+              onRun={() =>
+                runRuntimeAction("run", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).runProject(runtimeProject, runtimeFrames)
+                )
+              }
+              onUrlChange={(nextUrl) => {
+                setRuntimeUrl(nextUrl);
+                setRuntimeStatus("disconnected");
+                setRuntimeInfo(null);
+                setRuntimeResult(null);
+                setRuntimeError(null);
+              }}
+              onValidate={() =>
+                runRuntimeAction("validate", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).validateProject(runtimeProject)
+                )
+              }
+            />
+            <InspectorPanel
+              connectionCheck={connectionCheck}
+              graph={graph}
+              node={selectedNode}
+              onRemoveNode={removeNode}
+              validation={validation}
+            />
+          </Stack>
+        </ScrollArea>
       </AppShell.Aside>
     </AppShell>
   );
