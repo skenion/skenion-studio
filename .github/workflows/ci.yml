@@ -21,6 +21,10 @@ jobs:
         with:
           repository: echovisionlab/skenion-contracts
           path: .deps/skenion-contracts
+      - uses: actions/checkout@v6
+        with:
+          repository: echovisionlab/skenion-examples
+          path: .deps/skenion-examples
       - uses: pnpm/action-setup@v6
         with:
           version: 10.12.4
