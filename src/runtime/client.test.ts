@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import type { GraphPatchV01 } from "@skenion/contracts";
 import { createRuntimeClient, normalizeRuntimeUrl, RuntimeClientError } from "./client";
-import type { RuntimeProjectPayload, RuntimeSessionResponse } from "./types";
+import type {
+  RuntimePatchResponse,
+  RuntimeProjectPayload,
+  RuntimeSessionResponse
+} from "./types";
 
 const project = {
   graph: {
@@ -13,6 +18,21 @@ const project = {
   },
   nodes: []
 } as RuntimeProjectPayload;
+
+const patch: GraphPatchV01 = {
+  schema: "skenion.graph.patch",
+  schemaVersion: "0.1.0",
+  id: "patch_1",
+  baseRevision: "1",
+  ops: [
+    {
+      op: "setNodeParam",
+      nodeId: "value_1",
+      key: "value",
+      value: 0.75
+    }
+  ]
+};
 
 describe("runtime client", () => {
   it("normalizes runtime URLs", () => {
@@ -79,7 +99,11 @@ describe("runtime client", () => {
   });
 
   it("calls runtime session endpoints", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse(sessionResponse()));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
+      String(_input).endsWith("/v0/session/patch")
+        ? jsonResponse(patchResponse())
+        : jsonResponse(sessionResponse())
+    );
     const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
 
     await client.getSession();
@@ -87,10 +111,11 @@ describe("runtime client", () => {
     await client.validateSession();
     await client.planSession();
     await client.runSession(2);
+    await client.applySessionPatch(patch);
     await client.clearSession();
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(calls[0]).toEqual(["http://runtime.local/v0/session", { method: "GET" }]);
     expect(calls[1][0]).toBe("http://runtime.local/v0/session/load");
     expect(JSON.parse(String(calls[1][1].body))).toEqual(project);
@@ -98,7 +123,28 @@ describe("runtime client", () => {
     expect(calls[3]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
     expect(calls[4][0]).toBe("http://runtime.local/v0/session/run");
     expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
-    expect(calls[5]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+    expect(calls[5][0]).toBe("http://runtime.local/v0/session/patch");
+    expect(JSON.parse(String(calls[5][1].body))).toEqual(patch);
+    expect(calls[6]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+  });
+
+  it("accepts runtime patch responses", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () => jsonResponse(patchResponse())) as typeof fetch
+    });
+
+    await expect(client.applySessionPatch(patch)).resolves.toMatchObject({
+      ok: true,
+      applied: true,
+      conflict: false,
+      graph: {
+        revision: "2"
+      },
+      session: {
+        graphRevision: "2"
+      }
+    });
   });
 
   it("accepts empty runtime session responses", async () => {
@@ -250,6 +296,27 @@ describe("runtime client", () => {
     await expect(client.getSession()).rejects.toThrow("unsupported response shape");
   });
 
+  it("rejects unsupported runtime patch response shapes", async () => {
+    const invalidGraphClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          patchResponse({
+            graph: {
+              schema: "skenion.graph",
+              schemaVersion: "0.1.0",
+              id: "test",
+              revision: "2",
+              nodes: []
+            } as unknown as RuntimePatchResponse["graph"]
+          })
+        )
+      ) as typeof fetch
+    });
+
+    await expect(invalidGraphClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
+  });
+
   it("rejects non-object runtime session responses", async () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -270,6 +337,28 @@ function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): Runti
     diagnostics: [],
     plan: null,
     report: null,
+    ...overrides
+  };
+}
+
+function patchResponse(overrides: Partial<RuntimePatchResponse> = {}): RuntimePatchResponse {
+  return {
+    ok: true,
+    applied: true,
+    conflict: false,
+    graph: {
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "test",
+      revision: "2",
+      nodes: [],
+      edges: []
+    },
+    session: sessionResponse({
+      graphRevision: "2",
+      sessionRevision: 2
+    }),
+    diagnostics: [],
     ...overrides
   };
 }

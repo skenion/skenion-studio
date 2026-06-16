@@ -10,9 +10,21 @@ import {
   Text,
   TextInput
 } from "@mantine/core";
-import { Activity, Cable, Database, Play, RefreshCw, Route, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Activity,
+  Cable,
+  Database,
+  Play,
+  RefreshCw,
+  Route,
+  SendHorizontal,
+  ShieldCheck,
+  Trash2,
+  X
+} from "lucide-react";
 import type {
   RuntimeActionResult,
+  RuntimeActionResponse,
   RuntimeConnectionStatus,
   RuntimeInfo,
   RuntimeSessionResponse
@@ -26,9 +38,14 @@ interface RuntimePanelProps {
   result: RuntimeActionResult | null;
   session: RuntimeSessionResponse | null;
   sessionSynced: boolean;
+  patchBaseRevision: string | null;
+  patchConflict: string | null;
+  pendingPatchOps: number;
   status: RuntimeConnectionStatus;
   url: string;
+  onApplyPendingPatch: () => void;
   onClearSession: () => void;
+  onClearPendingPatch: () => void;
   onConnect: () => void;
   onFramesChange: (frames: number) => void;
   onLoadSession: () => void;
@@ -50,9 +67,14 @@ export function RuntimePanel({
   result,
   session,
   sessionSynced,
+  patchBaseRevision,
+  patchConflict,
+  pendingPatchOps,
   status,
   url,
+  onApplyPendingPatch,
   onClearSession,
+  onClearPendingPatch,
   onConnect,
   onFramesChange,
   onLoadSession,
@@ -67,6 +89,7 @@ export function RuntimePanel({
 }: RuntimePanelProps) {
   const connected = status === "connected";
   const sessionLoaded = session?.loaded ?? false;
+  const hasPendingPatch = pendingPatchOps > 0;
 
   return (
     <Stack className="runtime-panel" gap="sm">
@@ -215,6 +238,58 @@ export function RuntimePanel({
         </Code>
       ) : null}
 
+      <Divider />
+
+      <Group justify="space-between" wrap="nowrap">
+        <Text c="dimmed" size="xs">
+          Patch Sync
+        </Text>
+        <Badge color={patchBadgeColor(hasPendingPatch, patchConflict)} radius="sm" variant="light">
+          {patchBadgeLabel(hasPendingPatch, patchConflict)}
+        </Badge>
+      </Group>
+
+      <Code block className="runtime-json">
+        {JSON.stringify(
+          {
+            pendingOps: pendingPatchOps,
+            baseRevision: patchBaseRevision
+          },
+          null,
+          2
+        )}
+      </Code>
+
+      <Group gap="xs" grow>
+        <Button
+          disabled={!connected || !sessionLoaded || !hasPendingPatch}
+          leftSection={<SendHorizontal size={15} />}
+          loading={busyAction === "applyPatch"}
+          onClick={onApplyPendingPatch}
+          radius="sm"
+          size="xs"
+          variant={hasPendingPatch ? "filled" : "light"}
+        >
+          Apply Pending Patch
+        </Button>
+        <Button
+          disabled={!hasPendingPatch}
+          leftSection={<X size={15} />}
+          onClick={onClearPendingPatch}
+          radius="sm"
+          size="xs"
+          variant="light"
+        >
+          Clear Pending
+        </Button>
+      </Group>
+
+      {patchConflict ? (
+        <Alert color="red" radius="sm" variant="light">
+          {patchConflict}
+        </Alert>
+      ) : null}
+
       <NumberInput
         aria-label="Dummy execution frames"
         clampBehavior="strict"
@@ -295,8 +370,8 @@ export function RuntimePanel({
 
 function RuntimeResultSummary({ result }: { result: RuntimeActionResult }) {
   const diagnostics = result.response.diagnostics;
-  const plan = result.response.plan;
-  const report = result.response.report;
+  const plan = responsePlan(result.response);
+  const report = responseReport(result.response);
 
   return (
     <Stack gap="xs">
@@ -362,6 +437,14 @@ function RuntimeResultSummary({ result }: { result: RuntimeActionResult }) {
   );
 }
 
+function responsePlan(response: RuntimeActionResponse) {
+  return "plan" in response ? response.plan : response.session.plan;
+}
+
+function responseReport(response: RuntimeActionResponse) {
+  return "report" in response ? response.report : response.session.report;
+}
+
 function statusColor(status: RuntimeConnectionStatus): string {
   switch (status) {
     case "connected":
@@ -373,4 +456,18 @@ function statusColor(status: RuntimeConnectionStatus): string {
     case "disconnected":
       return "gray";
   }
+}
+
+function patchBadgeColor(hasPendingPatch: boolean, conflict: string | null): string {
+  if (conflict) {
+    return "red";
+  }
+  return hasPendingPatch ? "yellow" : "green";
+}
+
+function patchBadgeLabel(hasPendingPatch: boolean, conflict: string | null): string {
+  if (conflict) {
+    return "conflict";
+  }
+  return hasPendingPatch ? "pending patch" : "no pending patch";
 }

@@ -1,4 +1,8 @@
-import type { GraphDocumentV01, NodeDefinitionManifestV01 } from "@skenion/contracts";
+import type {
+  GraphDocumentV01,
+  GraphPatchV01,
+  NodeDefinitionManifestV01
+} from "@skenion/contracts";
 
 export type RuntimeConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
@@ -94,9 +98,20 @@ export interface RuntimeSessionResponse {
   report: RuntimeDummyExecutionReport | null;
 }
 
+export interface RuntimePatchResponse {
+  ok: boolean;
+  applied: boolean;
+  conflict: boolean;
+  graph: GraphDocumentV01 | null;
+  session: RuntimeSessionResponse;
+  diagnostics: RuntimeDiagnostic[];
+}
+
 export interface RuntimeSessionRunRequest {
   frames: number;
 }
+
+export type RuntimeSessionPatchRequest = GraphPatchV01;
 
 export type RuntimeResultKind =
   | "validate"
@@ -107,9 +122,10 @@ export type RuntimeResultKind =
   | "validateSession"
   | "planSession"
   | "runSession"
+  | "applyPatch"
   | "clearSession";
 
-export type RuntimeActionResponse = RuntimeApiResponse | RuntimeSessionResponse;
+export type RuntimeActionResponse = RuntimeApiResponse | RuntimePatchResponse | RuntimeSessionResponse;
 
 export interface RuntimeActionResult {
   kind: RuntimeResultKind;

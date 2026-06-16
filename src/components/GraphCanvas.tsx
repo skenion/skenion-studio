@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Background,
   Controls,
@@ -17,6 +17,7 @@ import {
   checkConnection,
   edgeFromReactFlow,
   toSkenionPatch,
+  type GraphPatch,
   type ConnectionCheck,
   type ViewPositions
 } from "../graph/skenionGraph";
@@ -33,7 +34,7 @@ interface GraphCanvasProps {
   positions: ViewPositions;
   selectedNodeId: string | null;
   onConnectionCheck: (check: ConnectionCheck | null) => void;
-  onGraphChange: (graph: GraphDocumentV01) => void;
+  onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
   onPositionsChange: (positions: ViewPositions) => void;
   onSelectedNodeChange: (nodeId: string | null) => void;
 }
@@ -50,6 +51,7 @@ export function GraphCanvas({
   const viewModel = useMemo(() => toReactFlowViewModel(graph, positions), [graph, positions]);
   const [nodes, setNodes, onNodesChange] = useNodesState(viewModel.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(viewModel.edges);
+  const deletingNodeIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setNodes(viewModel.nodes);
@@ -65,7 +67,7 @@ export function GraphCanvas({
         return;
       }
 
-      onGraphChange(applyPatch(graph, patch));
+      onGraphChange(applyPatch(graph, patch), [patch]);
     },
     [graph, onConnectionCheck, onGraphChange]
   );
@@ -83,13 +85,19 @@ export function GraphCanvas({
   const onEdgesDelete = useCallback(
     (deletedEdges: Edge[]) => {
       let nextGraph = graph;
+      const patches: GraphPatch[] = [];
       for (const edge of deletedEdges) {
+        if (deletingNodeIdsRef.current.has(edge.source) || deletingNodeIdsRef.current.has(edge.target)) {
+          continue;
+        }
         const skenionEdge = edgeFromReactFlow(edge);
         if (skenionEdge) {
-          nextGraph = applyPatch(nextGraph, { type: "removeEdge", edge: skenionEdge });
+          const patch = { type: "removeEdge", edge: skenionEdge } satisfies GraphPatch;
+          nextGraph = applyPatch(nextGraph, patch);
+          patches.push(patch);
         }
       }
-      onGraphChange(nextGraph);
+      onGraphChange(nextGraph, patches);
       onConnectionCheck(null);
     },
     [graph, onConnectionCheck, onGraphChange]
@@ -98,10 +106,17 @@ export function GraphCanvas({
   const onNodesDelete = useCallback(
     (deletedNodes: Node[]) => {
       let nextGraph = graph;
+      const patches: GraphPatch[] = [];
+      deletingNodeIdsRef.current = new Set(deletedNodes.map((node) => node.id));
+      window.queueMicrotask(() => {
+        deletingNodeIdsRef.current = new Set();
+      });
       for (const node of deletedNodes) {
-        nextGraph = applyPatch(nextGraph, { type: "removeNode", nodeId: node.id });
+        const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
+        nextGraph = applyPatch(nextGraph, patch);
+        patches.push(patch);
       }
-      onGraphChange(nextGraph);
+      onGraphChange(nextGraph, patches);
       onSelectedNodeChange(null);
     },
     [graph, onGraphChange, onSelectedNodeChange]

@@ -1,8 +1,11 @@
+import { validateGraphDocument } from "@skenion/contracts";
 import type {
   RuntimeApiResponse,
   RuntimeHealth,
   RuntimeInfo,
+  RuntimePatchResponse,
   RuntimeProjectPayload,
+  RuntimeSessionPatchRequest,
   RuntimeSessionResponse
 } from "./types";
 
@@ -22,6 +25,7 @@ export interface RuntimeClient {
   validateSession: () => Promise<RuntimeSessionResponse>;
   planSession: () => Promise<RuntimeSessionResponse>;
   runSession: (frames: number) => Promise<RuntimeSessionResponse>;
+  applySessionPatch: (patch: RuntimeSessionPatchRequest) => Promise<RuntimePatchResponse>;
   clearSession: () => Promise<RuntimeSessionResponse>;
 }
 
@@ -70,8 +74,9 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         "/v0/session/plan",
         { method: "POST" },
         isRuntimeSessionResponse
-      ),
+    ),
     runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/run", { frames }),
+    applySessionPatch: (patch) => postRuntimePatchResponse(fetchImpl, baseUrl, "/v0/session/patch", patch),
     clearSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
   };
@@ -125,6 +130,27 @@ async function postRuntimeSessionResponse(
       method: "POST"
     },
     isRuntimeSessionResponse
+  );
+}
+
+async function postRuntimePatchResponse(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  path: string,
+  body: unknown
+): Promise<RuntimePatchResponse> {
+  return requestJson<RuntimePatchResponse>(
+    fetchImpl,
+    baseUrl,
+    path,
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    },
+    isRuntimePatchResponse
   );
 }
 
@@ -198,6 +224,19 @@ function isRuntimeSessionResponse(value: unknown): value is RuntimeSessionRespon
     value.diagnostics.every(isRuntimeDiagnostic) &&
     (value.plan === null || isRecord(value.plan)) &&
     (value.report === null || isRecord(value.report))
+  );
+}
+
+function isRuntimePatchResponse(value: unknown): value is RuntimePatchResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    typeof value.applied === "boolean" &&
+    typeof value.conflict === "boolean" &&
+    (value.graph === null || validateGraphDocument(value.graph).ok) &&
+    isRuntimeSessionResponse(value.session) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
   );
 }
 

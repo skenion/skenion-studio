@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { Alert, AppShell, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
-import type { GraphDocumentV01, GraphNodeV01 } from "@skenion/contracts";
+import type {
+  GraphDocumentV01,
+  GraphNodeV01,
+  GraphPatchOperationV01
+} from "@skenion/contracts";
 import { GraphCanvas } from "./components/GraphCanvas";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { PalettePanel } from "./components/PalettePanel";
@@ -15,8 +19,13 @@ import {
   graphSummary,
   validateGraph,
   type ConnectionCheck,
+  type GraphPatch,
   type ViewPositions
 } from "./graph/skenionGraph";
+import {
+  createGraphPatch,
+  graphPatchFromStudioAction
+} from "./graph/graphPatch";
 import { createRuntimeClient, DEFAULT_RUNTIME_URL, RuntimeClientError } from "./runtime/client";
 import { createRuntimeProjectPayload } from "./runtime/payload";
 import {
@@ -30,6 +39,7 @@ import type {
   RuntimeConnectionStatus,
   RuntimeInfo,
   RuntimeResultKind,
+  RuntimePatchResponse,
   RuntimeSessionResponse
 } from "./runtime/types";
 
@@ -48,6 +58,9 @@ export default function App() {
   const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
   const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
+  const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
+  const [pendingPatchBaseRevision, setPendingPatchBaseRevision] = useState<string | null>(null);
+  const [patchConflict, setPatchConflict] = useState<string | null>(null);
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const runtimeProject = useMemo(() => createRuntimeProjectPayload(graph, nodeRegistry), [graph]);
   const currentGraphFingerprint = useMemo(
@@ -72,7 +85,9 @@ export default function App() {
     }
 
     const node = createGraphNodeFromDefinition(definition, graph.nodes);
+    const patch = { type: "addNode", node } satisfies GraphPatch;
     setGraph((currentGraph) => applyPatch(currentGraph, { type: "addNode", node }));
+    recordGraphPatches([patch]);
     setPositions((currentPositions) => ({
       ...currentPositions,
       [node.id]: {
@@ -85,10 +100,44 @@ export default function App() {
     setRuntimeResult(null);
   }
 
-  function updateGraph(nextGraph: GraphDocumentV01) {
+  function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
     setGraph(nextGraph);
+    recordGraphPatches(patches);
     setConnectionCheck(null);
     setRuntimeResult(null);
+  }
+
+  function recordGraphPatches(patches: GraphPatch[]) {
+    if (patches.length === 0) {
+      return;
+    }
+
+    const runtimeGraphRevision = runtimeSession?.graphRevision ?? null;
+    const baseRevision = pendingPatchBaseRevision ?? runtimeGraphRevision;
+    const canQueuePatch = pendingPatchBaseRevision !== null || runtimeSessionSynced;
+    if (!canQueuePatch || !baseRevision) {
+      return;
+    }
+
+    const operations = patches.map(graphPatchFromStudioAction);
+    setPendingPatchOps((current) => [...current, ...operations]);
+    setPendingPatchBaseRevision((current) => current ?? baseRevision);
+    setPatchConflict(null);
+  }
+
+  function clearPendingPatch() {
+    setPendingPatchOps([]);
+    setPendingPatchBaseRevision(null);
+    setPatchConflict(null);
+  }
+
+  function acceptRuntimeGraph(nextGraph: GraphDocumentV01) {
+    setGraph(nextGraph);
+    setSelectedNodeId((current) =>
+      current && nextGraph.nodes.some((node) => node.id === current) ? current : nextGraph.nodes[0]?.id ?? null
+    );
+    setConnectionCheck(null);
+    setLastLoadedGraphFingerprint(runtimeGraphFingerprint(nextGraph.id, nextGraph.revision));
   }
 
   async function importGraph(file: File | null) {
@@ -107,6 +156,7 @@ export default function App() {
       setGraph(result.value);
       setSelectedNodeId(result.value.nodes[0]?.id ?? null);
       setPositions({});
+      clearPendingPatch();
       setImportError(null);
       setConnectionCheck(null);
       setRuntimeResult(null);
@@ -131,13 +181,16 @@ export default function App() {
     setGraph(sampleGraph);
     setPositions({});
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
+    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
   function removeNode(node: GraphNodeV01) {
-    setGraph((currentGraph) => applyPatch(currentGraph, { type: "removeNode", nodeId: node.id }));
+    const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
+    setGraph((currentGraph) => applyPatch(currentGraph, patch));
+    recordGraphPatches([patch]);
     setSelectedNodeId(null);
     setRuntimeResult(null);
   }
@@ -161,6 +214,7 @@ export default function App() {
       setRuntimeInfo(null);
       setRuntimeSession(null);
       setLastLoadedGraphFingerprint(null);
+      clearPendingPatch();
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime connection failed.");
     } finally {
@@ -209,9 +263,50 @@ export default function App() {
         setLastLoadedGraphFingerprint((current) =>
           nextLoadedGraphFingerprint(current, response, currentGraphFingerprint)
         );
+        if (response.ok && response.loaded) {
+          clearPendingPatch();
+        }
       }
       if (kind === "clearSession" && response.ok) {
         setLastLoadedGraphFingerprint(null);
+        clearPendingPatch();
+      }
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function applyPendingPatch() {
+    if (!pendingPatchBaseRevision || pendingPatchOps.length === 0) {
+      return;
+    }
+
+    setRuntimeBusyAction("applyPatch");
+    setRuntimeError(null);
+    setPatchConflict(null);
+    try {
+      const patch = createGraphPatch(pendingPatchBaseRevision, pendingPatchOps, {
+        id: `patch_${Date.now()}`,
+        clientId: "studio-local"
+      });
+      const response: RuntimePatchResponse = await createRuntimeClient({
+        baseUrl: runtimeUrl
+      }).applySessionPatch(patch);
+      setRuntimeSession(response.session);
+      setRuntimeResult({
+        kind: "applyPatch",
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+      if (response.ok && response.applied && response.graph) {
+        acceptRuntimeGraph(response.graph);
+        clearPendingPatch();
+      } else if (response.conflict) {
+        setPatchConflict(response.diagnostics[0]?.message ?? "Runtime rejected patch because the session graph revision changed.");
       }
     } catch (error) {
       setRuntimeStatus("error");
@@ -328,8 +423,14 @@ export default function App() {
                 setRuntimeResult(null);
                 setRuntimeSession(null);
                 setLastLoadedGraphFingerprint(null);
+                clearPendingPatch();
                 setRuntimeError(null);
               }}
+              patchBaseRevision={pendingPatchBaseRevision}
+              patchConflict={patchConflict}
+              pendingPatchOps={pendingPatchOps.length}
+              onApplyPendingPatch={applyPendingPatch}
+              onClearPendingPatch={clearPendingPatch}
               onValidate={() =>
                 runRuntimeAction("validate", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).validateProject(runtimeProject)
