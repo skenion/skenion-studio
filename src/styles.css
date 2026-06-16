@@ -280,7 +280,20 @@ body {
 
 .react-flow__edge.selected .react-flow__edge-path {
   filter: drop-shadow(0 2px 5px rgb(31 41 51 / 24%));
-  stroke-width: 4px;
+  stroke: #1864ab !important;
+  stroke-width: 5px !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-textbg {
+  fill: #e7f5ff;
+  stroke: #74c0fc;
+  stroke-width: 1px;
+}
+
+.react-flow__edge.selected .react-flow__arrowhead polyline,
+.react-flow__edge.selected marker path {
+  fill: #1864ab;
+  stroke: #1864ab;
 }
 
 .ports-table th,

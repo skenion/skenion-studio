@@ -16,6 +16,13 @@ export default tseslint.config(
     }
   },
   {
+    files: ["scripts/**/*.{js,mjs}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.node
+    }
+  },
+  {
     ignores: ["dist", "storybook-static", "node_modules", ".deps"]
   }
 );
