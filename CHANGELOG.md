@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.10.0...skenion-studio-v0.11.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** add port edge feedback diagnostics ([f541419](https://github.com/echovisionlab/skenion-studio/commit/f5414192298e49a02b2db4e64831b39e57bcaeaf))
+* **studio:** expose port handles and render output sample ([60589d9](https://github.com/echovisionlab/skenion-studio/commit/60589d9848768296d456de40198c39e8bca75472))
+
 ## [0.10.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.9.0...skenion-studio-v0.10.0) (2026-06-16)
 
 
