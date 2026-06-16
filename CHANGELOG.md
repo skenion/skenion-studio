@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.11.0...skenion-studio-v0.12.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** add storybook component architecture ([981659b](https://github.com/echovisionlab/skenion-studio/commit/981659b12a765ef1228981701c39525642daa415))
+
 ## [0.11.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.10.0...skenion-studio-v0.11.0) (2026-06-16)
 
 
