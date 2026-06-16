@@ -11,7 +11,7 @@ import {
   type NodeTypes
 } from "@xyflow/react";
 import type { GraphDocumentV01 } from "@skenion/contracts";
-import { CanvasNode } from "./CanvasNode";
+import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
 import {
   applyPatch,
   checkConnection,
@@ -27,7 +27,7 @@ import {
 } from "../graph/reactFlowAdapter";
 
 const nodeTypes: NodeTypes = {
-  skenion: CanvasNode
+  skenion: ReactFlowNodeAdapter
 };
 
 interface GraphCanvasProps {

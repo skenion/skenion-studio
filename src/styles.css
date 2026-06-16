@@ -198,6 +198,40 @@ body {
   right: -19px;
 }
 
+.node-port-dot {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--port-color);
+  box-shadow: 0 0 0 1px rgb(31 41 51 / 18%);
+  transform: translateY(-50%);
+}
+
+.node-port-dot-input {
+  left: -19px;
+}
+
+.node-port-dot-output {
+  right: -19px;
+}
+
+.port-row.is-compatible .node-port-dot,
+.port-row.is-compatible .react-flow__handle.port-handle {
+  box-shadow:
+    0 0 0 1px rgb(31 41 51 / 18%),
+    0 0 0 4px rgb(12 166 120 / 18%);
+}
+
+.port-row.is-incompatible .node-port-dot,
+.port-row.is-incompatible .react-flow__handle.port-handle {
+  box-shadow:
+    0 0 0 1px rgb(31 41 51 / 18%),
+    0 0 0 4px rgb(250 82 82 / 18%);
+}
+
 .react-flow__edge-path {
   stroke-linecap: round;
 }
