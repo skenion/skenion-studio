@@ -40,13 +40,15 @@ import {
   previewBadgeColor,
   previewButtonVariant
 } from "../runtime/previewSync";
+import { TelemetryPanel } from "./TelemetryPanel";
 import type {
   RuntimeActionResult,
   RuntimeActionResponse,
   RuntimeConnectionStatus,
   RuntimeInfo,
   RuntimePreviewStatus,
-  RuntimeSessionResponse
+  RuntimeSessionResponse,
+  RuntimeTelemetrySnapshot
 } from "../runtime/types";
 
 interface RuntimePanelProps {
@@ -59,6 +61,7 @@ interface RuntimePanelProps {
   previewStatus: RuntimePreviewStatus | null;
   session: RuntimeSessionResponse | null;
   sessionSynced: boolean;
+  telemetry: RuntimeTelemetrySnapshot | null;
   patchBaseRevision: string | null;
   patchConflict: string | null;
   pendingPatchOps: number;
@@ -97,6 +100,7 @@ export function RuntimePanel({
   previewStatus,
   session,
   sessionSynced,
+  telemetry,
   patchBaseRevision,
   patchConflict,
   pendingPatchOps,
@@ -380,6 +384,8 @@ export function RuntimePanel({
           ))}
         </Stack>
       ) : null}
+
+      <TelemetryPanel telemetry={telemetry} />
 
       <Divider />
 
