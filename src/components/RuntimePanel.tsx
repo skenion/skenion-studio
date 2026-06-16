@@ -14,14 +14,22 @@ import {
   Activity,
   Cable,
   Database,
+  History,
   Play,
   RefreshCw,
+  Redo2,
   Route,
   SendHorizontal,
   ShieldCheck,
   Trash2,
+  Undo2,
   X
 } from "lucide-react";
+import type { GraphPatchHistoryV01 } from "@skenion/contracts";
+import {
+  latestHistoryEvents,
+  runtimeHistoryActionAvailability
+} from "../runtime/historySync";
 import type {
   RuntimeActionResult,
   RuntimeActionResponse,
@@ -36,6 +44,7 @@ interface RuntimePanelProps {
   frames: number;
   info: RuntimeInfo | null;
   result: RuntimeActionResult | null;
+  history: GraphPatchHistoryV01 | null;
   session: RuntimeSessionResponse | null;
   sessionSynced: boolean;
   patchBaseRevision: string | null;
@@ -51,9 +60,12 @@ interface RuntimePanelProps {
   onLoadSession: () => void;
   onPlan: () => void;
   onPlanSession: () => void;
+  onRedoPatch: () => void;
+  onRefreshHistory: () => void;
   onRefreshSession: () => void;
   onRun: () => void;
   onRunSession: () => void;
+  onUndoPatch: () => void;
   onUrlChange: (url: string) => void;
   onValidate: () => void;
   onValidateSession: () => void;
@@ -65,6 +77,7 @@ export function RuntimePanel({
   frames,
   info,
   result,
+  history,
   session,
   sessionSynced,
   patchBaseRevision,
@@ -80,9 +93,12 @@ export function RuntimePanel({
   onLoadSession,
   onPlan,
   onPlanSession,
+  onRedoPatch,
+  onRefreshHistory,
   onRefreshSession,
   onRun,
   onRunSession,
+  onUndoPatch,
   onUrlChange,
   onValidate,
   onValidateSession
@@ -90,6 +106,14 @@ export function RuntimePanel({
   const connected = status === "connected";
   const sessionLoaded = session?.loaded ?? false;
   const hasPendingPatch = pendingPatchOps > 0;
+  const historyAvailability = runtimeHistoryActionAvailability({
+    connected,
+    sessionLoaded,
+    sessionSynced,
+    pendingPatchOps,
+    history
+  });
+  const latestEvents = latestHistoryEvents(history, 3);
 
   return (
     <Stack className="runtime-panel" gap="sm">
@@ -288,6 +312,89 @@ export function RuntimePanel({
         <Alert color="red" radius="sm" variant="light">
           {patchConflict}
         </Alert>
+      ) : null}
+
+      <Divider />
+
+      <Group justify="space-between" wrap="nowrap">
+        <Text c="dimmed" size="xs">
+          History
+        </Text>
+        <Badge color={history ? "blue" : "gray"} radius="sm" variant="light">
+          {history ? `${history.events.length} events` : "unavailable"}
+        </Badge>
+      </Group>
+
+      <Code block className="runtime-json">
+        {JSON.stringify(
+          {
+            canUndo: history?.canUndo ?? false,
+            canRedo: history?.canRedo ?? false,
+            undoDepth: history?.undoDepth ?? 0,
+            redoDepth: history?.redoDepth ?? 0,
+            blocked: historyAvailability.reason
+          },
+          null,
+          2
+        )}
+      </Code>
+
+      <Group gap="xs" grow>
+        <Button
+          disabled={!connected || !sessionLoaded}
+          leftSection={<History size={15} />}
+          loading={busyAction === "refreshHistory"}
+          onClick={onRefreshHistory}
+          radius="sm"
+          size="xs"
+          variant="light"
+        >
+          Refresh History
+        </Button>
+      </Group>
+
+      <Group gap="xs" grow>
+        <Button
+          disabled={!historyAvailability.canUndo}
+          leftSection={<Undo2 size={15} />}
+          loading={busyAction === "undoPatch"}
+          onClick={onUndoPatch}
+          radius="sm"
+          size="xs"
+          variant="light"
+        >
+          Undo
+        </Button>
+        <Button
+          disabled={!historyAvailability.canRedo}
+          leftSection={<Redo2 size={15} />}
+          loading={busyAction === "redoPatch"}
+          onClick={onRedoPatch}
+          radius="sm"
+          size="xs"
+          variant="light"
+        >
+          Redo
+        </Button>
+      </Group>
+
+      {latestEvents.length > 0 ? (
+        <Stack gap={4}>
+          {latestEvents.map((event) => (
+            <Code block className="runtime-json" key={event.id}>
+              {JSON.stringify(
+                {
+                  id: event.id,
+                  kind: event.kind,
+                  revision: `${event.revisionBefore} -> ${event.revisionAfter}`,
+                  ops: event.patch.ops.length
+                },
+                null,
+                2
+              )}
+            </Code>
+          ))}
+        </Stack>
       ) : null}
 
       <NumberInput

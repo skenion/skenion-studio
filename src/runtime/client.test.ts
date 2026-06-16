@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GraphPatchV01 } from "@skenion/contracts";
+import type {
+  GraphPatchEventV01,
+  GraphPatchHistoryV01,
+  GraphPatchV01
+} from "@skenion/contracts";
 import { createRuntimeClient, normalizeRuntimeUrl, RuntimeClientError } from "./client";
 import type {
   RuntimePatchResponse,
@@ -100,7 +104,11 @@ describe("runtime client", () => {
 
   it("calls runtime session endpoints", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-      String(_input).endsWith("/v0/session/patch")
+      String(_input).endsWith("/v0/session/history")
+        ? jsonResponse(historyResponse())
+        : String(_input).endsWith("/v0/session/patch") ||
+            String(_input).endsWith("/v0/session/undo") ||
+            String(_input).endsWith("/v0/session/redo")
         ? jsonResponse(patchResponse())
         : jsonResponse(sessionResponse())
     );
@@ -112,10 +120,13 @@ describe("runtime client", () => {
     await client.planSession();
     await client.runSession(2);
     await client.applySessionPatch(patch);
+    await client.getSessionHistory();
+    await client.undoSessionPatch();
+    await client.redoSessionPatch();
     await client.clearSession();
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(calls[0]).toEqual(["http://runtime.local/v0/session", { method: "GET" }]);
     expect(calls[1][0]).toBe("http://runtime.local/v0/session/load");
     expect(JSON.parse(String(calls[1][1].body))).toEqual(project);
@@ -125,7 +136,10 @@ describe("runtime client", () => {
     expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
     expect(calls[5][0]).toBe("http://runtime.local/v0/session/patch");
     expect(JSON.parse(String(calls[5][1].body))).toEqual(patch);
-    expect(calls[6]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+    expect(calls[6]).toEqual(["http://runtime.local/v0/session/history", { method: "GET" }]);
+    expect(calls[7]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
+    expect(calls[8]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
+    expect(calls[9]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
   });
 
   it("accepts runtime patch responses", async () => {
@@ -143,7 +157,33 @@ describe("runtime client", () => {
       },
       session: {
         graphRevision: "2"
+      },
+      event: {
+        kind: "apply"
+      },
+      history: {
+        undoDepth: 1
       }
+    });
+  });
+
+  it("accepts empty patch events and runtime history responses", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async (_input: RequestInfo | URL) =>
+        String(_input).endsWith("/v0/session/history")
+          ? jsonResponse(historyResponse({ canUndo: false, undoDepth: 0, events: [] }))
+          : jsonResponse(patchResponse({ event: null }))
+      ) as typeof fetch
+    });
+
+    await expect(client.applySessionPatch(patch)).resolves.toMatchObject({
+      event: null
+    });
+    await expect(client.getSessionHistory()).resolves.toMatchObject({
+      canUndo: false,
+      undoDepth: 0,
+      events: []
     });
   });
 
@@ -315,6 +355,55 @@ describe("runtime client", () => {
     });
 
     await expect(invalidGraphClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
+
+    const invalidEventClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          patchResponse({
+            event: {
+              ...patchEvent(),
+              kind: "reverse"
+            } as unknown as RuntimePatchResponse["event"]
+          })
+        )
+      ) as typeof fetch
+    });
+    await expect(invalidEventClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
+
+    const invalidHistoryClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          patchResponse({
+            history: {
+              ...historyResponse(),
+              undoDepth: "1"
+            } as unknown as RuntimePatchResponse["history"]
+          })
+        )
+      ) as typeof fetch
+    });
+    await expect(invalidHistoryClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
+  });
+
+  it("rejects unsupported runtime history response shapes", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          schema: "skenion.graph.patch.history",
+          schemaVersion: "0.1.0",
+          events: [],
+          canUndo: "no",
+          canRedo: false,
+          undoDepth: 0,
+          redoDepth: 0
+        })
+      ) as typeof fetch
+    });
+
+    await expect(client.getSessionHistory()).rejects.toThrow("unsupported response shape");
   });
 
   it("rejects non-object runtime session responses", async () => {
@@ -358,7 +447,42 @@ function patchResponse(overrides: Partial<RuntimePatchResponse> = {}): RuntimePa
       graphRevision: "2",
       sessionRevision: 2
     }),
+    event: patchEvent(),
+    history: historyResponse(),
     diagnostics: [],
+    ...overrides
+  };
+}
+
+function historyResponse(overrides: Partial<GraphPatchHistoryV01> = {}): GraphPatchHistoryV01 {
+  return {
+    schema: "skenion.graph.patch.history",
+    schemaVersion: "0.1.0",
+    events: [patchEvent()],
+    canUndo: true,
+    canRedo: false,
+    undoDepth: 1,
+    redoDepth: 0,
+    ...overrides
+  };
+}
+
+function patchEvent(overrides: Partial<GraphPatchEventV01> = {}): GraphPatchEventV01 {
+  return {
+    schema: "skenion.graph.patch.event",
+    schemaVersion: "0.1.0",
+    id: "event_000001",
+    sequence: 1,
+    kind: "apply",
+    patch,
+    inversePatch: {
+      ...patch,
+      id: "inverse_patch_1",
+      baseRevision: "2"
+    },
+    revisionBefore: "1",
+    revisionAfter: "2",
+    createdAt: "unix-ms:0",
     ...overrides
   };
 }

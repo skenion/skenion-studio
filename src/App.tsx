@@ -4,6 +4,7 @@ import { CircleAlert } from "lucide-react";
 import type {
   GraphDocumentV01,
   GraphNodeV01,
+  GraphPatchHistoryV01,
   GraphPatchOperationV01
 } from "@skenion/contracts";
 import { GraphCanvas } from "./components/GraphCanvas";
@@ -26,7 +27,12 @@ import {
   createGraphPatch,
   graphPatchFromStudioAction
 } from "./graph/graphPatch";
-import { createRuntimeClient, DEFAULT_RUNTIME_URL, RuntimeClientError } from "./runtime/client";
+import {
+  createRuntimeClient,
+  DEFAULT_RUNTIME_URL,
+  RuntimeClientError,
+  type RuntimeClient
+} from "./runtime/client";
 import { createRuntimeProjectPayload } from "./runtime/payload";
 import {
   nextLoadedGraphFingerprint,
@@ -57,6 +63,7 @@ export default function App() {
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
   const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
+  const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
   const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
   const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
   const [pendingPatchBaseRevision, setPendingPatchBaseRevision] = useState<string | null>(null);
@@ -207,12 +214,15 @@ export default function App() {
       }
       const info = await client.getRuntimeInfo();
       const session = await client.getSession();
+      const history = runtimeSupportsHistory(info) ? await client.getSessionHistory() : null;
       setRuntimeInfo(info);
       setRuntimeSession(session);
+      setRuntimeHistory(history);
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeInfo(null);
       setRuntimeSession(null);
+      setRuntimeHistory(null);
       setLastLoadedGraphFingerprint(null);
       clearPendingPatch();
       setRuntimeStatus("error");
@@ -271,6 +281,9 @@ export default function App() {
         setLastLoadedGraphFingerprint(null);
         clearPendingPatch();
       }
+      if ((kind === "session" || kind === "loadSession" || kind === "clearSession") && runtimeSupportsHistory(runtimeInfo)) {
+        await refreshRuntimeHistory(createRuntimeClient({ baseUrl: runtimeUrl }));
+      }
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
@@ -296,6 +309,7 @@ export default function App() {
         baseUrl: runtimeUrl
       }).applySessionPatch(patch);
       setRuntimeSession(response.session);
+      setRuntimeHistory(response.history);
       setRuntimeResult({
         kind: "applyPatch",
         response,
@@ -314,6 +328,63 @@ export default function App() {
     } finally {
       setRuntimeBusyAction(null);
     }
+  }
+
+  async function refreshRuntimeHistory(client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl })) {
+    const history = await client.getSessionHistory();
+    setRuntimeHistory(history);
+    return history;
+  }
+
+  async function refreshRuntimeHistoryFromPanel() {
+    setRuntimeBusyAction("refreshHistory");
+    setRuntimeError(null);
+    try {
+      await refreshRuntimeHistory();
+      setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function runRuntimePatchHistoryAction(
+    kind: "undoPatch" | "redoPatch",
+    action: () => Promise<RuntimePatchResponse>
+  ) {
+    if (pendingPatchOps.length > 0) {
+      return;
+    }
+
+    setRuntimeBusyAction(kind);
+    setRuntimeError(null);
+    setPatchConflict(null);
+    try {
+      const response = await action();
+      setRuntimeSession(response.session);
+      setRuntimeHistory(response.history);
+      setRuntimeResult({
+        kind,
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+      if (response.ok && response.applied && response.graph) {
+        acceptRuntimeGraph(response.graph);
+        clearPendingPatch();
+      }
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  function runtimeSupportsHistory(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.history") ?? false;
   }
 
   return (
@@ -375,6 +446,7 @@ export default function App() {
               frames={runtimeFrames}
               info={runtimeInfo}
               result={runtimeResult}
+              history={runtimeHistory}
               session={runtimeSession}
               sessionSynced={runtimeSessionSynced}
               status={runtimeStatus}
@@ -422,15 +494,27 @@ export default function App() {
                 setRuntimeInfo(null);
                 setRuntimeResult(null);
                 setRuntimeSession(null);
+                setRuntimeHistory(null);
                 setLastLoadedGraphFingerprint(null);
                 clearPendingPatch();
                 setRuntimeError(null);
               }}
+              onRedoPatch={() =>
+                runRuntimePatchHistoryAction("redoPatch", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).redoSessionPatch()
+                )
+              }
+              onRefreshHistory={refreshRuntimeHistoryFromPanel}
               patchBaseRevision={pendingPatchBaseRevision}
               patchConflict={patchConflict}
               pendingPatchOps={pendingPatchOps.length}
               onApplyPendingPatch={applyPendingPatch}
               onClearPendingPatch={clearPendingPatch}
+              onUndoPatch={() =>
+                runRuntimePatchHistoryAction("undoPatch", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).undoSessionPatch()
+                )
+              }
               onValidate={() =>
                 runRuntimeAction("validate", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).validateProject(runtimeProject)

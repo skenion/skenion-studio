@@ -1,4 +1,9 @@
-import { validateGraphDocument } from "@skenion/contracts";
+import {
+  validateGraphDocument,
+  validateGraphPatchEvent,
+  validateGraphPatchHistory
+} from "@skenion/contracts";
+import type { GraphPatchHistoryV01 } from "@skenion/contracts";
 import type {
   RuntimeApiResponse,
   RuntimeHealth,
@@ -26,6 +31,9 @@ export interface RuntimeClient {
   planSession: () => Promise<RuntimeSessionResponse>;
   runSession: (frames: number) => Promise<RuntimeSessionResponse>;
   applySessionPatch: (patch: RuntimeSessionPatchRequest) => Promise<RuntimePatchResponse>;
+  getSessionHistory: () => Promise<GraphPatchHistoryV01>;
+  undoSessionPatch: () => Promise<RuntimePatchResponse>;
+  redoSessionPatch: () => Promise<RuntimePatchResponse>;
   clearSession: () => Promise<RuntimeSessionResponse>;
 }
 
@@ -77,6 +85,30 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
     ),
     runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/run", { frames }),
     applySessionPatch: (patch) => postRuntimePatchResponse(fetchImpl, baseUrl, "/v0/session/patch", patch),
+    getSessionHistory: () =>
+      requestJson<GraphPatchHistoryV01>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/history",
+        { method: "GET" },
+        isGraphPatchHistory
+      ),
+    undoSessionPatch: () =>
+      requestJson<RuntimePatchResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/undo",
+        { method: "POST" },
+        isRuntimePatchResponse
+      ),
+    redoSessionPatch: () =>
+      requestJson<RuntimePatchResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/redo",
+        { method: "POST" },
+        isRuntimePatchResponse
+      ),
     clearSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
   };
@@ -235,9 +267,15 @@ function isRuntimePatchResponse(value: unknown): value is RuntimePatchResponse {
     typeof value.conflict === "boolean" &&
     (value.graph === null || validateGraphDocument(value.graph).ok) &&
     isRuntimeSessionResponse(value.session) &&
+    (value.event === null || validateGraphPatchEvent(value.event).ok) &&
+    isGraphPatchHistory(value.history) &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic)
   );
+}
+
+function isGraphPatchHistory(value: unknown): value is GraphPatchHistoryV01 {
+  return validateGraphPatchHistory(value).ok;
 }
 
 function isRuntimeDiagnostic(value: unknown): boolean {

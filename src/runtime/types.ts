@@ -1,5 +1,7 @@
 import type {
   GraphDocumentV01,
+  GraphPatchEventV01,
+  GraphPatchHistoryV01,
   GraphPatchV01,
   NodeDefinitionManifestV01
 } from "@skenion/contracts";
@@ -104,6 +106,8 @@ export interface RuntimePatchResponse {
   conflict: boolean;
   graph: GraphDocumentV01 | null;
   session: RuntimeSessionResponse;
+  event: GraphPatchEventV01 | null;
+  history: GraphPatchHistoryV01;
   diagnostics: RuntimeDiagnostic[];
 }
 
@@ -123,6 +127,8 @@ export type RuntimeResultKind =
   | "planSession"
   | "runSession"
   | "applyPatch"
+  | "undoPatch"
+  | "redoPatch"
   | "clearSession";
 
 export type RuntimeActionResponse = RuntimeApiResponse | RuntimePatchResponse | RuntimeSessionResponse;
