@@ -204,6 +204,14 @@ export default function App() {
     setRuntimeResult(null);
   }
 
+  function setNodeParam(nodeId: string, key: string, value: unknown) {
+    const patch = { type: "setNodeParam", nodeId, key, value } satisfies GraphPatch;
+    setGraph((currentGraph) => applyPatch(currentGraph, patch));
+    recordGraphPatches([patch]);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+  }
+
   async function connectRuntime() {
     setRuntimeBusyAction("connect");
     setRuntimeStatus("connecting");
@@ -606,6 +614,7 @@ export default function App() {
               graph={graph}
               node={selectedNode}
               onRemoveNode={removeNode}
+              onSetNodeParam={setNodeParam}
               validation={validation}
             />
           </Stack>

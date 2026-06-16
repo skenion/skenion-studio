@@ -76,6 +76,13 @@ export function graphPatchFromStudioAction(
         op: "removeEdge",
         edge: clone(patch.edge)
       };
+    case "setNodeParam":
+      return {
+        op: "setNodeParam",
+        nodeId: patch.nodeId,
+        key: patch.key,
+        value: clone(patch.value)
+      };
   }
 }
 

@@ -45,6 +45,22 @@ describe("graph patch model", () => {
     });
   });
 
+  it("creates setNodeParam patch operations", () => {
+    expect(
+      graphPatchFromStudioAction({
+        type: "setNodeParam",
+        nodeId: "clear_1",
+        key: "color",
+        value: [0.8, 0.1, 0.2, 1]
+      })
+    ).toEqual({
+      op: "setNodeParam",
+      nodeId: "clear_1",
+      key: "color",
+      value: [0.8, 0.1, 0.2, 1]
+    });
+  });
+
   it("creates graph patches with the runtime base revision", () => {
     const operation = graphPatchFromStudioAction({
       type: "removeEdge",

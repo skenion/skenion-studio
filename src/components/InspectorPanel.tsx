@@ -1,6 +1,11 @@
-import { Alert, Badge, Button, Code, Divider, Group, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, Code, Divider, Group, NumberInput, Stack, Table, Text } from "@mantine/core";
 import { Trash2 } from "lucide-react";
 import type { GraphDocumentV01, GraphNodeV01, ValidationResult } from "@skenion/contracts";
+import {
+  isClearColorNode,
+  readClearColorParam,
+  replaceClearColorComponent
+} from "../graph/clearColor";
 import { typeLabel, type ConnectionCheck } from "../graph/skenionGraph";
 import { flowColor } from "../graph/reactFlowAdapter";
 
@@ -10,6 +15,7 @@ interface InspectorPanelProps {
   node: GraphNodeV01 | null;
   validation: ValidationResult<GraphDocumentV01>;
   onRemoveNode: (node: GraphNodeV01) => void;
+  onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }
 
 export function InspectorPanel({
@@ -17,8 +23,11 @@ export function InspectorPanel({
   graph,
   node,
   validation,
-  onRemoveNode
+  onRemoveNode,
+  onSetNodeParam
 }: InspectorPanelProps) {
+  const clearColor = isClearColorNode(node) ? readClearColorParam(node) : null;
+
   return (
     <Stack className="panel-shell" gap="md">
       <div>
@@ -107,6 +116,38 @@ export function InspectorPanel({
                   ))}
                 </Table.Tbody>
               </Table>
+
+              {clearColor ? (
+                <>
+                  <Divider />
+                  <Stack gap="xs">
+                    <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+                      Clear Color
+                    </Text>
+                    <Group grow>
+                      {(["R", "G", "B", "A"] as const).map((label, index) => (
+                        <NumberInput
+                          decimalScale={3}
+                          key={label}
+                          label={label}
+                          max={1}
+                          min={0}
+                          onChange={(value) => {
+                            if (typeof value !== "number" || !Number.isFinite(value)) {
+                              return;
+                            }
+                            const nextColor = replaceClearColorComponent(clearColor, index, value);
+                            onSetNodeParam(node.id, "color", nextColor);
+                          }}
+                          size="xs"
+                          step={0.01}
+                          value={clearColor[index]}
+                        />
+                      ))}
+                    </Group>
+                  </Stack>
+                </>
+              ) : null}
             </Stack>
           ) : (
             <Text c="dimmed" size="sm">

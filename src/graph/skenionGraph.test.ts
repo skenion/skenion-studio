@@ -75,7 +75,9 @@ describe("skenion graph helpers", () => {
 
   it("applies graph patches and bumps revisions", () => {
     const definition = nodeRegistry.find((candidate) => candidate.id === "core.event-log");
+    const renderDefinition = nodeRegistry.find((candidate) => candidate.id === "render.clear-color");
     const node = createGraphNodeFromDefinition(definition!, sampleGraph.nodes);
+    const renderNode = createGraphNodeFromDefinition(renderDefinition!, sampleGraph.nodes);
     const graphWithTextRevision = {
       ...sampleGraph,
       revision: "draft"
@@ -85,14 +87,33 @@ describe("skenion graph helpers", () => {
     const addedEdge = applyPatch(sampleGraph, { type: "addEdge", edge: sampleGraph.edges[0] });
     const removedEdge = applyPatch(sampleGraph, { type: "removeEdge", edge: sampleGraph.edges[0] });
     const removedNode = applyPatch(graphWithTextRevision, { type: "removeNode", nodeId: "value_1" });
+    const changedParam = applyPatch(
+      {
+        ...sampleGraph,
+        nodes: [...sampleGraph.nodes, renderNode]
+      },
+      {
+        type: "setNodeParam",
+        nodeId: renderNode.id,
+        key: "color",
+        value: [0.8, 0.1, 0.2, 1]
+      }
+    );
 
     expect(addedNode.revision).toBe("2");
     expect(addedNode.nodes.at(-1)).toEqual(node);
+    expect(renderNode.params).toEqual({ color: [0.05, 0.08, 0.12, 1] });
     expect(addedEdge.edges).toHaveLength(sampleGraph.edges.length + 1);
     expect(removedEdge.edges).toHaveLength(sampleGraph.edges.length - 1);
     expect(removedNode.revision).toBe("draft.1");
     expect(removedNode.nodes.some((candidate) => candidate.id === "value_1")).toBe(false);
     expect(removedNode.edges.some((edge) => edge.from.node === "value_1" || edge.to.node === "value_1")).toBe(false);
+    expect(changedParam.nodes.find((candidate) => candidate.id === renderNode.id)?.params.color).toEqual([
+      0.8,
+      0.1,
+      0.2,
+      1
+    ]);
   });
 
   it("checks connection failures and success messages", () => {
