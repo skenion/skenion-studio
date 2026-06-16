@@ -9,6 +9,8 @@ import type {
   RuntimeHealth,
   RuntimeInfo,
   RuntimePatchResponse,
+  RuntimePreviewStartRequest,
+  RuntimePreviewStatus,
   RuntimeProjectPayload,
   RuntimeSessionPatchRequest,
   RuntimeSessionResponse
@@ -34,6 +36,10 @@ export interface RuntimeClient {
   getSessionHistory: () => Promise<GraphPatchHistoryV01>;
   undoSessionPatch: () => Promise<RuntimePatchResponse>;
   redoSessionPatch: () => Promise<RuntimePatchResponse>;
+  getPreviewStatus: () => Promise<RuntimePreviewStatus>;
+  startPreview: (options?: Partial<RuntimePreviewStartRequest>) => Promise<RuntimePreviewStatus>;
+  stopPreview: () => Promise<RuntimePreviewStatus>;
+  restartPreview: () => Promise<RuntimePreviewStatus>;
   clearSession: () => Promise<RuntimeSessionResponse>;
 }
 
@@ -109,6 +115,34 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         { method: "POST" },
         isRuntimePatchResponse
       ),
+    getPreviewStatus: () =>
+      requestJson<RuntimePreviewStatus>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/preview",
+        { method: "GET" },
+        isRuntimePreviewStatus
+      ),
+    startPreview: (options = {}) =>
+      postRuntimePreviewStatus(fetchImpl, baseUrl, "/v0/session/preview/start", {
+        restart: options.restart ?? false
+      }),
+    stopPreview: () =>
+      requestJson<RuntimePreviewStatus>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/preview/stop",
+        { method: "POST" },
+        isRuntimePreviewStatus
+      ),
+    restartPreview: () =>
+      requestJson<RuntimePreviewStatus>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/preview/restart",
+        { method: "POST" },
+        isRuntimePreviewStatus
+      ),
     clearSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
   };
@@ -183,6 +217,27 @@ async function postRuntimePatchResponse(
       method: "POST"
     },
     isRuntimePatchResponse
+  );
+}
+
+async function postRuntimePreviewStatus(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  path: string,
+  body: RuntimePreviewStartRequest
+): Promise<RuntimePreviewStatus> {
+  return requestJson<RuntimePreviewStatus>(
+    fetchImpl,
+    baseUrl,
+    path,
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    },
+    isRuntimePreviewStatus
   );
 }
 
@@ -272,6 +327,30 @@ function isRuntimePatchResponse(value: unknown): value is RuntimePatchResponse {
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic)
   );
+}
+
+function isRuntimePreviewStatus(value: unknown): value is RuntimePreviewStatus {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    isRuntimePreviewState(value.state) &&
+    (typeof value.pid === "number" || value.pid === null) &&
+    (typeof value.graphId === "string" || value.graphId === null) &&
+    (typeof value.graphRevision === "string" || value.graphRevision === null) &&
+    (typeof value.sessionRevision === "number" || value.sessionRevision === null) &&
+    (typeof value.previewSessionRevision === "number" || value.previewSessionRevision === null) &&
+    typeof value.stale === "boolean" &&
+    (typeof value.startedAt === "string" || value.startedAt === null) &&
+    (typeof value.exitedAt === "string" || value.exitedAt === null) &&
+    (typeof value.exitCode === "number" || value.exitCode === null) &&
+    (typeof value.message === "string" || value.message === null) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
+  );
+}
+
+function isRuntimePreviewState(value: unknown): boolean {
+  return value === "stopped" || value === "starting" || value === "running" || value === "exited" || value === "error";
 }
 
 function isGraphPatchHistory(value: unknown): value is GraphPatchHistoryV01 {

@@ -7,6 +7,7 @@ import type {
 import { createRuntimeClient, normalizeRuntimeUrl, RuntimeClientError } from "./client";
 import type {
   RuntimePatchResponse,
+  RuntimePreviewStatus,
   RuntimeProjectPayload,
   RuntimeSessionResponse
 } from "./types";
@@ -141,6 +142,71 @@ describe("runtime client", () => {
     expect(calls[8]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
     expect(calls[9]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
   });
+
+  it("calls runtime preview endpoints", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(previewResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+
+    await client.getPreviewStatus();
+    await client.startPreview();
+    await client.startPreview({ restart: true });
+    await client.stopPreview();
+    await client.restartPreview();
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(calls[0]).toEqual(["http://runtime.local/v0/session/preview", { method: "GET" }]);
+    expect(calls[1][0]).toBe("http://runtime.local/v0/session/preview/start");
+    expect(JSON.parse(String(calls[1][1].body))).toEqual({ restart: false });
+    expect(calls[2][0]).toBe("http://runtime.local/v0/session/preview/start");
+    expect(JSON.parse(String(calls[2][1].body))).toEqual({ restart: true });
+    expect(calls[3]).toEqual(["http://runtime.local/v0/session/preview/stop", { method: "POST" }]);
+    expect(calls[4]).toEqual(["http://runtime.local/v0/session/preview/restart", { method: "POST" }]);
+  });
+
+  it("accepts runtime preview status responses", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () => jsonResponse(previewResponse({ stale: true }))) as typeof fetch
+    });
+
+    await expect(client.getPreviewStatus()).resolves.toMatchObject({
+      ok: true,
+      state: "running",
+      graphRevision: "1",
+      stale: true
+    });
+  });
+
+  it("accepts stopped runtime preview status responses with null metadata", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          previewResponse({
+            state: "stopped",
+            pid: null,
+            graphId: null,
+            graphRevision: null,
+            sessionRevision: null,
+            previewSessionRevision: null,
+            stale: false,
+            startedAt: null,
+            exitedAt: null,
+            exitCode: null,
+            message: null
+          })
+        )
+      ) as typeof fetch
+    });
+
+    await expect(client.getPreviewStatus()).resolves.toMatchObject({
+      state: "stopped",
+      graphRevision: null,
+      sessionRevision: null
+    });
+  });
+
 
   it("accepts runtime patch responses", async () => {
     const client = createRuntimeClient({
@@ -406,6 +472,36 @@ describe("runtime client", () => {
     await expect(client.getSessionHistory()).rejects.toThrow("unsupported response shape");
   });
 
+  it("rejects unsupported runtime preview status shapes", async () => {
+    const nonObjectClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () => jsonResponse(null)) as typeof fetch
+    });
+    await expect(nonObjectClient.getPreviewStatus()).rejects.toThrow("unsupported response shape");
+
+    const invalidStateClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...previewResponse(),
+          state: "paused"
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidStateClient.getPreviewStatus()).rejects.toThrow("unsupported response shape");
+
+    const invalidDiagnosticClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...previewResponse(),
+          diagnostics: [{ severity: "trace", message: "hidden" }]
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidDiagnosticClient.getPreviewStatus()).rejects.toThrow("unsupported response shape");
+  });
+
   it("rejects non-object runtime session responses", async () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -463,6 +559,25 @@ function historyResponse(overrides: Partial<GraphPatchHistoryV01> = {}): GraphPa
     canRedo: false,
     undoDepth: 1,
     redoDepth: 0,
+    ...overrides
+  };
+}
+
+function previewResponse(overrides: Partial<RuntimePreviewStatus> = {}): RuntimePreviewStatus {
+  return {
+    ok: true,
+    state: "running",
+    pid: 42,
+    graphId: "test",
+    graphRevision: "1",
+    sessionRevision: 1,
+    previewSessionRevision: 1,
+    stale: false,
+    startedAt: "unix-ms:1",
+    exitedAt: null,
+    exitCode: null,
+    message: null,
+    diagnostics: [],
     ...overrides
   };
 }

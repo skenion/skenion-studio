@@ -15,12 +15,15 @@ import {
   Cable,
   Database,
   History,
+  MonitorPlay,
   Play,
   RefreshCw,
   Redo2,
+  RotateCw,
   Route,
   SendHorizontal,
   ShieldCheck,
+  Square,
   Trash2,
   Undo2,
   X
@@ -30,11 +33,19 @@ import {
   latestHistoryEvents,
   runtimeHistoryActionAvailability
 } from "../runtime/historySync";
+import {
+  canRestartPreview,
+  canStartPreview,
+  canStopPreview,
+  previewBadgeColor,
+  previewButtonVariant
+} from "../runtime/previewSync";
 import type {
   RuntimeActionResult,
   RuntimeActionResponse,
   RuntimeConnectionStatus,
   RuntimeInfo,
+  RuntimePreviewStatus,
   RuntimeSessionResponse
 } from "../runtime/types";
 
@@ -45,6 +56,7 @@ interface RuntimePanelProps {
   info: RuntimeInfo | null;
   result: RuntimeActionResult | null;
   history: GraphPatchHistoryV01 | null;
+  previewStatus: RuntimePreviewStatus | null;
   session: RuntimeSessionResponse | null;
   sessionSynced: boolean;
   patchBaseRevision: string | null;
@@ -60,11 +72,15 @@ interface RuntimePanelProps {
   onLoadSession: () => void;
   onPlan: () => void;
   onPlanSession: () => void;
+  onRefreshPreview: () => void;
   onRedoPatch: () => void;
+  onRestartPreview: () => void;
   onRefreshHistory: () => void;
   onRefreshSession: () => void;
   onRun: () => void;
   onRunSession: () => void;
+  onStartPreview: () => void;
+  onStopPreview: () => void;
   onUndoPatch: () => void;
   onUrlChange: (url: string) => void;
   onValidate: () => void;
@@ -78,6 +94,7 @@ export function RuntimePanel({
   info,
   result,
   history,
+  previewStatus,
   session,
   sessionSynced,
   patchBaseRevision,
@@ -93,11 +110,15 @@ export function RuntimePanel({
   onLoadSession,
   onPlan,
   onPlanSession,
+  onRefreshPreview,
   onRedoPatch,
+  onRestartPreview,
   onRefreshHistory,
   onRefreshSession,
   onRun,
   onRunSession,
+  onStartPreview,
+  onStopPreview,
   onUndoPatch,
   onUrlChange,
   onValidate,
@@ -114,6 +135,13 @@ export function RuntimePanel({
     history
   });
   const latestEvents = latestHistoryEvents(history, 3);
+  const previewState = previewStatus?.state ?? "stopped";
+  const previewStale = previewStatus?.stale ?? false;
+  const previewActionState = {
+    connected,
+    sessionLoaded,
+    previewStatus
+  };
 
   return (
     <Stack className="runtime-panel" gap="sm">
@@ -260,6 +288,97 @@ export function RuntimePanel({
             2
           )}
         </Code>
+      ) : null}
+
+      <Divider />
+
+      <Group justify="space-between" wrap="nowrap">
+        <Text c="dimmed" size="xs">
+          Preview
+        </Text>
+        <Group gap={6} wrap="nowrap">
+          <Badge color={previewBadgeColor(previewState, previewStale)} radius="sm" variant="light">
+            {previewState}
+          </Badge>
+          {previewStale ? (
+            <Badge color="yellow" radius="sm" variant="light">
+              stale
+            </Badge>
+          ) : null}
+        </Group>
+      </Group>
+
+      <Code block className="runtime-json">
+        {JSON.stringify(
+          {
+            pid: previewStatus?.pid ?? null,
+            graphRevision: previewStatus?.graphRevision ?? null,
+            sessionRevision: previewStatus?.sessionRevision ?? null,
+            previewSessionRevision: previewStatus?.previewSessionRevision ?? null
+          },
+          null,
+          2
+        )}
+      </Code>
+
+      <Group gap="xs" grow>
+        <Button
+          disabled={!connected}
+          leftSection={<RefreshCw size={15} />}
+          loading={busyAction === "previewStatus"}
+          onClick={onRefreshPreview}
+          radius="sm"
+          size="xs"
+          variant="light"
+        >
+          Refresh Status
+        </Button>
+        <Button
+          disabled={!canStartPreview(previewActionState)}
+          leftSection={<MonitorPlay size={15} />}
+          loading={busyAction === "startPreview"}
+          onClick={onStartPreview}
+          radius="sm"
+          size="xs"
+          variant={previewState === "stopped" ? "filled" : "light"}
+        >
+          Start Preview
+        </Button>
+      </Group>
+
+      <Group gap="xs" grow>
+        <Button
+          disabled={!canStopPreview(previewStatus)}
+          leftSection={<Square size={15} />}
+          loading={busyAction === "stopPreview"}
+          onClick={onStopPreview}
+          radius="sm"
+          size="xs"
+          variant="light"
+        >
+          Stop Preview
+        </Button>
+        <Button
+          disabled={!canRestartPreview(previewActionState)}
+          leftSection={<RotateCw size={15} />}
+          loading={busyAction === "restartPreview"}
+          onClick={onRestartPreview}
+          radius="sm"
+          size="xs"
+          variant={previewButtonVariant(previewStatus)}
+        >
+          Restart Preview
+        </Button>
+      </Group>
+
+      {previewStatus?.diagnostics.length ? (
+        <Stack gap={4}>
+          {previewStatus.diagnostics.slice(0, 3).map((diagnostic) => (
+            <Alert color={diagnostic.severity === "error" ? "red" : "yellow"} key={diagnostic.message} radius="sm" variant="light">
+              {diagnostic.message}
+            </Alert>
+          ))}
+        </Stack>
       ) : null}
 
       <Divider />
