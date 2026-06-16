@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.9.0...skenion-studio-v0.10.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** add fullscreen shader node editor ([#19](https://github.com/echovisionlab/skenion-studio/issues/19)) ([6637c7c](https://github.com/echovisionlab/skenion-studio/commit/6637c7ceb74d481c14cde664484df31bb357751c))
+
 ## [0.9.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.8.0...skenion-studio-v0.9.0) (2026-06-16)
 
 
