@@ -111,6 +111,28 @@ export interface RuntimePatchResponse {
   diagnostics: RuntimeDiagnostic[];
 }
 
+export type RuntimePreviewState = "stopped" | "starting" | "running" | "exited" | "error";
+
+export interface RuntimePreviewStatus {
+  ok: boolean;
+  state: RuntimePreviewState;
+  pid: number | null;
+  graphId: string | null;
+  graphRevision: string | null;
+  sessionRevision: number | null;
+  previewSessionRevision: number | null;
+  stale: boolean;
+  startedAt: string | null;
+  exitedAt: string | null;
+  exitCode: number | null;
+  message: string | null;
+  diagnostics: RuntimeDiagnostic[];
+}
+
+export interface RuntimePreviewStartRequest {
+  restart: boolean;
+}
+
 export interface RuntimeSessionRunRequest {
   frames: number;
 }

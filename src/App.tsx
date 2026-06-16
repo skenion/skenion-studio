@@ -46,6 +46,7 @@ import type {
   RuntimeInfo,
   RuntimeResultKind,
   RuntimePatchResponse,
+  RuntimePreviewStatus,
   RuntimeSessionResponse
 } from "./runtime/types";
 
@@ -64,6 +65,7 @@ export default function App() {
   const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
   const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
+  const [runtimePreviewStatus, setRuntimePreviewStatus] = useState<RuntimePreviewStatus | null>(null);
   const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
   const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
   const [pendingPatchBaseRevision, setPendingPatchBaseRevision] = useState<string | null>(null);
@@ -215,14 +217,17 @@ export default function App() {
       const info = await client.getRuntimeInfo();
       const session = await client.getSession();
       const history = runtimeSupportsHistory(info) ? await client.getSessionHistory() : null;
+      const previewStatus = runtimeSupportsPreview(info) ? await client.getPreviewStatus() : null;
       setRuntimeInfo(info);
       setRuntimeSession(session);
       setRuntimeHistory(history);
+      setRuntimePreviewStatus(previewStatus);
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeInfo(null);
       setRuntimeSession(null);
       setRuntimeHistory(null);
+      setRuntimePreviewStatus(null);
       setLastLoadedGraphFingerprint(null);
       clearPendingPatch();
       setRuntimeStatus("error");
@@ -284,6 +289,9 @@ export default function App() {
       if ((kind === "session" || kind === "loadSession" || kind === "clearSession") && runtimeSupportsHistory(runtimeInfo)) {
         await refreshRuntimeHistory(createRuntimeClient({ baseUrl: runtimeUrl }));
       }
+      if (kind === "session" || kind === "loadSession" || kind === "clearSession") {
+        await refreshRuntimePreview(createRuntimeClient({ baseUrl: runtimeUrl }));
+      }
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
@@ -310,6 +318,7 @@ export default function App() {
       }).applySessionPatch(patch);
       setRuntimeSession(response.session);
       setRuntimeHistory(response.history);
+      await refreshRuntimePreview(createRuntimeClient({ baseUrl: runtimeUrl }));
       setRuntimeResult({
         kind: "applyPatch",
         response,
@@ -336,11 +345,54 @@ export default function App() {
     return history;
   }
 
+  async function refreshRuntimePreview(client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl })) {
+    if (!runtimeSupportsPreview(runtimeInfo)) {
+      setRuntimePreviewStatus(null);
+      return null;
+    }
+
+    const previewStatus = await client.getPreviewStatus();
+    setRuntimePreviewStatus(previewStatus);
+    return previewStatus;
+  }
+
   async function refreshRuntimeHistoryFromPanel() {
     setRuntimeBusyAction("refreshHistory");
     setRuntimeError(null);
     try {
       await refreshRuntimeHistory();
+      setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function refreshRuntimePreviewFromPanel() {
+    setRuntimeBusyAction("previewStatus");
+    setRuntimeError(null);
+    try {
+      await refreshRuntimePreview();
+      setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function runRuntimePreviewAction(
+    kind: "startPreview" | "stopPreview" | "restartPreview",
+    action: () => Promise<RuntimePreviewStatus>
+  ) {
+    setRuntimeBusyAction(kind);
+    setRuntimeError(null);
+    try {
+      const response = await action();
+      setRuntimePreviewStatus(response);
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeStatus("error");
@@ -365,6 +417,7 @@ export default function App() {
       const response = await action();
       setRuntimeSession(response.session);
       setRuntimeHistory(response.history);
+      await refreshRuntimePreview(createRuntimeClient({ baseUrl: runtimeUrl }));
       setRuntimeResult({
         kind,
         response,
@@ -385,6 +438,10 @@ export default function App() {
 
   function runtimeSupportsHistory(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.history") ?? false;
+  }
+
+  function runtimeSupportsPreview(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.preview.status") ?? false;
   }
 
   return (
@@ -447,6 +504,7 @@ export default function App() {
               info={runtimeInfo}
               result={runtimeResult}
               history={runtimeHistory}
+              previewStatus={runtimePreviewStatus}
               session={runtimeSession}
               sessionSynced={runtimeSessionSynced}
               status={runtimeStatus}
@@ -495,6 +553,7 @@ export default function App() {
                 setRuntimeResult(null);
                 setRuntimeSession(null);
                 setRuntimeHistory(null);
+                setRuntimePreviewStatus(null);
                 setLastLoadedGraphFingerprint(null);
                 clearPendingPatch();
                 setRuntimeError(null);
@@ -505,11 +564,27 @@ export default function App() {
                 )
               }
               onRefreshHistory={refreshRuntimeHistoryFromPanel}
+              onRefreshPreview={refreshRuntimePreviewFromPanel}
+              onRestartPreview={() =>
+                runRuntimePreviewAction("restartPreview", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).restartPreview()
+                )
+              }
               patchBaseRevision={pendingPatchBaseRevision}
               patchConflict={patchConflict}
               pendingPatchOps={pendingPatchOps.length}
               onApplyPendingPatch={applyPendingPatch}
               onClearPendingPatch={clearPendingPatch}
+              onStartPreview={() =>
+                runRuntimePreviewAction("startPreview", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).startPreview()
+                )
+              }
+              onStopPreview={() =>
+                runRuntimePreviewAction("stopPreview", () =>
+                  createRuntimeClient({ baseUrl: runtimeUrl }).stopPreview()
+                )
+              }
               onUndoPatch={() =>
                 runRuntimePatchHistoryAction("undoPatch", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).undoSessionPatch()
