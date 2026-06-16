@@ -10,10 +10,12 @@ function node(kind: string, id: string, label: string) {
     throw new Error(`missing sample node definition ${kind}`);
   }
 
+  const created = createGraphNodeFromDefinition(definition, []);
   return {
-    ...createGraphNodeFromDefinition(definition, []),
+    ...created,
     id,
     params: {
+      ...created.params,
       label
     }
   };
@@ -83,6 +85,29 @@ export const sampleGraph: GraphDocumentV01 = {
       to: {
         node: "preview_1",
         port: "texture"
+      }
+    }
+  ]
+};
+
+export const renderSampleGraph: GraphDocumentV01 = {
+  schema: "skenion.graph",
+  schemaVersion: "0.1.0",
+  id: "studio-render-sample",
+  revision: "1",
+  nodes: [
+    node("render.fullscreen-shader", "shader_1", "Fullscreen Shader"),
+    node("render.output", "output_1", "Preview Output")
+  ],
+  edges: [
+    {
+      from: {
+        node: "shader_1",
+        port: "out"
+      },
+      to: {
+        node: "output_1",
+        port: "in"
       }
     }
   ]

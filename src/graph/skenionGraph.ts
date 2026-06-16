@@ -205,6 +205,10 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
   };
 }
 
+export function isValidSkenionConnection(graph: GraphDocumentV01, connection: Connection): boolean {
+  return checkConnection(graph, toSkenionPatch(connection)).ok;
+}
+
 export function findPort(graph: GraphDocumentV01, nodeId: string, portId: string): PortV01 | undefined {
   return graph.nodes.find((node) => node.id === nodeId)?.ports.find((port) => port.id === portId);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Connection, Edge } from "@xyflow/react";
 import { nodeRegistry } from "../data/registry";
-import { sampleGraph } from "../data/sampleGraph";
+import { renderSampleGraph, sampleGraph } from "../data/sampleGraph";
 import {
   applyPatch,
   checkConnection,
@@ -9,6 +9,7 @@ import {
   edgeFromReactFlow,
   findPort,
   graphSummary,
+  isValidSkenionConnection,
   portKey,
   toSkenionPatch,
   typeKey,
@@ -46,6 +47,8 @@ describe("skenion graph helpers", () => {
   it("summarizes and validates graphs", () => {
     expect(graphSummary(sampleGraph)).toBe("8 nodes · 5 edges · rev 1");
     expect(validateGraph(sampleGraph).ok).toBe(true);
+    expect(graphSummary(renderSampleGraph)).toBe("2 nodes · 1 edges · rev 1");
+    expect(validateGraph(renderSampleGraph).ok).toBe(true);
     expect(validateGraph({}).ok).toBe(false);
   });
 
@@ -163,6 +166,22 @@ describe("skenion graph helpers", () => {
       ok: true,
       message: "value<f32> connected to value<f32>."
     });
+    expect(
+      isValidSkenionConnection(renderSampleGraph, {
+        source: "shader_1",
+        sourceHandle: "out",
+        target: "output_1",
+        targetHandle: "in"
+      })
+    ).toBe(true);
+    expect(
+      isValidSkenionConnection(renderSampleGraph, {
+        source: "output_1",
+        sourceHandle: "in",
+        target: "shader_1",
+        targetHandle: "out"
+      })
+    ).toBe(false);
   });
 
   it("finds graph ports", () => {

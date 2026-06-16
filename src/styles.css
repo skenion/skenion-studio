@@ -102,7 +102,7 @@ body {
   position: relative;
   width: 238px;
   min-height: 132px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #cdd5df;
   border-left: 4px solid var(--node-accent);
   border-radius: 8px;
@@ -137,14 +137,26 @@ body {
 .port-column {
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
+}
+
+.port-column-title {
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.port-empty {
+  min-height: 24px;
+  padding-top: 4px;
+  font-weight: 600;
 }
 
 .port-row {
   position: relative;
-  min-height: 24px;
+  min-height: 32px;
   min-width: 0;
+  padding: 2px 0;
 }
 
 .port-column-output .port-label {
@@ -158,12 +170,32 @@ body {
 .port-type {
   display: block;
   max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 
 .react-flow__handle {
   width: 10px;
   height: 10px;
   border: 2px solid #ffffff;
+}
+
+.react-flow__handle.port-handle {
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(31 41 51 / 18%);
+  transform: translateY(-50%);
+}
+
+.react-flow__handle.port-handle-input {
+  left: -19px;
+}
+
+.react-flow__handle.port-handle-output {
+  right: -19px;
 }
 
 .react-flow__edge-path {

@@ -115,7 +115,7 @@ export const nodeRegistry: NodeDefinitionManifestV01[] = [
     version: "0.1.0",
     displayName: "Clear Color",
     category: "Render",
-    ports: [],
+    ports: [output("out", "Out", gpuTexture)],
     execution: {
       model: "gpu_pass",
       clock: "frame"
@@ -133,7 +133,7 @@ export const nodeRegistry: NodeDefinitionManifestV01[] = [
     version: "0.1.0",
     displayName: "Fullscreen Shader",
     category: "Render",
-    ports: [],
+    ports: [output("out", "Out", gpuTexture)],
     execution: {
       model: "gpu_pass",
       clock: "frame"
@@ -143,5 +143,23 @@ export const nodeRegistry: NodeDefinitionManifestV01[] = [
     },
     permissions: [],
     capabilities: ["render.output.fullscreen-shader"]
+  },
+  {
+    schema: "skenion.node.definition",
+    schemaVersion: "0.1.0",
+    id: "render.output",
+    version: "0.1.0",
+    displayName: "Render Output",
+    category: "Render",
+    ports: [input("in", "In", gpuTexture, "latched")],
+    execution: {
+      model: "frame",
+      clock: "frame"
+    },
+    state: {
+      persistent: false
+    },
+    permissions: [],
+    capabilities: ["render.output.surface"]
   }
 ];

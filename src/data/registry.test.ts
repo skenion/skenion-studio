@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CLEAR_COLOR_NODE_KIND } from "../graph/clearColor";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "../graph/fullscreenShader";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
@@ -16,8 +17,57 @@ describe("node registry", () => {
         model: "gpu_pass",
         clock: "frame"
       },
-      ports: [],
+      ports: [
+        {
+          id: "out",
+          direction: "output",
+          label: "Out",
+          type: {
+            flow: "resource",
+            dataKind: "gpu.texture2d",
+            format: "rgba8unorm",
+            colorSpace: "srgb"
+          }
+        }
+      ],
       capabilities: ["render.output.fullscreen-shader"]
+    });
+  });
+
+  it("includes explicit render output wiring definitions", () => {
+    const clear = nodeRegistry.find((candidate) => candidate.id === CLEAR_COLOR_NODE_KIND);
+    const output = nodeRegistry.find((candidate) => candidate.id === "render.output");
+
+    expect(clear?.ports).toMatchObject([
+      {
+        id: "out",
+        direction: "output",
+        type: {
+          flow: "resource",
+          dataKind: "gpu.texture2d"
+        }
+      }
+    ]);
+    expect(output).toMatchObject({
+      id: "render.output",
+      displayName: "Render Output",
+      category: "Render",
+      execution: {
+        model: "frame",
+        clock: "frame"
+      },
+      ports: [
+        {
+          id: "in",
+          direction: "input",
+          activation: "latched",
+          type: {
+            flow: "resource",
+            dataKind: "gpu.texture2d"
+          }
+        }
+      ],
+      capabilities: ["render.output.surface"]
     });
   });
 

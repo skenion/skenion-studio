@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, FileButton, Group, Text, Tooltip } from "@mantine/core";
-import { Download, FileJson, RefreshCcw, Upload } from "lucide-react";
+import { Download, FileJson, MonitorPlay, RefreshCcw, Upload } from "lucide-react";
 import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
 
 interface StudioToolbarProps {
@@ -8,6 +8,7 @@ interface StudioToolbarProps {
   validation: ValidationResult<GraphDocumentV01>;
   onExport: () => void;
   onImport: (file: File | null) => void;
+  onLoadRenderSample: () => void;
   onReset: () => void;
 }
 
@@ -17,6 +18,7 @@ export function StudioToolbar({
   validation,
   onExport,
   onImport,
+  onLoadRenderSample,
   onReset
 }: StudioToolbarProps) {
   return (
@@ -56,6 +58,17 @@ export function StudioToolbar({
         <Tooltip label="Restore sample graph">
           <ActionIcon aria-label="Restore sample graph" onClick={onReset} radius="sm" size="lg" variant="subtle">
             <RefreshCcw size={18} />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip label="Load render sample">
+          <ActionIcon
+            aria-label="Load render sample"
+            onClick={onLoadRenderSample}
+            radius="sm"
+            size="lg"
+            variant="subtle"
+          >
+            <MonitorPlay size={18} />
           </ActionIcon>
         </Tooltip>
         <Badge leftSection={<FileJson size={13} />} radius="sm" variant="outline">

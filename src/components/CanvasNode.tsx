@@ -43,19 +43,26 @@ export function CanvasNode({ data, selected }: CanvasNodeProps) {
 function PortColumn({ ports, side }: { ports: PortV01[]; side: "input" | "output" }) {
   return (
     <div className={`port-column port-column-${side}`}>
-      {ports.map((port, index) => {
+      <Text c="dimmed" className="port-column-title" size="10px" tt="uppercase">
+        {side === "input" ? "Inlets" : "Outlets"}
+      </Text>
+      {ports.length === 0 ? (
+        <Text c="dimmed" className="port-empty" size="10px" ta={side === "input" ? "left" : "right"}>
+          {side === "input" ? "No inlets" : "No outlets"}
+        </Text>
+      ) : null}
+      {ports.map((port) => {
         const color = flowColor(port.type.flow, port.type.dataKind);
-        const top = 74 + index * 30;
 
         return (
           <div className="port-row" key={port.id}>
             <Handle
+              className={`port-handle port-handle-${side}`}
               id={port.id}
               position={side === "input" ? Position.Left : Position.Right}
               style={{
                 background: color,
-                borderColor: color,
-                top
+                borderColor: color
               }}
               type={side === "input" ? "target" : "source"}
             />
@@ -66,8 +73,9 @@ function PortColumn({ ports, side }: { ports: PortV01[]; side: "input" | "output
               </Text>
               {side === "output" ? <span className="flow-swatch" style={{ background: color }} /> : null}
             </Group>
-            <Text c="dimmed" className="port-type" size="10px" ta={side === "input" ? "left" : "right"} truncate>
+            <Text c="dimmed" className="port-type" size="10px" ta={side === "input" ? "left" : "right"}>
               {typeLabel(port.type)}
+              {side === "input" && port.activation ? ` · ${port.activation}` : ""}
             </Text>
           </div>
         );

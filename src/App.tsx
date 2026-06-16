@@ -13,7 +13,7 @@ import { PalettePanel } from "./components/PalettePanel";
 import { RuntimePanel } from "./components/RuntimePanel";
 import { StudioToolbar } from "./components/StudioToolbar";
 import { nodeRegistry } from "./data/registry";
-import { sampleGraph } from "./data/sampleGraph";
+import { renderSampleGraph, sampleGraph } from "./data/sampleGraph";
 import {
   applyPatch,
   createGraphNodeFromDefinition,
@@ -192,6 +192,16 @@ export default function App() {
     setGraph(sampleGraph);
     setPositions({});
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
+    clearPendingPatch();
+    setImportError(null);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+  }
+
+  function loadRenderSample() {
+    setGraph(renderSampleGraph);
+    setPositions({});
+    setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
     clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
@@ -529,6 +539,7 @@ export default function App() {
           validation={validation}
           onExport={exportGraph}
           onImport={importGraph}
+          onLoadRenderSample={loadRenderSample}
           onReset={resetSample}
         />
       </AppShell.Header>

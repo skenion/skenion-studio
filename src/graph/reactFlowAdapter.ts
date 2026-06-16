@@ -103,7 +103,9 @@ function toReactFlowEdge(edge: EdgeV01, graph: GraphDocumentV01): Edge {
     sourceHandle: edge.from.port,
     target: edge.to.node,
     targetHandle: edge.to.port,
+    type: "smoothstep",
     label,
+    interactionWidth: 18,
     animated: sourcePort?.type.flow === "event" || sourcePort?.type.flow === "stream",
     style: {
       stroke: color,

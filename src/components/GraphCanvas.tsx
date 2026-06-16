@@ -16,6 +16,7 @@ import {
   applyPatch,
   checkConnection,
   edgeFromReactFlow,
+  isValidSkenionConnection,
   toSkenionPatch,
   type GraphPatch,
   type ConnectionCheck,
@@ -52,6 +53,13 @@ export function GraphCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(viewModel.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(viewModel.edges);
   const deletingNodeIdsRef = useRef<Set<string>>(new Set());
+  const defaultEdgeOptions = useMemo(
+    () => ({
+      type: "smoothstep",
+      interactionWidth: 18
+    }),
+    []
+  );
 
   useEffect(() => {
     setNodes(viewModel.nodes);
@@ -70,6 +78,17 @@ export function GraphCanvas({
       onGraphChange(applyPatch(graph, patch), [patch]);
     },
     [graph, onConnectionCheck, onGraphChange]
+  );
+
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) =>
+      isValidSkenionConnection(graph, {
+        source: connection.source,
+        sourceHandle: connection.sourceHandle ?? null,
+        target: connection.target,
+        targetHandle: connection.targetHandle ?? null
+      }),
+    [graph]
   );
 
   const onNodeDragStop = useCallback(
@@ -130,12 +149,14 @@ export function GraphCanvas({
   return (
     <ReactFlow
       className="skenion-flow"
+      defaultEdgeOptions={defaultEdgeOptions}
       deleteKeyCode={["Backspace", "Delete"]}
       edges={edges}
       fitView
       fitViewOptions={{ padding: 0.18 }}
       nodeTypes={nodeTypes}
       nodes={selectedNodes}
+      isValidConnection={isValidConnection}
       onConnect={onConnect}
       onEdgesChange={onEdgesChange}
       onEdgesDelete={onEdgesDelete}

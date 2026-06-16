@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GraphDocumentV01 } from "@skenion/contracts";
-import { sampleGraph } from "../data/sampleGraph";
+import { renderSampleGraph, sampleGraph } from "../data/sampleGraph";
 import { defaultPosition, flowColor, flowName, toReactFlowViewModel } from "./reactFlowAdapter";
 
 describe("React Flow adapter", () => {
@@ -24,7 +24,9 @@ describe("React Flow adapter", () => {
       id: "value_1.value->target_1.value",
       source: "value_1",
       target: "target_1",
+      type: "smoothstep",
       label: "value<f32>",
+      interactionWidth: 18,
       animated: false,
       style: {
         stroke: "#495057",
@@ -35,6 +37,28 @@ describe("React Flow adapter", () => {
     expect(viewModel.edges[4].style).toMatchObject({
       stroke: "#7048e8",
       strokeWidth: 3
+    });
+  });
+
+  it("derives explicit render output sample edges", () => {
+    const viewModel = toReactFlowViewModel(renderSampleGraph, {});
+
+    expect(viewModel.nodes.map((node) => node.id)).toEqual(["shader_1", "output_1"]);
+    expect(viewModel.nodes[0].data.ports).toHaveLength(1);
+    expect(viewModel.nodes[1].data.ports).toHaveLength(1);
+    expect(viewModel.edges[0]).toMatchObject({
+      id: "shader_1.out->output_1.in",
+      source: "shader_1",
+      sourceHandle: "out",
+      target: "output_1",
+      targetHandle: "in",
+      type: "smoothstep",
+      label: "resource<gpu.texture2d>",
+      interactionWidth: 18,
+      style: {
+        stroke: "#7048e8",
+        strokeWidth: 3
+      }
     });
   });
 
