@@ -133,6 +133,51 @@ export interface RuntimePreviewStartRequest {
   restart: boolean;
 }
 
+export interface RuntimeTelemetrySnapshot {
+  schema: "skenion.runtime.telemetry";
+  schemaVersion: "0.1.0";
+  ok: boolean;
+  timestamp: string;
+  session: RuntimeTelemetrySession;
+  preview: RuntimeTelemetryPreview;
+  render: RuntimeTelemetryRender;
+  process: RuntimeTelemetryProcess;
+  diagnostics: RuntimeDiagnostic[];
+}
+
+export interface RuntimeTelemetrySession {
+  loaded: boolean;
+  graphId: string | null;
+  graphRevision: string | null;
+  sessionRevision: number;
+}
+
+export interface RuntimeTelemetryPreview {
+  state: RuntimePreviewState;
+  pid: number | null;
+  stale: boolean;
+  graphId: string | null;
+  graphRevision: string | null;
+  sessionRevision: number | null;
+  previewSessionRevision: number | null;
+}
+
+export interface RuntimeTelemetryRender {
+  active: boolean;
+  backend: string | null;
+  renderer: string | null;
+  framesRendered: number;
+  approxFps: number | null;
+  lastFrameMs: number | null;
+  lastError: string | null;
+  sourceNodeId: string | null;
+}
+
+export interface RuntimeTelemetryProcess {
+  runtimeVersion: string;
+  uptimeMs: number;
+}
+
 export interface RuntimeSessionRunRequest {
   frames: number;
 }

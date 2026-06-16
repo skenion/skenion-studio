@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, AppShell, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
 import type {
@@ -47,7 +47,8 @@ import type {
   RuntimeResultKind,
   RuntimePatchResponse,
   RuntimePreviewStatus,
-  RuntimeSessionResponse
+  RuntimeSessionResponse,
+  RuntimeTelemetrySnapshot
 } from "./runtime/types";
 
 export default function App() {
@@ -66,6 +67,7 @@ export default function App() {
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
   const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] = useState<RuntimePreviewStatus | null>(null);
+  const [runtimeTelemetry, setRuntimeTelemetry] = useState<RuntimeTelemetrySnapshot | null>(null);
   const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
   const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
   const [pendingPatchBaseRevision, setPendingPatchBaseRevision] = useState<string | null>(null);
@@ -226,16 +228,19 @@ export default function App() {
       const session = await client.getSession();
       const history = runtimeSupportsHistory(info) ? await client.getSessionHistory() : null;
       const previewStatus = runtimeSupportsPreview(info) ? await client.getPreviewStatus() : null;
+      const telemetry = runtimeSupportsTelemetry(info) ? await client.getTelemetry() : null;
       setRuntimeInfo(info);
       setRuntimeSession(session);
       setRuntimeHistory(history);
       setRuntimePreviewStatus(previewStatus);
+      setRuntimeTelemetry(telemetry);
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeInfo(null);
       setRuntimeSession(null);
       setRuntimeHistory(null);
       setRuntimePreviewStatus(null);
+      setRuntimeTelemetry(null);
       setLastLoadedGraphFingerprint(null);
       clearPendingPatch();
       setRuntimeStatus("error");
@@ -275,6 +280,7 @@ export default function App() {
     setRuntimeError(null);
     try {
       const response = await action();
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
       setRuntimeSession(response);
       setRuntimeResult({
         kind,
@@ -295,11 +301,12 @@ export default function App() {
         clearPendingPatch();
       }
       if ((kind === "session" || kind === "loadSession" || kind === "clearSession") && runtimeSupportsHistory(runtimeInfo)) {
-        await refreshRuntimeHistory(createRuntimeClient({ baseUrl: runtimeUrl }));
+        await refreshRuntimeHistory(client);
       }
       if (kind === "session" || kind === "loadSession" || kind === "clearSession") {
-        await refreshRuntimePreview(createRuntimeClient({ baseUrl: runtimeUrl }));
+        await refreshRuntimePreview(client);
       }
+      await refreshRuntimeTelemetry(client);
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
@@ -324,9 +331,11 @@ export default function App() {
       const response: RuntimePatchResponse = await createRuntimeClient({
         baseUrl: runtimeUrl
       }).applySessionPatch(patch);
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
       setRuntimeSession(response.session);
       setRuntimeHistory(response.history);
-      await refreshRuntimePreview(createRuntimeClient({ baseUrl: runtimeUrl }));
+      await refreshRuntimePreview(client);
+      await refreshRuntimeTelemetry(client);
       setRuntimeResult({
         kind: "applyPatch",
         response,
@@ -364,6 +373,20 @@ export default function App() {
     return previewStatus;
   }
 
+  async function refreshRuntimeTelemetry(
+    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    info: RuntimeInfo | null = runtimeInfo
+  ) {
+    if (!runtimeSupportsTelemetry(info)) {
+      setRuntimeTelemetry(null);
+      return null;
+    }
+
+    const telemetry = await client.getTelemetry();
+    setRuntimeTelemetry(telemetry);
+    return telemetry;
+  }
+
   async function refreshRuntimeHistoryFromPanel() {
     setRuntimeBusyAction("refreshHistory");
     setRuntimeError(null);
@@ -383,6 +406,7 @@ export default function App() {
     setRuntimeError(null);
     try {
       await refreshRuntimePreview();
+      await refreshRuntimeTelemetry();
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeStatus("error");
@@ -400,7 +424,9 @@ export default function App() {
     setRuntimeError(null);
     try {
       const response = await action();
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
       setRuntimePreviewStatus(response);
+      await refreshRuntimeTelemetry(client);
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeStatus("error");
@@ -423,9 +449,11 @@ export default function App() {
     setPatchConflict(null);
     try {
       const response = await action();
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
       setRuntimeSession(response.session);
       setRuntimeHistory(response.history);
-      await refreshRuntimePreview(createRuntimeClient({ baseUrl: runtimeUrl }));
+      await refreshRuntimePreview(client);
+      await refreshRuntimeTelemetry(client);
       setRuntimeResult({
         kind,
         response,
@@ -451,6 +479,41 @@ export default function App() {
   function runtimeSupportsPreview(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.preview.status") ?? false;
   }
+
+  function runtimeSupportsTelemetry(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.telemetry") ?? false;
+  }
+
+  useEffect(() => {
+    if (runtimeStatus !== "connected" || !runtimeSupportsTelemetry(runtimeInfo)) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const client = createRuntimeClient({ baseUrl: runtimeUrl });
+    const refresh = async () => {
+      try {
+        const telemetry = await client.getTelemetry();
+        if (!cancelled) {
+          setRuntimeTelemetry(telemetry);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRuntimeTelemetry(null);
+          setRuntimeStatus("error");
+          setRuntimeError(error instanceof Error ? error.message : "Runtime telemetry request failed.");
+        }
+      }
+    };
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [runtimeInfo, runtimeStatus, runtimeUrl]);
 
   return (
     <AppShell
@@ -515,6 +578,7 @@ export default function App() {
               previewStatus={runtimePreviewStatus}
               session={runtimeSession}
               sessionSynced={runtimeSessionSynced}
+              telemetry={runtimeTelemetry}
               status={runtimeStatus}
               url={runtimeUrl}
               onClearSession={() =>
@@ -562,6 +626,7 @@ export default function App() {
                 setRuntimeSession(null);
                 setRuntimeHistory(null);
                 setRuntimePreviewStatus(null);
+                setRuntimeTelemetry(null);
                 setLastLoadedGraphFingerprint(null);
                 clearPendingPatch();
                 setRuntimeError(null);

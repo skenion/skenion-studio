@@ -13,7 +13,8 @@ import type {
   RuntimePreviewStatus,
   RuntimeProjectPayload,
   RuntimeSessionPatchRequest,
-  RuntimeSessionResponse
+  RuntimeSessionResponse,
+  RuntimeTelemetrySnapshot
 } from "./types";
 
 export const DEFAULT_RUNTIME_URL =
@@ -40,6 +41,7 @@ export interface RuntimeClient {
   startPreview: (options?: Partial<RuntimePreviewStartRequest>) => Promise<RuntimePreviewStatus>;
   stopPreview: () => Promise<RuntimePreviewStatus>;
   restartPreview: () => Promise<RuntimePreviewStatus>;
+  getTelemetry: () => Promise<RuntimeTelemetrySnapshot>;
   clearSession: () => Promise<RuntimeSessionResponse>;
 }
 
@@ -142,6 +144,14 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         "/v0/session/preview/restart",
         { method: "POST" },
         isRuntimePreviewStatus
+      ),
+    getTelemetry: () =>
+      requestJson<RuntimeTelemetrySnapshot>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/telemetry",
+        { method: "GET" },
+        isRuntimeTelemetrySnapshot
       ),
     clearSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
@@ -347,6 +357,63 @@ function isRuntimePreviewStatus(value: unknown): value is RuntimePreviewStatus {
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic)
   );
+}
+
+function isRuntimeTelemetrySnapshot(value: unknown): value is RuntimeTelemetrySnapshot {
+  return (
+    isRecord(value) &&
+    value.schema === "skenion.runtime.telemetry" &&
+    value.schemaVersion === "0.1.0" &&
+    typeof value.ok === "boolean" &&
+    typeof value.timestamp === "string" &&
+    isRuntimeTelemetrySession(value.session) &&
+    isRuntimeTelemetryPreview(value.preview) &&
+    isRuntimeTelemetryRender(value.render) &&
+    isRuntimeTelemetryProcess(value.process) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
+  );
+}
+
+function isRuntimeTelemetrySession(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.loaded === "boolean" &&
+    (typeof value.graphId === "string" || value.graphId === null) &&
+    (typeof value.graphRevision === "string" || value.graphRevision === null) &&
+    typeof value.sessionRevision === "number"
+  );
+}
+
+function isRuntimeTelemetryPreview(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isRuntimePreviewState(value.state) &&
+    (typeof value.pid === "number" || value.pid === null) &&
+    typeof value.stale === "boolean" &&
+    (typeof value.graphId === "string" || value.graphId === null) &&
+    (typeof value.graphRevision === "string" || value.graphRevision === null) &&
+    (typeof value.sessionRevision === "number" || value.sessionRevision === null) &&
+    (typeof value.previewSessionRevision === "number" || value.previewSessionRevision === null)
+  );
+}
+
+function isRuntimeTelemetryRender(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.active === "boolean" &&
+    (typeof value.backend === "string" || value.backend === null) &&
+    (typeof value.renderer === "string" || value.renderer === null) &&
+    typeof value.framesRendered === "number" &&
+    (typeof value.approxFps === "number" || value.approxFps === null) &&
+    (typeof value.lastFrameMs === "number" || value.lastFrameMs === null) &&
+    (typeof value.lastError === "string" || value.lastError === null) &&
+    (typeof value.sourceNodeId === "string" || value.sourceNodeId === null)
+  );
+}
+
+function isRuntimeTelemetryProcess(value: unknown): boolean {
+  return isRecord(value) && typeof value.runtimeVersion === "string" && typeof value.uptimeMs === "number";
 }
 
 function isRuntimePreviewState(value: unknown): boolean {

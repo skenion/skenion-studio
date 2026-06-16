@@ -9,7 +9,8 @@ import type {
   RuntimePatchResponse,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
-  RuntimeSessionResponse
+  RuntimeSessionResponse,
+  RuntimeTelemetrySnapshot
 } from "./types";
 
 const project = {
@@ -164,6 +165,15 @@ describe("runtime client", () => {
     expect(calls[4]).toEqual(["http://runtime.local/v0/session/preview/restart", { method: "POST" }]);
   });
 
+  it("calls runtime telemetry endpoint", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(telemetryResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+
+    await client.getTelemetry();
+
+    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/session/telemetry", { method: "GET" });
+  });
+
   it("accepts runtime preview status responses", async () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -207,6 +217,76 @@ describe("runtime client", () => {
     });
   });
 
+  it("accepts runtime telemetry snapshots", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () => jsonResponse(telemetryResponse())) as typeof fetch
+    });
+
+    await expect(client.getTelemetry()).resolves.toMatchObject({
+      schema: "skenion.runtime.telemetry",
+      preview: {
+        state: "running",
+        stale: false
+      },
+      render: {
+        active: true,
+        backend: "wgpu"
+      }
+    });
+  });
+
+  it("accepts runtime telemetry snapshots with null optional metadata", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          telemetryResponse({
+            session: {
+              loaded: false,
+              graphId: null,
+              graphRevision: null,
+              sessionRevision: 0
+            },
+            preview: {
+              state: "stopped",
+              pid: null,
+              stale: false,
+              graphId: null,
+              graphRevision: null,
+              sessionRevision: null,
+              previewSessionRevision: null
+            },
+            render: {
+              active: false,
+              backend: null,
+              renderer: null,
+              framesRendered: 0,
+              approxFps: null,
+              lastFrameMs: null,
+              lastError: null,
+              sourceNodeId: null
+            }
+          })
+        )
+      ) as typeof fetch
+    });
+
+    await expect(client.getTelemetry()).resolves.toMatchObject({
+      session: {
+        loaded: false,
+        graphId: null
+      },
+      preview: {
+        state: "stopped",
+        pid: null
+      },
+      render: {
+        active: false,
+        backend: null
+      }
+    });
+  });
 
   it("accepts runtime patch responses", async () => {
     const client = createRuntimeClient({
@@ -502,6 +582,69 @@ describe("runtime client", () => {
     await expect(invalidDiagnosticClient.getPreviewStatus()).rejects.toThrow("unsupported response shape");
   });
 
+  it("rejects unsupported runtime telemetry shapes", async () => {
+    const invalidSchemaClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () => jsonResponse({ ...telemetryResponse(), schema: "wrong" })) as typeof fetch
+    });
+    await expect(invalidSchemaClient.getTelemetry()).rejects.toThrow("unsupported response shape");
+
+    const invalidSessionClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...telemetryResponse(),
+          session: { loaded: true }
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidSessionClient.getTelemetry()).rejects.toThrow("unsupported response shape");
+
+    const invalidPreviewClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...telemetryResponse(),
+          preview: { state: "unknown" }
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidPreviewClient.getTelemetry()).rejects.toThrow("unsupported response shape");
+
+    const invalidRenderClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...telemetryResponse(),
+          render: { active: true }
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidRenderClient.getTelemetry()).rejects.toThrow("unsupported response shape");
+
+    const invalidProcessClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...telemetryResponse(),
+          process: { runtimeVersion: "0.11.0" }
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidProcessClient.getTelemetry()).rejects.toThrow("unsupported response shape");
+
+    const invalidDiagnosticsClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          ...telemetryResponse(),
+          diagnostics: [{ severity: "debug", message: "hidden" }]
+        })
+      ) as typeof fetch
+    });
+    await expect(invalidDiagnosticsClient.getTelemetry()).rejects.toThrow("unsupported response shape");
+  });
+
   it("rejects non-object runtime session responses", async () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -577,6 +720,46 @@ function previewResponse(overrides: Partial<RuntimePreviewStatus> = {}): Runtime
     exitedAt: null,
     exitCode: null,
     message: null,
+    diagnostics: [],
+    ...overrides
+  };
+}
+
+function telemetryResponse(overrides: Partial<RuntimeTelemetrySnapshot> = {}): RuntimeTelemetrySnapshot {
+  return {
+    schema: "skenion.runtime.telemetry",
+    schemaVersion: "0.1.0",
+    ok: true,
+    timestamp: "unix-ms:1",
+    session: {
+      loaded: true,
+      graphId: "test",
+      graphRevision: "1",
+      sessionRevision: 1
+    },
+    preview: {
+      state: "running",
+      pid: 42,
+      stale: false,
+      graphId: "test",
+      graphRevision: "1",
+      sessionRevision: 1,
+      previewSessionRevision: 1
+    },
+    render: {
+      active: true,
+      backend: "wgpu",
+      renderer: "clear-color",
+      framesRendered: 12,
+      approxFps: 59.8,
+      lastFrameMs: 16.7,
+      lastError: null,
+      sourceNodeId: "clear_1"
+    },
+    process: {
+      runtimeVersion: "0.11.0",
+      uptimeMs: 1000
+    },
     diagnostics: [],
     ...overrides
   };
