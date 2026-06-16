@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.12.0...skenion-studio-v0.13.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** add shader uniform controls ([0589e51](https://github.com/echovisionlab/skenion-studio/commit/0589e51642553316d343d34d31fb748a8cd9ba5e))
+
 ## [0.12.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.11.0...skenion-studio-v0.12.0) (2026-06-16)
 
 
