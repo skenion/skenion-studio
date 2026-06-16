@@ -5,8 +5,14 @@ import type {
   GraphNodeV01,
   PortV01
 } from "@skenion/contracts";
-import type { Edge, Node } from "@xyflow/react";
-import { typeKey, typeLabel, type ViewPositions } from "./skenionGraph";
+import { MarkerType, type Edge, type Node } from "@xyflow/react";
+import { typeKey, type ViewPositions } from "./skenionGraph";
+import {
+  edgeInspectorModel,
+  semanticTypeColor,
+  portSemanticsForPort,
+  type EdgeInspectorModel
+} from "./portSemantics";
 
 export interface SkenionNodeData extends Record<string, unknown> {
   label: string;
@@ -14,6 +20,11 @@ export interface SkenionNodeData extends Record<string, unknown> {
   kindVersion: string;
   ports: PortV01[];
   primaryFlow: DataFlow;
+}
+
+export interface SkenionEdgeData extends Record<string, unknown> {
+  inspector: EdgeInspectorModel;
+  typeKey: string;
 }
 
 export interface ReactFlowViewModel {
@@ -91,14 +102,15 @@ function toReactFlowNode(
 }
 
 function toReactFlowEdge(edge: EdgeV01, graph: GraphDocumentV01): Edge {
-  const sourcePort = graph.nodes
-    .find((node) => node.id === edge.from.node)
-    ?.ports.find((port) => port.id === edge.from.port);
-  const color = sourcePort ? flowColor(sourcePort.type.flow, sourcePort.type.dataKind) : "#868e96";
-  const label = sourcePort ? typeLabel(sourcePort.type) : "";
+  const sourceNode = graph.nodes.find((node) => node.id === edge.from.node);
+  const sourcePort = sourceNode?.ports.find((port) => port.id === edge.from.port);
+  const inspector = edgeInspectorModel(graph, edge);
+  const color = sourcePort && sourceNode ? semanticTypeColor(portSemanticsForPort(sourceNode, sourcePort).type) : "#868e96";
+  const label = inspector.resolvedType === "unknown" ? "" : inspector.resolvedType;
+  const feedback = Boolean(inspector.feedback);
 
   return {
-    id: `${edge.from.node}.${edge.from.port}->${edge.to.node}.${edge.to.port}`,
+    id: inspector.id,
     source: edge.from.node,
     sourceHandle: edge.from.port,
     target: edge.to.node,
@@ -106,16 +118,28 @@ function toReactFlowEdge(edge: EdgeV01, graph: GraphDocumentV01): Edge {
     type: "smoothstep",
     label,
     interactionWidth: 18,
-    animated: sourcePort?.type.flow === "event" || sourcePort?.type.flow === "stream",
+    animated: feedback || sourcePort?.type.flow === "event" || sourcePort?.type.flow === "stream",
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color
+    },
+    markerStart: feedback
+      ? {
+          type: MarkerType.ArrowClosed,
+          color
+        }
+      : undefined,
     style: {
       stroke: color,
-      strokeWidth: sourcePort?.type.dataKind === "gpu.texture2d" ? 3 : 2
+      strokeDasharray: feedback ? "7 4" : undefined,
+      strokeWidth: label === "gpu.texture2d" || label === "render.frame" ? 3 : 2
     },
     labelStyle: {
       fill: "#343a40",
       fontWeight: 600
     },
     data: {
+      inspector,
       typeKey: sourcePort ? typeKey(sourcePort.type) : ""
     }
   };

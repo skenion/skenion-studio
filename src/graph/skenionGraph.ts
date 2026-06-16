@@ -10,6 +10,7 @@ import type {
 } from "@skenion/contracts";
 import type { Connection, Edge } from "@xyflow/react";
 import { defaultParamsForNodeKind } from "./clearColor";
+import { connectionSemanticCheck } from "./portSemantics";
 
 export type ViewPositions = Record<string, { x: number; y: number }>;
 
@@ -196,6 +197,14 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
     return {
       ok: false,
       message: result.errors[0]!
+    };
+  }
+
+  const semanticDiagnostic = connectionSemanticCheck(graph, patch);
+  if (semanticDiagnostic) {
+    return {
+      ok: false,
+      message: `${semanticDiagnostic.code}: ${semanticDiagnostic.message}`
     };
   }
 
