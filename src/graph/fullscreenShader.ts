@@ -7,7 +7,11 @@ export const FULLSCREEN_SHADER_LANGUAGE = "wgsl";
 export const DEFAULT_FULLSCREEN_SHADER_SOURCE = `struct SkenionFrame {
   resolution: vec2<f32>,
   time: f32,
+  u_value: f32,
   frame: u32,
+  _pad0: u32,
+  _pad1: u32,
+  _pad2: u32,
 }
 
 @group(0) @binding(0)
@@ -33,7 +37,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOut {
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
   let pulse = 0.5 + 0.5 * sin(skenion.time);
-  return vec4<f32>(pulse, 0.2, 0.8, 1.0);
+  return vec4<f32>(skenion.u_value, 0.2 + 0.3 * pulse, 1.0 - skenion.u_value, 1.0);
 }`;
 
 export function isFullscreenShaderNode(node: GraphNodeV01 | null): node is GraphNodeV01 {

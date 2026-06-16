@@ -44,6 +44,7 @@ describe("React Flow adapter", () => {
     const viewModel = toReactFlowViewModel(renderSampleGraph, {});
 
     expect(viewModel.nodes.map((node) => node.id)).toEqual(["shader_1", "output_1"]);
+    expect(viewModel.nodes[0].data.card.inputs).toHaveLength(1);
     expect(viewModel.nodes[0].data.card.outputs).toHaveLength(1);
     expect(viewModel.nodes[1].data.card.inputs).toHaveLength(1);
     expect(viewModel.edges[0]).toMatchObject({

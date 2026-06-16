@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import type { GraphDocumentV01 } from "@skenion/contracts";
 import { GraphCanvas } from "../GraphCanvas";
-import { renderSampleGraph, sampleGraph } from "../../data/sampleGraph";
+import { renderSampleGraph, sampleGraph, shaderUniformSampleGraph } from "../../data/sampleGraph";
 import type { ConnectionCheck, GraphPatch, ViewPositions } from "../../graph/skenionGraph";
 
 const meta = {
@@ -17,6 +17,10 @@ type Story = StoryObj<typeof meta>;
 
 export const RenderOutputGraph: Story = {
   render: () => <GraphCanvasStory initialGraph={renderSampleGraph} />
+};
+
+export const ShaderUniformGraph: Story = {
+  render: () => <GraphCanvasStory initialGraph={shaderUniformSampleGraph} />
 };
 
 export const CompatibilityGraph: Story = {

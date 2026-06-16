@@ -14,8 +14,10 @@ import {
 describe("port and edge semantics", () => {
   it("derives v0.2 artist-facing port metadata from persisted v0.1 ports", () => {
     const shader = renderSampleGraph.nodes[0];
-    const out = shader.ports[0];
+    const out = shader.ports.find((port) => port.id === "out")!;
+    const uniform = shader.ports.find((port) => port.id === "u_value")!;
     const semantics = portSemanticsForPort(shader, out);
+    const uniformSemantics = portSemanticsForPort(shader, uniform);
 
     expect(semantics).toMatchObject({
       direction: "output",
@@ -27,6 +29,15 @@ describe("port and edge semantics", () => {
       storedType: "resource<gpu.texture2d>",
       triggerMode: "passive",
       type: "render.frame"
+    });
+    expect(uniformSemantics).toMatchObject({
+      direction: "input",
+      maxConnections: 1,
+      mergePolicy: "forbid",
+      rate: "control",
+      required: false,
+      storedType: "value<f32>",
+      type: "value.f32"
     });
     expect(semanticTypeColor("render.frame")).toBe("#d6336c");
     expect(semanticTypeColor("gpu.texture2d")).toBe("#7048e8");

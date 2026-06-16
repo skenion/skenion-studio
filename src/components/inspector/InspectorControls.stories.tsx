@@ -4,6 +4,7 @@ import { ClearColorControls } from "./ClearColorControls";
 import { ConnectionDiagnosticsPanel } from "./ConnectionDiagnosticsPanel";
 import { EdgeInspector } from "./EdgeInspector";
 import { FeedbackPolicyDialog } from "./FeedbackPolicyDialog";
+import { FloatValueControls } from "./FloatValueControls";
 import { FullscreenShaderControls } from "./FullscreenShaderControls";
 import { GraphDiagnosticsPanel } from "./GraphDiagnosticsPanel";
 import { InspectorShell } from "./InspectorShell";
@@ -46,6 +47,10 @@ export const NodeControls: Story = {
 
 export const ClearColorControl: Story = {
   render: () => <ClearColorControls color={[0.1, 0.36, 0.84, 1]} onChange={noop} />
+};
+
+export const FloatValueControl: Story = {
+  render: () => <FloatValueControls value={0.2} onChange={noop} />
 };
 
 export const FullscreenShaderControl: Story = {

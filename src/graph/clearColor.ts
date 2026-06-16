@@ -1,5 +1,6 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
+import { FLOAT_VALUE_NODE_KIND, defaultFloatValueParams } from "./floatValue";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "./fullscreenShader";
 
 export const CLEAR_COLOR_NODE_KIND = "render.clear-color";
@@ -18,6 +19,9 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   }
   if (kind === FULLSCREEN_SHADER_NODE_KIND) {
     return defaultFullscreenShaderParams();
+  }
+  if (kind === FLOAT_VALUE_NODE_KIND) {
+    return defaultFloatValueParams();
   }
 
   return {};

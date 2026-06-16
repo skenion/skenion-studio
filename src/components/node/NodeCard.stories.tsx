@@ -7,6 +7,7 @@ import {
   longLabelCard,
   multiPortCard,
   renderCard,
+  shaderUniformCard,
   targetCard,
   valueTransformCard,
   zeroPortCard
@@ -33,6 +34,10 @@ export const SingleInput: Story = {
 
 export const SingleOutput: Story = {
   args: renderCard
+};
+
+export const FullscreenShaderWithUniformInput: Story = {
+  args: shaderUniformCard
 };
 
 export const InputAndOutput: Story = {

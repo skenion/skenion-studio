@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, FileButton, Group, Text, Tooltip } from "@mantine/core";
-import { Download, FileJson, MonitorPlay, RefreshCcw, Upload } from "lucide-react";
+import { Download, FileJson, MonitorPlay, RefreshCcw, SlidersHorizontal, Upload } from "lucide-react";
 import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
 
 interface StudioToolbarProps {
@@ -9,6 +9,7 @@ interface StudioToolbarProps {
   onExport: () => void;
   onImport: (file: File | null) => void;
   onLoadRenderSample: () => void;
+  onLoadShaderUniformSample: () => void;
   onReset: () => void;
 }
 
@@ -19,6 +20,7 @@ export function StudioToolbar({
   onExport,
   onImport,
   onLoadRenderSample,
+  onLoadShaderUniformSample,
   onReset
 }: StudioToolbarProps) {
   return (
@@ -69,6 +71,17 @@ export function StudioToolbar({
             variant="subtle"
           >
             <MonitorPlay size={18} />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip label="Load shader uniform sample">
+          <ActionIcon
+            aria-label="Load shader uniform sample"
+            onClick={onLoadShaderUniformSample}
+            radius="sm"
+            size="lg"
+            variant="subtle"
+          >
+            <SlidersHorizontal size={18} />
           </ActionIcon>
         </Tooltip>
         <Badge leftSection={<FileJson size={13} />} radius="sm" variant="outline">

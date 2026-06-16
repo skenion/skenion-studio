@@ -4,7 +4,7 @@ import { nodeRegistry } from "./registry";
 
 const byId = new Map(nodeRegistry.map((definition) => [definition.id, definition]));
 
-function node(kind: string, id: string, label: string) {
+function node(kind: string, id: string, label: string, params: Record<string, unknown> = {}) {
   const definition = byId.get(kind);
   if (!definition) {
     throw new Error(`missing sample node definition ${kind}`);
@@ -16,7 +16,8 @@ function node(kind: string, id: string, label: string) {
     id,
     params: {
       ...created.params,
-      label
+      label,
+      ...params
     }
   };
 }
@@ -100,6 +101,40 @@ export const renderSampleGraph: GraphDocumentV01 = {
     node("render.output", "output_1", "Preview Output")
   ],
   edges: [
+    {
+      from: {
+        node: "shader_1",
+        port: "out"
+      },
+      to: {
+        node: "output_1",
+        port: "in"
+      }
+    }
+  ]
+};
+
+export const shaderUniformSampleGraph: GraphDocumentV01 = {
+  schema: "skenion.graph",
+  schemaVersion: "0.1.0",
+  id: "studio-shader-uniform-sample",
+  revision: "1",
+  nodes: [
+    node("core.value-f32", "value_1", "u_value", { value: 0.2 }),
+    node("render.fullscreen-shader", "shader_1", "Fullscreen Shader"),
+    node("render.output", "output_1", "Preview Output")
+  ],
+  edges: [
+    {
+      from: {
+        node: "value_1",
+        port: "value"
+      },
+      to: {
+        node: "shader_1",
+        port: "u_value"
+      }
+    },
     {
       from: {
         node: "shader_1",

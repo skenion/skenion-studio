@@ -15,7 +15,17 @@ describe("nodeCardView", () => {
       selected: true,
       typeBadgeLabel: "render.frame"
     });
-    expect(shaderCard.inputs).toEqual([]);
+    expect(shaderCard.inputs).toHaveLength(1);
+    expect(shaderCard.inputs[0]).toMatchObject({
+      id: "u_value",
+      direction: "input",
+      typeLabel: "value.f32",
+      metadata: {
+        maxConnections: 1,
+        mergePolicy: "forbid",
+        required: false
+      }
+    });
     expect(shaderCard.outputs).toHaveLength(1);
     expect(shaderCard.outputs[0]).toMatchObject({
       id: "out",
@@ -59,7 +69,7 @@ describe("nodeCardView", () => {
   });
 
   it("includes stored low-level type when artist-facing type differs", () => {
-    const outputPort = renderSampleGraph.nodes[0]!.ports[0]!;
+    const outputPort = renderSampleGraph.nodes[0]!.ports.find((port) => port.id === "out")!;
     const portView = toPortView(renderSampleGraph.nodes[0]!, outputPort);
 
     expect(portView.typeLabel).toBe("render.frame");

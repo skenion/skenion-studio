@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Connection, Edge } from "@xyflow/react";
 import { nodeRegistry } from "../data/registry";
-import { renderSampleGraph, sampleGraph } from "../data/sampleGraph";
+import { renderSampleGraph, sampleGraph, shaderUniformSampleGraph } from "../data/sampleGraph";
 import {
   applyPatch,
   checkConnection,
@@ -49,6 +49,8 @@ describe("skenion graph helpers", () => {
     expect(validateGraph(sampleGraph).ok).toBe(true);
     expect(graphSummary(renderSampleGraph)).toBe("2 nodes · 1 edges · rev 1");
     expect(validateGraph(renderSampleGraph).ok).toBe(true);
+    expect(graphSummary(shaderUniformSampleGraph)).toBe("3 nodes · 2 edges · rev 1");
+    expect(validateGraph(shaderUniformSampleGraph).ok).toBe(true);
     expect(validateGraph({}).ok).toBe(false);
   });
 
@@ -200,6 +202,40 @@ describe("skenion graph helpers", () => {
         }
       )
     ).toBe(true);
+    expect(
+      checkConnection(
+        {
+          ...shaderUniformSampleGraph,
+          edges: [shaderUniformSampleGraph.edges[1]!]
+        },
+        {
+          type: "addEdge",
+          edge: shaderUniformSampleGraph.edges[0]!
+        }
+      )
+    ).toEqual({
+      ok: true,
+      message: "value<f32> connected to value<f32>."
+    });
+    expect(
+      checkConnection(
+        {
+          ...shaderUniformSampleGraph,
+          nodes: [
+            ...shaderUniformSampleGraph.nodes,
+            sampleGraph.nodes.find((node) => node.id === "bang_1")!
+          ],
+          edges: [shaderUniformSampleGraph.edges[1]!]
+        },
+        {
+          type: "addEdge",
+          edge: {
+            from: { node: "bang_1", port: "bang" },
+            to: { node: "shader_1", port: "u_value" }
+          }
+        }
+      ).message
+    ).toMatch(/incompatible edge/);
     expect(
       isValidSkenionConnection(renderSampleGraph, {
         source: "output_1",

@@ -19,6 +19,22 @@ describe("node registry", () => {
       },
       ports: [
         {
+          id: "u_value",
+          direction: "input",
+          label: "u_value",
+          activation: "latched",
+          required: false,
+          type: {
+            flow: "value",
+            dataKind: "f32",
+            range: {
+              min: 0,
+              max: 1,
+              step: 0.01
+            }
+          }
+        },
+        {
           id: "out",
           direction: "output",
           label: "Out",
@@ -76,6 +92,7 @@ describe("node registry", () => {
     const node = createGraphNodeFromDefinition(definition!, []);
 
     expect(node.params).toEqual(defaultFullscreenShaderParams());
+    expect(node.ports.map((port) => port.id)).toEqual(["u_value", "out"]);
     expect(String(node.params.source)).toContain("fn fs_main");
   });
 });

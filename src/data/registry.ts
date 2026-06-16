@@ -46,6 +46,18 @@ function input(id: string, label: string, type: PortV01["type"], activation: Por
   };
 }
 
+function optionalInput(
+  id: string,
+  label: string,
+  type: PortV01["type"],
+  activation: PortV01["activation"]
+): PortV01 {
+  return {
+    ...input(id, label, type, activation),
+    required: false
+  };
+}
+
 function output(id: string, label: string, type: PortV01["type"]): PortV01 {
   return {
     id,
@@ -133,7 +145,10 @@ export const nodeRegistry: NodeDefinitionManifestV01[] = [
     version: "0.1.0",
     displayName: "Fullscreen Shader",
     category: "Render",
-    ports: [output("out", "Out", gpuTexture)],
+    ports: [
+      optionalInput("u_value", "u_value", f32Value, "latched"),
+      output("out", "Out", gpuTexture)
+    ],
     execution: {
       model: "gpu_pass",
       clock: "frame"

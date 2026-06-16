@@ -13,7 +13,7 @@ import { PalettePanel } from "./components/PalettePanel";
 import { RuntimePanel } from "./components/RuntimePanel";
 import { StudioToolbar } from "./components/StudioToolbar";
 import { nodeRegistry } from "./data/registry";
-import { renderSampleGraph, sampleGraph } from "./data/sampleGraph";
+import { renderSampleGraph, sampleGraph, shaderUniformSampleGraph } from "./data/sampleGraph";
 import {
   applyPatch,
   createGraphNodeFromDefinition,
@@ -217,6 +217,17 @@ export default function App() {
     setGraph(renderSampleGraph);
     setPositions({});
     setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
+    setSelectedEdgeId(null);
+    clearPendingPatch();
+    setImportError(null);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+  }
+
+  function loadShaderUniformSample() {
+    setGraph(shaderUniformSampleGraph);
+    setPositions({});
+    setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -557,6 +568,7 @@ export default function App() {
           onExport={exportGraph}
           onImport={importGraph}
           onLoadRenderSample={loadRenderSample}
+          onLoadShaderUniformSample={loadShaderUniformSample}
           onReset={resetSample}
         />
       </AppShell.Header>

@@ -20,7 +20,9 @@ describe("clear color graph helpers", () => {
     expect(defaultParamsForNodeKind(CLEAR_COLOR_NODE_KIND)).toEqual({
       color: [...DEFAULT_CLEAR_COLOR]
     });
-    expect(defaultParamsForNodeKind("core.value-f32")).toEqual({});
+    expect(defaultParamsForNodeKind("core.value-f32")).toEqual({
+      value: 0.5
+    });
   });
 
   it("reads and clamps clear color params", () => {

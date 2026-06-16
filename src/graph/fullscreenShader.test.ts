@@ -20,6 +20,7 @@ describe("fullscreen shader graph helpers", () => {
     expect(isFullscreenShaderNode({ ...shaderNode(params.source), kind: "render.clear-color" })).toBe(false);
     expect(isFullscreenShaderNode(null)).toBe(false);
     expect(params.language).toBe(FULLSCREEN_SHADER_LANGUAGE);
+    expect(params.source).toContain("u_value");
     expect(params.source).toContain("fn vs_main");
     expect(params.source).toContain("fn fs_main");
   });

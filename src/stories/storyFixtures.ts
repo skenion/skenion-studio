@@ -44,6 +44,16 @@ export const valueInputPort: NodePortView = {
   }
 };
 
+export const shaderUniformInputPort: NodePortView = {
+  ...valueInputPort,
+  id: "u_value",
+  label: "u_value",
+  metadata: {
+    ...valueInputPort.metadata,
+    required: false
+  }
+};
+
 export const renderFrameOutputPort: NodePortView = {
   id: "out",
   label: "out",
@@ -118,6 +128,11 @@ export const renderCard: NodeCardView = {
   accentColor: "#d6336c",
   inputs: [],
   outputs: [renderFrameOutputPort]
+};
+
+export const shaderUniformCard: NodeCardView = {
+  ...renderCard,
+  inputs: [shaderUniformInputPort]
 };
 
 export const targetCard: NodeCardView = {
