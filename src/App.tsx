@@ -24,6 +24,10 @@ import {
   type ViewPositions
 } from "./graph/skenionGraph";
 import {
+  analyzeGraphPortSemantics,
+  findEdgeInspectorModel
+} from "./graph/portSemantics";
+import {
   createGraphPatch,
   graphPatchFromStudioAction
 } from "./graph/graphPatch";
@@ -55,6 +59,7 @@ export default function App() {
   const [graph, setGraph] = useState<GraphDocumentV01>(sampleGraph);
   const [positions, setPositions] = useState<ViewPositions>({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [runtimeUrl, setRuntimeUrl] = useState(DEFAULT_RUNTIME_URL);
@@ -73,6 +78,7 @@ export default function App() {
   const [pendingPatchBaseRevision, setPendingPatchBaseRevision] = useState<string | null>(null);
   const [patchConflict, setPatchConflict] = useState<string | null>(null);
   const validation = useMemo(() => validateGraph(graph), [graph]);
+  const semanticDiagnostics = useMemo(() => analyzeGraphPortSemantics(graph), [graph]);
   const runtimeProject = useMemo(() => createRuntimeProjectPayload(graph, nodeRegistry), [graph]);
   const currentGraphFingerprint = useMemo(
     () => runtimeGraphFingerprint(graph.id, graph.revision),
@@ -87,6 +93,10 @@ export default function App() {
   const selectedNode = useMemo(
     () => graph.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [graph.nodes, selectedNodeId]
+  );
+  const selectedEdge = useMemo(
+    () => findEdgeInspectorModel(graph, selectedEdgeId),
+    [graph, selectedEdgeId]
   );
 
   function addNode(definitionId: string) {
@@ -107,8 +117,10 @@ export default function App() {
       }
     }));
     setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
+    setSelectedEdgeId(null);
   }
 
   function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
@@ -147,6 +159,7 @@ export default function App() {
     setSelectedNodeId((current) =>
       current && nextGraph.nodes.some((node) => node.id === current) ? current : nextGraph.nodes[0]?.id ?? null
     );
+    setSelectedEdgeId(null);
     setConnectionCheck(null);
     setLastLoadedGraphFingerprint(runtimeGraphFingerprint(nextGraph.id, nextGraph.revision));
   }
@@ -166,6 +179,7 @@ export default function App() {
 
       setGraph(result.value);
       setSelectedNodeId(result.value.nodes[0]?.id ?? null);
+      setSelectedEdgeId(null);
       setPositions({});
       clearPendingPatch();
       setImportError(null);
@@ -192,6 +206,7 @@ export default function App() {
     setGraph(sampleGraph);
     setPositions({});
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
+    setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
@@ -202,6 +217,7 @@ export default function App() {
     setGraph(renderSampleGraph);
     setPositions({});
     setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
+    setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
@@ -213,6 +229,7 @@ export default function App() {
     setGraph((currentGraph) => applyPatch(currentGraph, patch));
     recordGraphPatches([patch]);
     setSelectedNodeId(null);
+    setSelectedEdgeId(null);
     setRuntimeResult(null);
   }
 
@@ -570,7 +587,9 @@ export default function App() {
             onConnectionCheck={setConnectionCheck}
             onGraphChange={updateGraph}
             onPositionsChange={setPositions}
+            onSelectedEdgeChange={setSelectedEdgeId}
             onSelectedNodeChange={setSelectedNodeId}
+            selectedEdgeId={selectedEdgeId}
             selectedNodeId={selectedNodeId}
           />
         </div>
@@ -688,9 +707,11 @@ export default function App() {
             <InspectorPanel
               connectionCheck={connectionCheck}
               graph={graph}
+              edge={selectedEdge}
               node={selectedNode}
               onRemoveNode={removeNode}
               onSetNodeParam={setNodeParam}
+              semanticDiagnostics={semanticDiagnostics}
               validation={validation}
             />
           </Stack>

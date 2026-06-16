@@ -161,18 +161,44 @@ describe("skenion graph helpers", () => {
       checkConnection(sampleGraph, {
         type: "addEdge",
         edge: sampleGraph.edges[0]
-      })
+      }).message
+    ).toMatch(/fan-in-forbidden/);
+    expect(
+      checkConnection(
+        {
+          ...sampleGraph,
+          edges: []
+        },
+        {
+          type: "addEdge",
+          edge: sampleGraph.edges[0]
+        }
+      )
     ).toEqual({
       ok: true,
       message: "value<f32> connected to value<f32>."
     });
     expect(
-      isValidSkenionConnection(renderSampleGraph, {
-        source: "shader_1",
-        sourceHandle: "out",
-        target: "output_1",
-        targetHandle: "in"
+      isValidSkenionConnection(sampleGraph, {
+        source: "value_1",
+        sourceHandle: "value",
+        target: "target_1",
+        targetHandle: "value"
       })
+    ).toBe(false);
+    expect(
+      isValidSkenionConnection(
+        {
+          ...renderSampleGraph,
+          edges: []
+        },
+        {
+          source: "shader_1",
+          sourceHandle: "out",
+          target: "output_1",
+          targetHandle: "in"
+        }
+      )
     ).toBe(true);
     expect(
       isValidSkenionConnection(renderSampleGraph, {

@@ -54,6 +54,20 @@ export interface RuntimePlanEdge {
   fromPort: string;
   toNode: string;
   toPort: string;
+  metadata?: RuntimePlanEdgeMetadata | null;
+}
+
+export interface RuntimePlanEdgeMetadata {
+  resolvedType?: string | null;
+  mergePolicy?: string | null;
+  fanOutPolicy?: string | null;
+  order?: number | null;
+  feedback?: {
+    boundary: string;
+    bufferMode?: string;
+    maxLatencyFrames?: number;
+  } | null;
+  cycleClassification?: string | null;
 }
 
 export interface RuntimeExecutionGroup {

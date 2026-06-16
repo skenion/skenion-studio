@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GraphDocumentV01 } from "@skenion/contracts";
+import type { EdgeV01, GraphDocumentV01 } from "@skenion/contracts";
 import { renderSampleGraph, sampleGraph } from "../data/sampleGraph";
 import { defaultPosition, flowColor, flowName, toReactFlowViewModel } from "./reactFlowAdapter";
 
@@ -25,7 +25,7 @@ describe("React Flow adapter", () => {
       source: "value_1",
       target: "target_1",
       type: "smoothstep",
-      label: "value<f32>",
+      label: "value.f32",
       interactionWidth: 18,
       animated: false,
       style: {
@@ -53,11 +53,35 @@ describe("React Flow adapter", () => {
       target: "output_1",
       targetHandle: "in",
       type: "smoothstep",
-      label: "resource<gpu.texture2d>",
+      label: "render.frame",
       interactionWidth: 18,
       style: {
-        stroke: "#7048e8",
+        stroke: "#d6336c",
         strokeWidth: 3
+      }
+    });
+  });
+
+  it("marks explicit feedback edges in the view model", () => {
+    const feedbackEdge = {
+      ...renderSampleGraph.edges[0],
+      feedback: { boundary: "render-frame" }
+    } as EdgeV01 & { feedback: { boundary: string } };
+    const viewModel = toReactFlowViewModel(
+      {
+        ...renderSampleGraph,
+        edges: [feedbackEdge]
+      },
+      {}
+    );
+
+    expect(viewModel.edges[0]).toMatchObject({
+      animated: true,
+      markerStart: {
+        color: "#d6336c"
+      },
+      style: {
+        strokeDasharray: "7 4"
       }
     });
   });

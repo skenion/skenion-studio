@@ -33,8 +33,10 @@ const nodeTypes: NodeTypes = {
 interface GraphCanvasProps {
   graph: GraphDocumentV01;
   positions: ViewPositions;
+  selectedEdgeId: string | null;
   selectedNodeId: string | null;
   onConnectionCheck: (check: ConnectionCheck | null) => void;
+  onSelectedEdgeChange: (edgeId: string | null) => void;
   onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
   onPositionsChange: (positions: ViewPositions) => void;
   onSelectedNodeChange: (nodeId: string | null) => void;
@@ -43,8 +45,10 @@ interface GraphCanvasProps {
 export function GraphCanvas({
   graph,
   positions,
+  selectedEdgeId,
   selectedNodeId,
   onConnectionCheck,
+  onSelectedEdgeChange,
   onGraphChange,
   onPositionsChange,
   onSelectedNodeChange
@@ -117,9 +121,12 @@ export function GraphCanvas({
         }
       }
       onGraphChange(nextGraph, patches);
+      if (deletedEdges.some((edge) => edge.id === selectedEdgeId)) {
+        onSelectedEdgeChange(null);
+      }
       onConnectionCheck(null);
     },
-    [graph, onConnectionCheck, onGraphChange]
+    [graph, onConnectionCheck, onGraphChange, onSelectedEdgeChange, selectedEdgeId]
   );
 
   const onNodesDelete = useCallback(
@@ -136,14 +143,19 @@ export function GraphCanvas({
         patches.push(patch);
       }
       onGraphChange(nextGraph, patches);
+      onSelectedEdgeChange(null);
       onSelectedNodeChange(null);
     },
-    [graph, onGraphChange, onSelectedNodeChange]
+    [graph, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange]
   );
 
   const selectedNodes = useMemo(
     () => nodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
     [nodes, selectedNodeId]
+  );
+  const selectedEdges = useMemo(
+    () => edges.map((edge) => ({ ...edge, selected: edge.id === selectedEdgeId })),
+    [edges, selectedEdgeId]
   );
 
   return (
@@ -151,7 +163,7 @@ export function GraphCanvas({
       className="skenion-flow"
       defaultEdgeOptions={defaultEdgeOptions}
       deleteKeyCode={["Backspace", "Delete"]}
-      edges={edges}
+      edges={selectedEdges}
       fitView
       fitViewOptions={{ padding: 0.18 }}
       nodeTypes={nodeTypes}
@@ -160,11 +172,21 @@ export function GraphCanvas({
       onConnect={onConnect}
       onEdgesChange={onEdgesChange}
       onEdgesDelete={onEdgesDelete}
-      onNodeClick={(_event, node) => onSelectedNodeChange(node.id)}
+      onEdgeClick={(_event, edge) => {
+        onSelectedEdgeChange(edge.id);
+        onSelectedNodeChange(null);
+      }}
+      onNodeClick={(_event, node) => {
+        onSelectedNodeChange(node.id);
+        onSelectedEdgeChange(null);
+      }}
       onNodeDragStop={onNodeDragStop}
       onNodesChange={onNodesChange}
       onNodesDelete={onNodesDelete}
-      onPaneClick={() => onSelectedNodeChange(null)}
+      onPaneClick={() => {
+        onSelectedNodeChange(null);
+        onSelectedEdgeChange(null);
+      }}
     >
       <Background color="#d8dee6" gap={20} size={1} />
       <Controls position="bottom-left" showInteractive={false} />
