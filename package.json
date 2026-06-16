@@ -1,6 +1,6 @@
 {
   "name": "skenion-studio",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Mantine and React Flow studio shell for Skenion graphs",
   "type": "module",
   "license": "Apache-2.0",

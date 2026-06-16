@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.5.0...skenion-studio-v0.6.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** add runtime patch history controls ([e73846f](https://github.com/echovisionlab/skenion-studio/commit/e73846f9c569a4a8107fe14420d6118da096d9ba))
+
 ## [0.5.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.4.0...skenion-studio-v0.5.0) (2026-06-16)
 
 
