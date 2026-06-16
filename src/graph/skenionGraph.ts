@@ -9,6 +9,7 @@ import type {
   ValidationResult
 } from "@skenion/contracts";
 import type { Connection, Edge } from "@xyflow/react";
+import { defaultParamsForNodeKind } from "./clearColor";
 
 export type ViewPositions = Record<string, { x: number; y: number }>;
 
@@ -16,7 +17,8 @@ export type GraphPatch =
   | { type: "addNode"; node: GraphNodeV01 }
   | { type: "addEdge"; edge: EdgeV01 }
   | { type: "removeEdge"; edge: EdgeV01 }
-  | { type: "removeNode"; nodeId: string };
+  | { type: "removeNode"; nodeId: string }
+  | { type: "setNodeParam"; nodeId: string; key: string; value: unknown };
 
 export interface ConnectionCheck {
   ok: boolean;
@@ -53,7 +55,7 @@ export function createGraphNodeFromDefinition(
     id,
     kind: definition.id,
     kindVersion: definition.version,
-    params: {},
+    params: defaultParamsForNodeKind(definition.id),
     ports: definition.ports.map((port) => ({ ...port, type: { ...port.type } }))
   };
 }
@@ -132,6 +134,24 @@ export function applyPatch(graph: GraphDocumentV01, patch: GraphPatch): GraphDoc
             edge.to.node === patch.edge.to.node &&
             edge.to.port === patch.edge.to.port
           )
+      )
+    };
+  }
+
+  if (patch.type === "setNodeParam") {
+    return {
+      ...graph,
+      revision: bumpRevision(graph.revision),
+      nodes: graph.nodes.map((node) =>
+        node.id === patch.nodeId
+          ? {
+              ...node,
+              params: {
+                ...node.params,
+                [patch.key]: patch.value
+              }
+            }
+          : node
       )
     };
   }

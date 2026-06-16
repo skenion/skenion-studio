@@ -107,5 +107,23 @@ export const nodeRegistry: NodeDefinitionManifestV01[] = [
     "Output",
     [input("texture", "Texture", gpuTexture, "latched")],
     "frame"
-  )
+  ),
+  {
+    schema: "skenion.node.definition",
+    schemaVersion: "0.1.0",
+    id: "render.clear-color",
+    version: "0.1.0",
+    displayName: "Clear Color",
+    category: "Render",
+    ports: [],
+    execution: {
+      model: "gpu_pass",
+      clock: "frame"
+    },
+    state: {
+      persistent: false
+    },
+    permissions: [],
+    capabilities: ["render.output.clear-color"]
+  }
 ];
