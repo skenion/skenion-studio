@@ -1,5 +1,6 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
+import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "./fullscreenShader";
 
 export const CLEAR_COLOR_NODE_KIND = "render.clear-color";
 export const DEFAULT_CLEAR_COLOR = [0.05, 0.08, 0.12, 1] as const;
@@ -14,6 +15,9 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
     return {
       color: [...DEFAULT_CLEAR_COLOR]
     };
+  }
+  if (kind === FULLSCREEN_SHADER_NODE_KIND) {
+    return defaultFullscreenShaderParams();
   }
 
   return {};

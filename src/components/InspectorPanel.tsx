@@ -1,11 +1,17 @@
-import { Alert, Badge, Button, Code, Divider, Group, NumberInput, Stack, Table, Text } from "@mantine/core";
-import { Trash2 } from "lucide-react";
+import { Alert, Badge, Button, Code, Divider, Group, NumberInput, Stack, Table, Text, Textarea } from "@mantine/core";
+import { RotateCcw, Trash2 } from "lucide-react";
 import type { GraphDocumentV01, GraphNodeV01, ValidationResult } from "@skenion/contracts";
 import {
   isClearColorNode,
   readClearColorParam,
   replaceClearColorComponent
 } from "../graph/clearColor";
+import {
+  DEFAULT_FULLSCREEN_SHADER_SOURCE,
+  isFullscreenShaderNode,
+  readShaderLanguageParam,
+  readShaderSourceParam
+} from "../graph/fullscreenShader";
 import { typeLabel, type ConnectionCheck } from "../graph/skenionGraph";
 import { flowColor } from "../graph/reactFlowAdapter";
 
@@ -27,6 +33,8 @@ export function InspectorPanel({
   onSetNodeParam
 }: InspectorPanelProps) {
   const clearColor = isClearColorNode(node) ? readClearColorParam(node) : null;
+  const shaderSource = isFullscreenShaderNode(node) ? readShaderSourceParam(node) : null;
+  const shaderLanguage = isFullscreenShaderNode(node) ? readShaderLanguageParam(node) : null;
 
   return (
     <Stack className="panel-shell" gap="md">
@@ -145,6 +153,53 @@ export function InspectorPanel({
                         />
                       ))}
                     </Group>
+                  </Stack>
+                </>
+              ) : null}
+
+              {shaderSource !== null ? (
+                <>
+                  <Divider />
+                  <Stack gap="xs">
+                    <Group justify="space-between" wrap="nowrap">
+                      <div>
+                        <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+                          Fullscreen Shader
+                        </Text>
+                        <Group gap={6} mt={4}>
+                          <Text c="dimmed" size="xs">
+                            Language
+                          </Text>
+                          <Badge radius="sm" variant="light">
+                            {shaderLanguage}
+                          </Badge>
+                        </Group>
+                      </div>
+                      <Button
+                        leftSection={<RotateCcw size={14} />}
+                        onClick={() => onSetNodeParam(node.id, "source", DEFAULT_FULLSCREEN_SHADER_SOURCE)}
+                        radius="sm"
+                        size="compact-sm"
+                        variant="light"
+                      >
+                        Reset
+                      </Button>
+                    </Group>
+                    <Textarea
+                      autosize
+                      label="WGSL Source"
+                      maxRows={22}
+                      minRows={12}
+                      onChange={(event) => onSetNodeParam(node.id, "source", event.currentTarget.value)}
+                      size="xs"
+                      spellCheck={false}
+                      styles={{
+                        input: {
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                        }
+                      }}
+                      value={shaderSource}
+                    />
                   </Stack>
                 </>
               ) : null}

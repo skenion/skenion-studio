@@ -125,5 +125,23 @@ export const nodeRegistry: NodeDefinitionManifestV01[] = [
     },
     permissions: [],
     capabilities: ["render.output.clear-color"]
+  },
+  {
+    schema: "skenion.node.definition",
+    schemaVersion: "0.1.0",
+    id: "render.fullscreen-shader",
+    version: "0.1.0",
+    displayName: "Fullscreen Shader",
+    category: "Render",
+    ports: [],
+    execution: {
+      model: "gpu_pass",
+      clock: "frame"
+    },
+    state: {
+      persistent: false
+    },
+    permissions: [],
+    capabilities: ["render.output.fullscreen-shader"]
   }
 ];

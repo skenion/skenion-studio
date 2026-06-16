@@ -28,6 +28,20 @@ describe("TelemetryPanel", () => {
     expect(html).toContain("surface lost");
   });
 
+  it("shows fullscreen shader render errors", () => {
+    const html = renderPanel(
+      telemetry({
+        render: {
+          renderer: "fullscreen-shader",
+          lastError: "shader validation failed"
+        }
+      })
+    );
+
+    expect(html).toContain("fullscreen-shader");
+    expect(html).toContain("shader validation failed");
+  });
+
   it("renders unavailable state", () => {
     const html = renderPanel(null);
 
