@@ -7,11 +7,13 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
-    "ci": "pnpm run lint && pnpm run coverage && pnpm run build",
+    "build-storybook": "storybook build",
+    "ci": "pnpm run lint && pnpm run coverage && pnpm run build && pnpm run build-storybook",
     "coverage": "vitest run --coverage",
     "dev": "vite --host 127.0.0.1",
     "lint": "eslint .",
     "preview": "vite preview --host 127.0.0.1",
+    "storybook": "storybook dev -p 6006 --host 127.0.0.1",
     "test": "vitest run"
   },
   "dependencies": {
@@ -25,12 +27,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@storybook/addon-a11y": "10.4.6",
+    "@storybook/addon-docs": "10.4.6",
+    "@storybook/react-vite": "^10.4.6",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.9",
+    "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "globals": "^17.6.0",
+    "storybook": "^10.4.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
     "vite": "^8.0.16",

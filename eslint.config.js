@@ -16,6 +16,6 @@ export default tseslint.config(
     }
   },
   {
-    ignores: ["dist", "node_modules", ".deps"]
+    ignores: ["dist", "storybook-static", "node_modules", ".deps"]
   }
 );

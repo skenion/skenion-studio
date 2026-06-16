@@ -2,8 +2,7 @@ import type {
   DataFlow,
   EdgeV01,
   GraphDocumentV01,
-  GraphNodeV01,
-  PortV01
+  GraphNodeV01
 } from "@skenion/contracts";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import { typeKey, type ViewPositions } from "./skenionGraph";
@@ -13,12 +12,14 @@ import {
   portSemanticsForPort,
   type EdgeInspectorModel
 } from "./portSemantics";
+import { toNodeCardView } from "./nodeCardView";
+import type { NodeCardView } from "../components/node/nodeTypes";
 
 export interface SkenionNodeData extends Record<string, unknown> {
+  card: NodeCardView;
   label: string;
   kind: string;
   kindVersion: string;
-  ports: PortV01[];
   primaryFlow: DataFlow;
 }
 
@@ -92,10 +93,10 @@ function toReactFlowNode(
     type: "skenion",
     position: position ?? defaultPosition(index),
     data: {
+      card: toNodeCardView(node),
       label: String(node.params.label ?? node.id),
       kind: node.kind,
       kindVersion: node.kindVersion,
-      ports: node.ports,
       primaryFlow: primaryPort?.type.flow ?? "value"
     }
   };
