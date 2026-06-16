@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.7.0...skenion-studio-v0.8.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** add clear color render node controls ([#15](https://github.com/echovisionlab/skenion-studio/issues/15)) ([79f9a44](https://github.com/echovisionlab/skenion-studio/commit/79f9a444fe2861a9fb0944abe0e1158f230fc6ed))
+
 ## [0.7.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.6.0...skenion-studio-v0.7.0) (2026-06-16)
 
 
