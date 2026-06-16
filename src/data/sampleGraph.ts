@@ -1,5 +1,6 @@
 import type { GraphDocumentV01 } from "@skenion/contracts";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
+import type { ViewPositions } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
 
 const byId = new Map(nodeRegistry.map((definition) => [definition.id, definition]));
@@ -146,4 +147,66 @@ export const shaderUniformSampleGraph: GraphDocumentV01 = {
       }
     }
   ]
+};
+
+export const shaderUniformSamplePositions: ViewPositions = {
+  value_1: { x: 64, y: 120 },
+  shader_1: { x: 364, y: 120 },
+  output_1: { x: 664, y: 120 }
+};
+
+export const portDemoSampleGraph: GraphDocumentV01 = {
+  schema: "skenion.graph",
+  schemaVersion: "0.1.0",
+  id: "studio-port-demo-sample",
+  revision: "1",
+  nodes: [
+    node("core.value-f32", "value_1", "Float Value", { value: 0.65 }),
+    node("core.target", "target_1", "Value Target"),
+    node("core.bang-button", "bang_1", "Bang Button"),
+    node("core.event-log", "event_log_1", "Event Log"),
+    node("render.fullscreen-shader", "shader_1", "Fullscreen Shader"),
+    node("render.output", "output_1", "Render Output")
+  ],
+  edges: [
+    {
+      from: {
+        node: "value_1",
+        port: "value"
+      },
+      to: {
+        node: "target_1",
+        port: "value"
+      }
+    },
+    {
+      from: {
+        node: "bang_1",
+        port: "bang"
+      },
+      to: {
+        node: "event_log_1",
+        port: "bang"
+      }
+    },
+    {
+      from: {
+        node: "shader_1",
+        port: "out"
+      },
+      to: {
+        node: "output_1",
+        port: "in"
+      }
+    }
+  ]
+};
+
+export const portDemoSamplePositions: ViewPositions = {
+  value_1: { x: 64, y: 72 },
+  target_1: { x: 364, y: 72 },
+  bang_1: { x: 64, y: 244 },
+  event_log_1: { x: 364, y: 244 },
+  shader_1: { x: 64, y: 416 },
+  output_1: { x: 364, y: 416 }
 };

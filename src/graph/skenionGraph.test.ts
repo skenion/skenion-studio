@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Connection, Edge } from "@xyflow/react";
 import { nodeRegistry } from "../data/registry";
-import { renderSampleGraph, sampleGraph, shaderUniformSampleGraph } from "../data/sampleGraph";
+import {
+  portDemoSampleGraph,
+  renderSampleGraph,
+  sampleGraph,
+  shaderUniformSampleGraph
+} from "../data/sampleGraph";
 import {
   applyPatch,
   checkConnection,
@@ -51,6 +56,8 @@ describe("skenion graph helpers", () => {
     expect(validateGraph(renderSampleGraph).ok).toBe(true);
     expect(graphSummary(shaderUniformSampleGraph)).toBe("3 nodes · 2 edges · rev 1");
     expect(validateGraph(shaderUniformSampleGraph).ok).toBe(true);
+    expect(graphSummary(portDemoSampleGraph)).toBe("6 nodes · 3 edges · rev 1");
+    expect(validateGraph(portDemoSampleGraph).ok).toBe(true);
     expect(validateGraph({}).ok).toBe(false);
   });
 
@@ -148,7 +155,7 @@ describe("skenion graph helpers", () => {
       })
     ).toEqual({
       ok: false,
-      message: "Connections must run from an output port to an input port."
+      message: "Connections must run from an OUT port to an IN port."
     });
     expect(
       checkConnection(sampleGraph, {
@@ -158,7 +165,7 @@ describe("skenion graph helpers", () => {
           to: { node: "event_log_1", port: "bang" }
         }
       }).message
-    ).toMatch(/incompatible edge/);
+    ).toMatch(/incompatible-edge-type: .*value\.f32.*event\.bang/);
     expect(
       checkConnection(sampleGraph, {
         type: "addEdge",
@@ -180,6 +187,19 @@ describe("skenion graph helpers", () => {
       ok: true,
       message: "value<f32> connected to value<f32>."
     });
+    expect(
+      checkConnection(
+        {
+          ...sampleGraph,
+          schemaVersion: "broken" as "0.1.0",
+          edges: []
+        },
+        {
+          type: "addEdge",
+          edge: sampleGraph.edges[0]
+        }
+      ).ok
+    ).toBe(false);
     expect(
       isValidSkenionConnection(sampleGraph, {
         source: "value_1",
@@ -235,7 +255,35 @@ describe("skenion graph helpers", () => {
           }
         }
       ).message
-    ).toMatch(/incompatible edge/);
+    ).toMatch(/incompatible-edge-type: .*event\.bang.*value\.f32/);
+    expect(
+      checkConnection(renderSampleGraph, {
+        type: "addEdge",
+        edge: {
+          from: { node: "output_1", port: "in" },
+          to: { node: "shader_1", port: "u_value" }
+        }
+      })
+    ).toEqual({
+      ok: false,
+      message: "Connections must run from an OUT port to an IN port."
+    });
+    expect(
+      isValidSkenionConnection(
+        {
+          ...sampleGraph,
+          edges: sampleGraph.edges.filter(
+            (edge) => !(edge.from.node === "gpu_upload_1" && edge.to.node === "preview_1")
+          )
+        },
+        {
+          source: "gpu_upload_1",
+          sourceHandle: "texture",
+          target: "preview_1",
+          targetHandle: "texture"
+        }
+      )
+    ).toBe(true);
     expect(
       isValidSkenionConnection(renderSampleGraph, {
         source: "output_1",

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { EdgeV01, GraphDocumentV01 } from "@skenion/contracts";
-import { renderSampleGraph, sampleGraph } from "../data/sampleGraph";
+import {
+  portDemoSampleGraph,
+  portDemoSamplePositions,
+  renderSampleGraph,
+  sampleGraph,
+  shaderUniformSampleGraph,
+  shaderUniformSamplePositions
+} from "../data/sampleGraph";
 import { defaultPosition, flowColor, flowName, toReactFlowViewModel } from "./reactFlowAdapter";
 
 describe("React Flow adapter", () => {
@@ -34,6 +41,7 @@ describe("React Flow adapter", () => {
       }
     });
     expect(viewModel.edges[1].animated).toBe(true);
+    expect(viewModel.edges[3].animated).toBe(true);
     expect(viewModel.edges[4].style).toMatchObject({
       stroke: "#7048e8",
       strokeWidth: 3
@@ -61,6 +69,34 @@ describe("React Flow adapter", () => {
         strokeWidth: 3
       }
     });
+  });
+
+  it("preserves explicit sample graph handle mappings and positions", () => {
+    const shaderUniformViewModel = toReactFlowViewModel(
+      shaderUniformSampleGraph,
+      shaderUniformSamplePositions
+    );
+    const portDemoViewModel = toReactFlowViewModel(portDemoSampleGraph, portDemoSamplePositions);
+
+    expect(shaderUniformViewModel.nodes.map((node) => [node.id, node.position])).toEqual([
+      ["value_1", { x: 64, y: 120 }],
+      ["shader_1", { x: 364, y: 120 }],
+      ["output_1", { x: 664, y: 120 }]
+    ]);
+    expect(shaderUniformViewModel.edges.map((edge) => [
+      edge.source,
+      edge.sourceHandle,
+      edge.target,
+      edge.targetHandle
+    ])).toEqual([
+      ["value_1", "value", "shader_1", "u_value"],
+      ["shader_1", "out", "output_1", "in"]
+    ]);
+    expect(portDemoViewModel.edges.map((edge) => edge.type)).toEqual([
+      "smoothstep",
+      "smoothstep",
+      "smoothstep"
+    ]);
   });
 
   it("marks explicit feedback edges in the view model", () => {

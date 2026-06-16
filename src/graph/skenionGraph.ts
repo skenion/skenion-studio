@@ -187,7 +187,15 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
   if (sourcePort.direction !== "output" || targetPort.direction !== "input") {
     return {
       ok: false,
-      message: "Connections must run from an output port to an input port."
+      message: "Connections must run from an OUT port to an IN port."
+    };
+  }
+
+  const semanticDiagnostic = connectionSemanticCheck(graph, patch);
+  if (semanticDiagnostic) {
+    return {
+      ok: false,
+      message: `${semanticDiagnostic.code}: ${semanticDiagnostic.message}`
     };
   }
 
@@ -197,14 +205,6 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
     return {
       ok: false,
       message: result.errors[0]!
-    };
-  }
-
-  const semanticDiagnostic = connectionSemanticCheck(graph, patch);
-  if (semanticDiagnostic) {
-    return {
-      ok: false,
-      message: `${semanticDiagnostic.code}: ${semanticDiagnostic.message}`
     };
   }
 

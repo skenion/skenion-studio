@@ -23,10 +23,12 @@ export function NodeCard({
 
   return (
     <div className={`canvas-node ${selected ? "is-selected" : ""}`} style={style}>
-      <NodeHeader kind={kind} label={label} typeBadgeLabel={typeBadgeLabel} />
-      <div className="canvas-node-ports">
-        <NodePortColumn ports={inputs} renderHandle={renderInputHandle} side="input" />
-        <NodePortColumn ports={outputs} renderHandle={renderOutputHandle} side="output" />
+      <div className="canvas-node-body">
+        <NodeHeader kind={kind} label={label} typeBadgeLabel={typeBadgeLabel} />
+        <div className="canvas-node-ports">
+          <NodePortColumn ports={inputs} renderHandle={renderInputHandle} side="input" />
+          <NodePortColumn ports={outputs} renderHandle={renderOutputHandle} side="output" />
+        </div>
       </div>
     </div>
   );

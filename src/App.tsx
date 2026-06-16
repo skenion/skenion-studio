@@ -13,7 +13,14 @@ import { PalettePanel } from "./components/PalettePanel";
 import { RuntimePanel } from "./components/RuntimePanel";
 import { StudioToolbar } from "./components/StudioToolbar";
 import { nodeRegistry } from "./data/registry";
-import { renderSampleGraph, sampleGraph, shaderUniformSampleGraph } from "./data/sampleGraph";
+import {
+  portDemoSampleGraph,
+  portDemoSamplePositions,
+  renderSampleGraph,
+  sampleGraph,
+  shaderUniformSampleGraph,
+  shaderUniformSamplePositions
+} from "./data/sampleGraph";
 import {
   applyPatch,
   createGraphNodeFromDefinition,
@@ -226,8 +233,19 @@ export default function App() {
 
   function loadShaderUniformSample() {
     setGraph(shaderUniformSampleGraph);
-    setPositions({});
+    setPositions(shaderUniformSamplePositions);
     setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
+    setSelectedEdgeId(null);
+    clearPendingPatch();
+    setImportError(null);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+  }
+
+  function loadPortDemoSample() {
+    setGraph(portDemoSampleGraph);
+    setPositions(portDemoSamplePositions);
+    setSelectedNodeId(portDemoSampleGraph.nodes[0]?.id ?? null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -567,6 +585,7 @@ export default function App() {
           validation={validation}
           onExport={exportGraph}
           onImport={importGraph}
+          onLoadPortDemoSample={loadPortDemoSample}
           onLoadRenderSample={loadRenderSample}
           onLoadShaderUniformSample={loadShaderUniformSample}
           onReset={resetSample}

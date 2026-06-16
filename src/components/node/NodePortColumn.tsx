@@ -14,7 +14,7 @@ export function NodePortColumn({
   return (
     <div className={`port-column port-column-${side}`}>
       <Text c="dimmed" className="port-column-title" size="10px" tt="uppercase">
-        {side === "input" ? "Inlets" : "Outlets"}
+        {side === "input" ? "IN" : "OUT"}
       </Text>
       {ports.length === 0 ? (
         <Text c="dimmed" className="port-empty" size="10px" ta={side === "input" ? "left" : "right"}>

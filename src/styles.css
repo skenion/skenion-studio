@@ -94,6 +94,17 @@ body {
   height: 100%;
 }
 
+.connection-status {
+  padding: 7px 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 8px 20px rgb(31 41 51 / 12%);
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .react-flow__node-skenion {
   width: 238px;
 }
@@ -103,14 +114,19 @@ body {
   width: 238px;
   min-height: 132px;
   overflow: visible;
+}
+
+.canvas-node-body {
+  position: relative;
   border: 1px solid #cdd5df;
   border-left: 4px solid var(--node-accent);
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 12px 30px rgb(31 41 51 / 10%);
+  overflow: visible;
 }
 
-.canvas-node.is-selected {
+.canvas-node.is-selected .canvas-node-body {
   border-color: #1c7ed6;
   box-shadow:
     0 0 0 2px rgb(28 126 214 / 22%),
@@ -154,9 +170,16 @@ body {
 
 .port-row {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   min-height: 32px;
   min-width: 0;
   padding: 2px 0;
+}
+
+.port-column-output .port-row {
+  justify-content: flex-end;
 }
 
 .port-column-output .port-label {
@@ -182,40 +205,59 @@ body {
 
 .react-flow__handle.port-handle {
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: 2px solid #ffffff;
   border-radius: 999px;
-  box-shadow: 0 0 0 1px rgb(31 41 51 / 18%);
+  background: var(--port-color);
+  box-shadow:
+    0 0 0 1px rgb(31 41 51 / 25%),
+    0 2px 8px rgb(31 41 51 / 16%);
   transform: translateY(-50%);
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+  z-index: 4;
 }
 
 .react-flow__handle.port-handle-input {
-  left: -19px;
+  left: -20px;
 }
 
 .react-flow__handle.port-handle-output {
-  right: -19px;
+  right: -20px;
+}
+
+.react-flow__handle.port-handle::after {
+  position: absolute;
+  inset: -10px;
+  content: "";
+}
+
+.react-flow__handle.port-handle:hover {
+  transform: translateY(-50%) scale(1.15);
 }
 
 .node-port-dot {
   position: absolute;
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: 2px solid #ffffff;
   border-radius: 999px;
   background: var(--port-color);
-  box-shadow: 0 0 0 1px rgb(31 41 51 / 18%);
+  box-shadow:
+    0 0 0 1px rgb(31 41 51 / 25%),
+    0 2px 8px rgb(31 41 51 / 16%);
   transform: translateY(-50%);
 }
 
 .node-port-dot-input {
-  left: -19px;
+  left: -20px;
 }
 
 .node-port-dot-output {
-  right: -19px;
+  right: -20px;
 }
 
 .port-row.is-compatible .node-port-dot,
@@ -234,6 +276,11 @@ body {
 
 .react-flow__edge-path {
   stroke-linecap: round;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  filter: drop-shadow(0 2px 5px rgb(31 41 51 / 24%));
+  stroke-width: 4px;
 }
 
 .ports-table th,

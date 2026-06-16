@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
+  Panel,
   ReactFlow,
   useEdgesState,
   useNodesState,
   type Connection,
   type Edge,
+  type FinalConnectionState,
   type Node,
-  type NodeTypes
+  type NodeTypes,
+  type OnConnectEnd,
+  type OnConnectStart
 } from "@xyflow/react";
 import type { GraphDocumentV01 } from "@skenion/contracts";
 import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
@@ -25,6 +29,7 @@ import {
 import {
   toReactFlowViewModel
 } from "../graph/reactFlowAdapter";
+import { portSemanticsForPort } from "../graph/portSemantics";
 
 const nodeTypes: NodeTypes = {
   skenion: ReactFlowNodeAdapter
@@ -57,6 +62,8 @@ export function GraphCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(viewModel.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(viewModel.edges);
   const deletingNodeIdsRef = useRef<Set<string>>(new Set());
+  const activeConnectionRef = useRef<string | null>(null);
+  const [activeConnectionMessage, setActiveConnectionMessage] = useState<string | null>(null);
   const defaultEdgeOptions = useMemo(
     () => ({
       type: "smoothstep",
@@ -72,6 +79,8 @@ export function GraphCanvas({
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      activeConnectionRef.current = null;
+      setActiveConnectionMessage(null);
       const patch = toSkenionPatch(connection);
       const check = checkConnection(graph, patch);
       onConnectionCheck(check);
@@ -93,6 +102,45 @@ export function GraphCanvas({
         targetHandle: connection.targetHandle ?? null
       }),
     [graph]
+  );
+
+  const onConnectStart = useCallback<OnConnectStart>(
+    (_event, params) => {
+      const message = connectionStartMessage(graph, params.nodeId, params.handleId);
+      activeConnectionRef.current = message;
+      setActiveConnectionMessage(message);
+      if (message) {
+        onConnectionCheck({
+          ok: true,
+          message
+        });
+      }
+    },
+    [graph, onConnectionCheck]
+  );
+
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (_event, connectionState) => {
+      window.setTimeout(() => {
+        if (!activeConnectionRef.current) {
+          return;
+        }
+        const attemptedConnection = connectionFromFinalState(connectionState);
+        if (attemptedConnection) {
+          onConnectionCheck(checkConnection(graph, toSkenionPatch(attemptedConnection)));
+          activeConnectionRef.current = null;
+          setActiveConnectionMessage(null);
+          return;
+        }
+        onConnectionCheck({
+          ok: false,
+          message: `Connection rejected before drop. ${activeConnectionRef.current}`
+        });
+        activeConnectionRef.current = null;
+        setActiveConnectionMessage(null);
+      }, 0);
+    },
+    [graph, onConnectionCheck]
   );
 
   const onNodeDragStop = useCallback(
@@ -170,6 +218,8 @@ export function GraphCanvas({
       nodes={selectedNodes}
       isValidConnection={isValidConnection}
       onConnect={onConnect}
+      onConnectEnd={onConnectEnd}
+      onConnectStart={onConnectStart}
       onEdgesChange={onEdgesChange}
       onEdgesDelete={onEdgesDelete}
       onEdgeClick={(_event, edge) => {
@@ -189,7 +239,59 @@ export function GraphCanvas({
       }}
     >
       <Background color="#d8dee6" gap={20} size={1} />
+      {activeConnectionMessage ? (
+        <Panel className="connection-status" position="top-center">
+          {activeConnectionMessage}
+        </Panel>
+      ) : null}
       <Controls position="bottom-left" showInteractive={false} />
     </ReactFlow>
   );
+}
+
+function connectionFromFinalState(connectionState: FinalConnectionState): Connection | null {
+  if (!connectionState.fromHandle || !connectionState.toHandle) {
+    return null;
+  }
+
+  const { fromHandle, toHandle } = connectionState;
+  if (fromHandle.type === "source" && toHandle.type === "target") {
+    return {
+      source: fromHandle.nodeId,
+      sourceHandle: fromHandle.id ?? null,
+      target: toHandle.nodeId,
+      targetHandle: toHandle.id ?? null
+    };
+  }
+
+  if (fromHandle.type === "target" && toHandle.type === "source") {
+    return {
+      source: toHandle.nodeId,
+      sourceHandle: toHandle.id ?? null,
+      target: fromHandle.nodeId,
+      targetHandle: fromHandle.id ?? null
+    };
+  }
+
+  return null;
+}
+
+function connectionStartMessage(
+  graph: GraphDocumentV01,
+  nodeId: string | null,
+  portId: string | null
+): string | null {
+  if (!nodeId || !portId) {
+    return null;
+  }
+
+  const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+  const port = node?.ports.find((candidate) => candidate.id === portId);
+  if (!node || !port) {
+    return null;
+  }
+
+  const semantics = portSemanticsForPort(node, port);
+  const side = port.direction === "output" ? "OUT" : "IN";
+  return `Dragging ${side}: ${node.id}.${port.id} ${semantics.type}`;
 }
