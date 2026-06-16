@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.8.0...skenion-studio-v0.9.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** show runtime telemetry ([#17](https://github.com/echovisionlab/skenion-studio/issues/17)) ([bc16e5a](https://github.com/echovisionlab/skenion-studio/commit/bc16e5ae3acbb77f9e14027a9cc8295d3802c0ce))
+
 ## [0.8.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.7.0...skenion-studio-v0.8.0) (2026-06-16)
 
 
