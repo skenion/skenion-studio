@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.6.0...skenion-studio-v0.7.0) (2026-06-16)
+
+
+### Features
+
+* **studio:** control local runtime preview ([0eeb1f8](https://github.com/echovisionlab/skenion-studio/commit/0eeb1f8ec5217fa71655933ceb64cb3717933903))
+
 ## [0.6.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.5.0...skenion-studio-v0.6.0) (2026-06-16)
 
 
