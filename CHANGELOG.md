@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.15.0...skenion-studio-v0.16.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** add control layer inspector help ([2cbe723](https://github.com/echovisionlab/skenion-studio/commit/2cbe723b4dc108da893e9361c0939fba948cb5e0))
+* **studio:** sync fullscreen shader inputs ([#41](https://github.com/echovisionlab/skenion-studio/issues/41)) ([003cd45](https://github.com/echovisionlab/skenion-studio/commit/003cd45da16e1b20d2028b2af15cea9689447f67))
+
 ## [0.15.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.14.0...skenion-studio-v0.15.0) (2026-06-17)
 
 
