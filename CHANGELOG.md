@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.14.0...skenion-studio-v0.15.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** add typed value runtime controls ([#37](https://github.com/echovisionlab/skenion-studio/issues/37)) ([91e330c](https://github.com/echovisionlab/skenion-studio/commit/91e330cc1255adb0baf8d25a19462d3b1b0d6fa0))
+
 ## [0.14.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.13.2...skenion-studio-v0.14.0) (2026-06-17)
 
 
