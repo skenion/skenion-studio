@@ -155,6 +155,70 @@ export const shaderUniformSamplePositions: ViewPositions = {
   output_1: { x: 664, y: 120 }
 };
 
+export const shaderMultiUniformSampleGraph: GraphDocumentV01 = {
+  schema: "skenion.graph",
+  schemaVersion: "0.1.0",
+  id: "studio-shader-multi-uniform-sample",
+  revision: "1",
+  nodes: [
+    node("core.value-f32", "value_1", "u_value", { value: 0.25 }),
+    node("core.value-f32", "value_2", "u_value2", { value: 0.65 }),
+    node("core.color-rgba", "color_1", "u_color", { value: [0.95, 0.25, 0.12, 1] }),
+    node("render.fullscreen-shader", "shader_1", "Fullscreen Shader"),
+    node("render.output", "output_1", "Preview Output")
+  ],
+  edges: [
+    {
+      from: {
+        node: "value_1",
+        port: "value"
+      },
+      to: {
+        node: "shader_1",
+        port: "u_value"
+      }
+    },
+    {
+      from: {
+        node: "value_2",
+        port: "value"
+      },
+      to: {
+        node: "shader_1",
+        port: "u_value2"
+      }
+    },
+    {
+      from: {
+        node: "color_1",
+        port: "value"
+      },
+      to: {
+        node: "shader_1",
+        port: "u_color"
+      }
+    },
+    {
+      from: {
+        node: "shader_1",
+        port: "out"
+      },
+      to: {
+        node: "output_1",
+        port: "in"
+      }
+    }
+  ]
+};
+
+export const shaderMultiUniformSamplePositions: ViewPositions = {
+  value_1: { x: 64, y: 56 },
+  value_2: { x: 64, y: 212 },
+  color_1: { x: 64, y: 368 },
+  shader_1: { x: 408, y: 178 },
+  output_1: { x: 752, y: 218 }
+};
+
 export const portDemoSampleGraph: GraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",

@@ -12,9 +12,10 @@ The Visual Gate job must upload `artifacts/studio-visual-gate` and must fail if 
 
 ## Visual Gate Artifacts
 
-The visual gate is expected to generate exactly eight PNG artifacts:
+The visual gate is expected to generate exactly nine PNG artifacts:
 
 - `shader-uniform-sample.png`
+- `shader-multi-uniform-sample.png`
 - `port-demo-sample.png`
 - `nodecard-float-value.png`
 - `nodecard-fullscreen-shader.png`

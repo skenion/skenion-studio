@@ -29,6 +29,9 @@ export function FullscreenShaderControls({
               {language}
             </Badge>
           </Group>
+          <Text c="dimmed" mt={4} size="xs">
+            Uniforms: skenion.u_value, skenion.u_value2, skenion.u_color
+          </Text>
         </div>
         <Button
           leftSection={<RotateCcw size={14} />}

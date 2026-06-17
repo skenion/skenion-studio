@@ -1,10 +1,11 @@
 import { builtinNodeDefinitionsV01 } from "@skenion/contracts";
 import { describe, expect, it } from "vitest";
 import { CLEAR_COLOR_NODE_KIND } from "../graph/clearColor";
+import { COLOR_RGBA_NODE_KIND } from "../graph/colorRgba";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "../graph/fullscreenShader";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
-import { renderSampleGraph, shaderUniformSampleGraph } from "./sampleGraph";
+import { renderSampleGraph, shaderMultiUniformSampleGraph, shaderUniformSampleGraph } from "./sampleGraph";
 
 describe("node registry", () => {
   it("uses the contracts builtin node ids as the registry source", () => {
@@ -22,6 +23,9 @@ describe("node registry", () => {
     );
     expect(findStudioDefinition(CLEAR_COLOR_NODE_KIND)?.ports).toEqual(
       findContractsDefinition(CLEAR_COLOR_NODE_KIND)?.ports
+    );
+    expect(findStudioDefinition(COLOR_RGBA_NODE_KIND)?.ports).toEqual(
+      findContractsDefinition(COLOR_RGBA_NODE_KIND)?.ports
     );
   });
 
@@ -45,21 +49,35 @@ describe("node registry", () => {
     const node = createGraphNodeFromDefinition(definition!, []);
 
     expect(node.params).toEqual(defaultFullscreenShaderParams());
-    expect(node.ports.map((port) => port.id)).toEqual(["u_value", "out"]);
+    expect(node.ports.map((port) => port.id)).toEqual(["u_value", "u_value2", "u_color", "out"]);
     expect(String(node.params.source)).toContain("fn fs_main");
   });
 
-  it("creates sample graphs with canonical number.f32 ports", () => {
+  it("creates sample graphs with canonical shader uniform ports", () => {
     const valuePort = shaderUniformSampleGraph.nodes
       .find((node) => node.id === "value_1")
       ?.ports.find((port) => port.id === "value");
     const uniformPort = shaderUniformSampleGraph.nodes
       .find((node) => node.id === "shader_1")
       ?.ports.find((port) => port.id === "u_value");
+    const secondUniformPort = shaderMultiUniformSampleGraph.nodes
+      .find((node) => node.id === "shader_1")
+      ?.ports.find((port) => port.id === "u_value2");
+    const colorPort = shaderMultiUniformSampleGraph.nodes
+      .find((node) => node.id === "color_1")
+      ?.ports.find((port) => port.id === "value");
+    const colorUniformPort = shaderMultiUniformSampleGraph.nodes
+      .find((node) => node.id === "shader_1")
+      ?.ports.find((port) => port.id === "u_color");
 
     expect(valuePort?.type.dataKind).toBe("number.f32");
     expect(uniformPort?.type.dataKind).toBe("number.f32");
-    expect(findDataKinds([renderSampleGraph, shaderUniformSampleGraph])).not.toContain("f32");
+    expect(secondUniformPort?.type.dataKind).toBe("number.f32");
+    expect(colorPort?.type.dataKind).toBe("color.rgba");
+    expect(colorUniformPort?.type.dataKind).toBe("color.rgba");
+    expect(findDataKinds([renderSampleGraph, shaderUniformSampleGraph, shaderMultiUniformSampleGraph])).not.toContain(
+      "f32"
+    );
   });
 });
 

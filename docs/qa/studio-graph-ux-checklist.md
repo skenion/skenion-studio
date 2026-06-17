@@ -13,6 +13,7 @@ pnpm run visual-gate
 Expected output:
 
 - `artifacts/studio-visual-gate/shader-uniform-sample.png`
+- `artifacts/studio-visual-gate/shader-multi-uniform-sample.png`
 - `artifacts/studio-visual-gate/port-demo-sample.png`
 - `artifacts/studio-visual-gate/nodecard-float-value.png`
 - `artifacts/studio-visual-gate/nodecard-fullscreen-shader.png`
@@ -44,6 +45,7 @@ Required checks:
 - Delete and Backspace remove the selected edge.
 - Zoom and pan keep port labels, dots, and edge labels readable.
 - The shader uniform sample clearly shows `Float Value.value -> Fullscreen Shader.u_value -> Render Output.in`.
+- The shader multi-uniform sample clearly shows `u_value`, `u_value2`, and `u_color` inputs wired into `Fullscreen Shader`.
 - The port demo sample clearly distinguishes value, event, and render-frame cables.
 - The many-port node keeps rows stable without text overlap.
 

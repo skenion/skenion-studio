@@ -1,5 +1,6 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
+import { COLOR_RGBA_NODE_KIND, defaultColorRgbaParams } from "./colorRgba";
 import { FLOAT_VALUE_NODE_KIND, defaultFloatValueParams } from "./floatValue";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "./fullscreenShader";
 
@@ -22,6 +23,9 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   }
   if (kind === FLOAT_VALUE_NODE_KIND) {
     return defaultFloatValueParams();
+  }
+  if (kind === COLOR_RGBA_NODE_KIND) {
+    return defaultColorRgbaParams();
   }
 
   return {};

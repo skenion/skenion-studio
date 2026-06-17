@@ -7,6 +7,8 @@ import {
   portDemoSamplePositions,
   renderSampleGraph,
   sampleGraph,
+  shaderMultiUniformSampleGraph,
+  shaderMultiUniformSamplePositions,
   shaderUniformSampleGraph,
   shaderUniformSamplePositions
 } from "../../data/sampleGraph";
@@ -31,6 +33,15 @@ export const ShaderUniformGraph: Story = {
     <GraphCanvasStory
       initialGraph={shaderUniformSampleGraph}
       initialPositions={shaderUniformSamplePositions}
+    />
+  )
+};
+
+export const ShaderMultiUniformGraph: Story = {
+  render: () => (
+    <GraphCanvasStory
+      initialGraph={shaderMultiUniformSampleGraph}
+      initialPositions={shaderMultiUniformSamplePositions}
     />
   )
 };
