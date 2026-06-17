@@ -46,7 +46,7 @@ export const ValueOutputOnly: Story = {
     id: "value_1",
     label: "Float Value",
     kind: "core.value-f32",
-    typeBadgeLabel: "value<f32>",
+    typeBadgeLabel: "value.f32",
     accentColor: "#495057",
     inputs: [],
     outputs: [valueTransformCard.outputs[0]!]

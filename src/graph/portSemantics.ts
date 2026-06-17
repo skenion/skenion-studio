@@ -273,6 +273,12 @@ function artistFacingType(node: GraphNodeV01, port: PortV01): string {
   if (port.type.dataKind === "gpu.texture2d") {
     return "gpu.texture2d";
   }
+  if (port.type.flow === "value" && port.type.dataKind === "number.f32") {
+    return "value.f32";
+  }
+  if (port.type.flow === "event" && port.type.dataKind === "event.bang") {
+    return "event.bang";
+  }
   return `${port.type.flow}.${port.type.dataKind}`;
 }
 

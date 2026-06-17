@@ -25,6 +25,7 @@ import {
   applyPatch,
   createGraphNodeFromDefinition,
   graphSummary,
+  normalizeLegacyGraphTypes,
   validateGraph,
   type ConnectionCheck,
   type GraphPatch,
@@ -184,8 +185,9 @@ export default function App() {
         return;
       }
 
-      setGraph(result.value);
-      setSelectedNodeId(result.value.nodes[0]?.id ?? null);
+      const normalizedGraph = normalizeLegacyGraphTypes(result.value);
+      setGraph(normalizedGraph);
+      setSelectedNodeId(normalizedGraph.nodes[0]?.id ?? null);
       setSelectedEdgeId(null);
       setPositions({});
       clearPendingPatch();

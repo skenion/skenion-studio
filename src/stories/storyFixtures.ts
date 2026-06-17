@@ -20,7 +20,7 @@ export const valueOutputPort: NodePortView = {
   id: "value",
   label: "value",
   direction: "output",
-  typeLabel: "value<f32>",
+  typeLabel: "value.f32",
   color: "#495057",
   metadata: {
     rate: "control",
@@ -33,7 +33,7 @@ export const valueInputPort: NodePortView = {
   id: "amount",
   label: "amount",
   direction: "input",
-  typeLabel: "value<f32>",
+  typeLabel: "value.f32",
   color: "#495057",
   metadata: {
     rate: "control",
@@ -86,7 +86,7 @@ export const gpuTextureOutputPort: NodePortView = {
   id: "texture",
   label: "texture",
   direction: "output",
-  typeLabel: "resource<gpu.texture2d>",
+  typeLabel: "gpu.texture2d",
   color: "#7048e8",
   metadata: {
     rate: "frame",
@@ -99,7 +99,7 @@ export const eventInputPort: NodePortView = {
   id: "bang",
   label: "bang",
   direction: "input",
-  typeLabel: "event<bang>",
+  typeLabel: "event.bang",
   color: "#f08c00",
   metadata: {
     rate: "event",
@@ -151,7 +151,7 @@ export const valueTransformCard: NodeCardView = {
   label: "Scale Value",
   kind: "core.scale-f32",
   kindVersion: "0.2.0",
-  typeBadgeLabel: "value<f32>",
+  typeBadgeLabel: "value.f32",
   accentColor: "#495057",
   inputs: [valueInputPort],
   outputs: [valueOutputPort]
@@ -220,7 +220,7 @@ export const multiPortCard: NodeCardView = {
       id: "left",
       label: "left",
       direction: "input",
-      typeLabel: "signal<audio.buffer>",
+      typeLabel: "signal.audio.buffer",
       color: "#0ca678",
       metadata: { rate: "audio", maxConnections: null, mergePolicy: "mix" }
     },
@@ -228,7 +228,7 @@ export const multiPortCard: NodeCardView = {
       id: "right",
       label: "right",
       direction: "input",
-      typeLabel: "signal<audio.buffer>",
+      typeLabel: "signal.audio.buffer",
       color: "#0ca678",
       metadata: { rate: "audio", maxConnections: null, mergePolicy: "mix" }
     },
@@ -239,7 +239,7 @@ export const multiPortCard: NodeCardView = {
       id: "mix",
       label: "mix",
       direction: "output",
-      typeLabel: "signal<audio.buffer>",
+      typeLabel: "signal.audio.buffer",
       color: "#0ca678",
       metadata: { rate: "audio", fanOutPolicy: "allow" }
     },

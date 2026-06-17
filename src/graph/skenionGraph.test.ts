@@ -15,6 +15,7 @@ import {
   findPort,
   graphSummary,
   isValidSkenionConnection,
+  normalizeLegacyGraphTypes,
   portKey,
   toSkenionPatch,
   typeKey,
@@ -59,6 +60,41 @@ describe("skenion graph helpers", () => {
     expect(graphSummary(portDemoSampleGraph)).toBe("6 nodes · 3 edges · rev 1");
     expect(validateGraph(portDemoSampleGraph).ok).toBe(true);
     expect(validateGraph({}).ok).toBe(false);
+  });
+
+  it("normalizes legacy f32 port data kinds without mutating imported graphs", () => {
+    const legacyGraph = {
+      ...sampleGraph,
+      nodes: sampleGraph.nodes.map((node) => ({
+        ...node,
+        ports: node.ports.map((port) =>
+          port.type.dataKind === "number.f32"
+            ? {
+                ...port,
+                type: {
+                  ...port.type,
+                  dataKind: "f32"
+                }
+              }
+            : port
+        )
+      }))
+    };
+    const normalizedGraph = normalizeLegacyGraphTypes(legacyGraph);
+
+    expect(normalizedGraph).not.toBe(legacyGraph);
+    expect(
+      normalizedGraph.nodes
+        .flatMap((node) => node.ports)
+        .filter((port) => port.type.flow === "value")
+        .map((port) => port.type.dataKind)
+    ).toEqual(["number.f32", "number.f32"]);
+    expect(
+      legacyGraph.nodes
+        .flatMap((node) => node.ports)
+        .filter((port) => port.type.dataKind === "f32")
+    ).toHaveLength(2);
+    expect(normalizeLegacyGraphTypes(sampleGraph)).toBe(sampleGraph);
   });
 
   it("converts React Flow connections and edges to Skenion patches", () => {
@@ -185,7 +221,7 @@ describe("skenion graph helpers", () => {
       )
     ).toEqual({
       ok: true,
-      message: "value<f32> connected to value<f32>."
+      message: "value<number.f32> connected to value<number.f32>."
     });
     expect(
       checkConnection(
@@ -235,7 +271,7 @@ describe("skenion graph helpers", () => {
       )
     ).toEqual({
       ok: true,
-      message: "value<f32> connected to value<f32>."
+      message: "value<number.f32> connected to value<number.f32>."
     });
     expect(
       checkConnection(

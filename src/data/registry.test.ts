@@ -1,98 +1,85 @@
+import { builtinNodeDefinitionsV01 } from "@skenion/contracts";
 import { describe, expect, it } from "vitest";
 import { CLEAR_COLOR_NODE_KIND } from "../graph/clearColor";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "../graph/fullscreenShader";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
+import { renderSampleGraph, shaderUniformSampleGraph } from "./sampleGraph";
 
 describe("node registry", () => {
-  it("includes the fullscreen shader render node", () => {
-    const definition = nodeRegistry.find((candidate) => candidate.id === FULLSCREEN_SHADER_NODE_KIND);
-
-    expect(definition).toBeDefined();
-    expect(definition).toMatchObject({
-      id: FULLSCREEN_SHADER_NODE_KIND,
-      displayName: "Fullscreen Shader",
-      category: "Render",
-      execution: {
-        model: "gpu_pass",
-        clock: "frame"
-      },
-      ports: [
-        {
-          id: "u_value",
-          direction: "input",
-          label: "u_value",
-          activation: "latched",
-          required: false,
-          type: {
-            flow: "value",
-            dataKind: "f32",
-            range: {
-              min: 0,
-              max: 1,
-              step: 0.01
-            }
-          }
-        },
-        {
-          id: "out",
-          direction: "output",
-          label: "Out",
-          type: {
-            flow: "resource",
-            dataKind: "gpu.texture2d",
-            format: "rgba8unorm",
-            colorSpace: "srgb"
-          }
-        }
-      ],
-      capabilities: ["render.output.fullscreen-shader"]
-    });
+  it("uses the contracts builtin node ids as the registry source", () => {
+    expect(nodeRegistry.map((definition) => definition.id)).toEqual(
+      builtinNodeDefinitionsV01.map((definition) => definition.id)
+    );
   });
 
-  it("includes explicit render output wiring definitions", () => {
-    const clear = nodeRegistry.find((candidate) => candidate.id === CLEAR_COLOR_NODE_KIND);
-    const output = nodeRegistry.find((candidate) => candidate.id === "render.output");
+  it("matches canonical contracts builtins for render definitions", () => {
+    expect(findStudioDefinition(FULLSCREEN_SHADER_NODE_KIND)?.ports).toEqual(
+      findContractsDefinition(FULLSCREEN_SHADER_NODE_KIND)?.ports
+    );
+    expect(findStudioDefinition("render.output")?.ports).toEqual(
+      findContractsDefinition("render.output")?.ports
+    );
+    expect(findStudioDefinition(CLEAR_COLOR_NODE_KIND)?.ports).toEqual(
+      findContractsDefinition(CLEAR_COLOR_NODE_KIND)?.ports
+    );
+  });
 
-    expect(clear?.ports).toMatchObject([
-      {
-        id: "out",
-        direction: "output",
-        type: {
-          flow: "resource",
-          dataKind: "gpu.texture2d"
-        }
+  it("does not expose non-canonical f32 dataKind values", () => {
+    expect(findDataKinds(nodeRegistry)).not.toContain("f32");
+    expect(
+      findStudioDefinition(FULLSCREEN_SHADER_NODE_KIND)?.ports.find((port) => port.id === "u_value")?.type
+    ).toMatchObject({
+      flow: "value",
+      dataKind: "number.f32",
+      range: {
+        min: 0,
+        max: 1,
+        step: 0.01
       }
-    ]);
-    expect(output).toMatchObject({
-      id: "render.output",
-      displayName: "Render Output",
-      category: "Render",
-      execution: {
-        model: "frame",
-        clock: "frame"
-      },
-      ports: [
-        {
-          id: "in",
-          direction: "input",
-          activation: "latched",
-          type: {
-            flow: "resource",
-            dataKind: "gpu.texture2d"
-          }
-        }
-      ],
-      capabilities: ["render.output.surface"]
     });
   });
 
-  it("creates fullscreen shader nodes with default wgsl params", () => {
-    const definition = nodeRegistry.find((candidate) => candidate.id === FULLSCREEN_SHADER_NODE_KIND);
+  it("creates fullscreen shader nodes with Studio default wgsl params", () => {
+    const definition = findStudioDefinition(FULLSCREEN_SHADER_NODE_KIND);
     const node = createGraphNodeFromDefinition(definition!, []);
 
     expect(node.params).toEqual(defaultFullscreenShaderParams());
     expect(node.ports.map((port) => port.id)).toEqual(["u_value", "out"]);
     expect(String(node.params.source)).toContain("fn fs_main");
   });
+
+  it("creates sample graphs with canonical number.f32 ports", () => {
+    const valuePort = shaderUniformSampleGraph.nodes
+      .find((node) => node.id === "value_1")
+      ?.ports.find((port) => port.id === "value");
+    const uniformPort = shaderUniformSampleGraph.nodes
+      .find((node) => node.id === "shader_1")
+      ?.ports.find((port) => port.id === "u_value");
+
+    expect(valuePort?.type.dataKind).toBe("number.f32");
+    expect(uniformPort?.type.dataKind).toBe("number.f32");
+    expect(findDataKinds([renderSampleGraph, shaderUniformSampleGraph])).not.toContain("f32");
+  });
 });
+
+function findStudioDefinition(id: string) {
+  return nodeRegistry.find((candidate) => candidate.id === id);
+}
+
+function findContractsDefinition(id: string) {
+  return builtinNodeDefinitionsV01.find((candidate) => candidate.id === id);
+}
+
+function findDataKinds(value: unknown): string[] {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(findDataKinds);
+  }
+
+  const record = value as Record<string, unknown>;
+  const current = typeof record.dataKind === "string" ? [record.dataKind] : [];
+  return [...current, ...Object.values(record).flatMap(findDataKinds)];
+}

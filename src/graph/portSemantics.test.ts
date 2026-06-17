@@ -36,7 +36,7 @@ describe("port and edge semantics", () => {
       mergePolicy: "forbid",
       rate: "control",
       required: false,
-      storedType: "value<f32>",
+      storedType: "value<number.f32>",
       type: "value.f32"
     });
     expect(semanticTypeColor("render.frame")).toBe("#d6336c");
@@ -181,13 +181,13 @@ function twoNodeValueCycle(): GraphDocumentV01 {
     {
       id: "in",
       direction: "input",
-      type: { flow: "value", dataKind: "f32" },
+      type: { flow: "value", dataKind: "number.f32" },
       activation: "latched"
     },
     {
       id: "out",
       direction: "output",
-      type: { flow: "value", dataKind: "f32" }
+      type: { flow: "value", dataKind: "number.f32" }
     }
   ];
 
