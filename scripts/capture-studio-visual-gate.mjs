@@ -51,6 +51,7 @@ const captures = [
     waitFor: ".canvas-node"
   }
 ];
+const expectedArtifactNames = captures.map((capture) => `${capture.name}.png`).sort();
 
 await ensureStorybookBuild();
 await fs.rm(outputDir, { recursive: true, force: true });
@@ -80,6 +81,8 @@ try {
     });
     console.log(`captured ${path.relative(rootDir, outputPath)}`);
   }
+
+  await verifyCapturedArtifacts();
 } finally {
   await browser.close();
   await server.close();
@@ -130,6 +133,33 @@ async function serveStatic(staticRoot) {
       server.close((error) => (error ? reject(error) : resolve()));
     })
   };
+}
+
+async function verifyCapturedArtifacts() {
+  const entries = await fs.readdir(outputDir);
+  const pngNames = entries.filter((entry) => entry.endsWith(".png")).sort();
+  const missing = expectedArtifactNames.filter((name) => !pngNames.includes(name));
+  const unexpected = pngNames.filter((name) => !expectedArtifactNames.includes(name));
+  const empty = [];
+
+  for (const name of expectedArtifactNames) {
+    const stat = await fs.stat(path.join(outputDir, name));
+    if (stat.size === 0) {
+      empty.push(name);
+    }
+  }
+
+  const problems = [
+    missing.length > 0 ? `missing: ${missing.join(", ")}` : null,
+    unexpected.length > 0 ? `unexpected: ${unexpected.join(", ")}` : null,
+    empty.length > 0 ? `empty: ${empty.join(", ")}` : null
+  ].filter(Boolean);
+
+  if (problems.length > 0) {
+    throw new Error(`visual gate artifact verification failed (${problems.join("; ")})`);
+  }
+
+  console.log(`verified ${expectedArtifactNames.length} visual gate artifacts`);
 }
 
 function contentType(filePath) {
