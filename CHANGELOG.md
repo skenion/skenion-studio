@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.13.2...skenion-studio-v0.14.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** add multi uniform shader sample ([#35](https://github.com/echovisionlab/skenion-studio/issues/35)) ([2476e38](https://github.com/echovisionlab/skenion-studio/commit/2476e38958274285aca5de77838ea2c151c043ac))
+
 ## [0.13.2](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.13.1...skenion-studio-v0.13.2) (2026-06-17)
 
 
