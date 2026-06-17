@@ -15,9 +15,13 @@ Expected output:
 - `artifacts/studio-visual-gate/shader-uniform-sample.png`
 - `artifacts/studio-visual-gate/shader-multi-uniform-sample.png`
 - `artifacts/studio-visual-gate/port-demo-sample.png`
+- `artifacts/studio-visual-gate/project-saved-layout.png`
 - `artifacts/studio-visual-gate/nodecard-float-value.png`
 - `artifacts/studio-visual-gate/nodecard-fullscreen-shader.png`
 - `artifacts/studio-visual-gate/nodecard-render-output.png`
+- `artifacts/studio-visual-gate/shader-diagnostics-panel.png`
+- `artifacts/studio-visual-gate/help-panel-value-f32.png`
+- `artifacts/studio-visual-gate/help-graph-value-bang-set.png`
 - `artifacts/studio-visual-gate/invalid-connection.png`
 - `artifacts/studio-visual-gate/selected-edge.png`
 - `artifacts/studio-visual-gate/many-port-node.png`
@@ -44,9 +48,10 @@ Required checks:
 - Selected edges are visually distinct from normal edges.
 - Delete and Backspace remove the selected edge.
 - Zoom and pan keep port labels, dots, and edge labels readable.
-- The shader uniform sample clearly shows `Float Value.value -> Fullscreen Shader.u_value -> Render Output.in`.
-- The shader multi-uniform sample clearly shows `u_value`, `u_value2`, and `u_color` inputs wired into `Fullscreen Shader`.
+- The shader uniform sample clearly shows `Float Value.value -> Fullscreen Shader.speed -> Render Output.in`.
+- The shader multi-uniform sample clearly shows `speed`, `phase`, and `tint` inputs wired into `Fullscreen Shader`.
 - The port demo sample clearly distinguishes value, event, and render-frame cables.
+- The project saved layout sample keeps its saved node positions and viewport rather than auto-layouting.
 - The many-port node keeps rows stable without text overlap.
 
 ## Merge Rule

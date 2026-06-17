@@ -6,6 +6,7 @@ import {
   type NodeTypes
 } from "@xyflow/react";
 import type { GraphDocumentV01 } from "@skenion/contracts";
+import { createViewStateFromPositions } from "../../graph/projectDocument";
 import { toReactFlowViewModel } from "../../graph/reactFlowAdapter";
 import { ReactFlowNodeAdapter } from "../graph/ReactFlowNodeAdapter";
 
@@ -14,7 +15,8 @@ const nodeTypes: NodeTypes = {
 };
 
 export function HelpGraphViewer({ graph }: { graph: GraphDocumentV01 }) {
-  const viewModel = useMemo(() => toReactFlowViewModel(graph, {}), [graph]);
+  const viewState = useMemo(() => createViewStateFromPositions(graph, {}), [graph]);
+  const viewModel = useMemo(() => toReactFlowViewModel(graph, viewState), [graph, viewState]);
   const nodes = useMemo(
     () =>
       viewModel.nodes.map((node) => ({

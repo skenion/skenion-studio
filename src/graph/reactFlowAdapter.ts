@@ -2,10 +2,12 @@ import type {
   DataFlow,
   EdgeV01,
   GraphDocumentV01,
-  GraphNodeV01
+  GraphNodeV01,
+  ViewStateV01
 } from "@skenion/contracts";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import { typeKey, type ViewPositions } from "./skenionGraph";
+import { typeKey } from "./skenionGraph";
+import { viewPositionsFromViewState } from "./projectDocument";
 import {
   edgeInspectorModel,
   semanticTypeColor,
@@ -35,8 +37,9 @@ export interface ReactFlowViewModel {
 
 export function toReactFlowViewModel(
   graph: GraphDocumentV01,
-  positions: ViewPositions
+  viewState: ViewStateV01
 ): ReactFlowViewModel {
+  const positions = viewPositionsFromViewState(viewState);
   return {
     nodes: graph.nodes.map((node, index) => toReactFlowNode(node, index, positions[node.id])),
     edges: graph.edges.map((edge) => toReactFlowEdge(edge, graph))

@@ -16,15 +16,15 @@ import { StudioToolbar } from "./components/StudioToolbar";
 import { nodeRegistry } from "./data/registry";
 import {
   portDemoSampleGraph,
-  portDemoSamplePositions,
+  portDemoSampleViewState,
   renderSampleGraph,
   sampleGraph,
   sendReceivePanelSampleGraph,
-  sendReceivePanelSamplePositions,
+  sendReceivePanelSampleViewState,
   shaderMultiUniformSampleGraph,
-  shaderMultiUniformSamplePositions,
+  shaderMultiUniformSampleViewState,
   shaderUniformSampleGraph,
-  shaderUniformSamplePositions
+  shaderUniformSampleViewState
 } from "./data/sampleGraph";
 import {
   applyPatch,
@@ -33,9 +33,14 @@ import {
   normalizeLegacyGraphTypes,
   validateGraph,
   type ConnectionCheck,
-  type GraphPatch,
-  type ViewPositions
+  type GraphPatch
 } from "./graph/skenionGraph";
+import {
+  createProjectDocument,
+  createViewStateFromPositions,
+  parseProjectDocument,
+  reconcileViewStateWithGraph
+} from "./graph/projectDocument";
 import {
   analyzeGraphPortSemantics,
   findEdgeInspectorModel
@@ -73,7 +78,7 @@ import type {
 
 export default function App() {
   const [graph, setGraph] = useState<GraphDocumentV01>(sampleGraph);
-  const [positions, setPositions] = useState<ViewPositions>({});
+  const [viewState, setViewState] = useState(() => createViewStateFromPositions(sampleGraph, {}));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [activeHelpNodeId, setActiveHelpNodeId] = useState<string | null>(null);
@@ -131,25 +136,34 @@ export default function App() {
 
     const node = createGraphNodeFromDefinition(definition, graph.nodes);
     const patch = { type: "addNode", node } satisfies GraphPatch;
-    setGraph((currentGraph) => applyPatch(currentGraph, { type: "addNode", node }));
+    const nextGraph = applyPatch(graph, patch);
+    setGraph(nextGraph);
     recordGraphPatches([patch]);
-    setPositions((currentPositions) => ({
-      ...currentPositions,
-      [node.id]: {
-        x: 88 + (graph.nodes.length % 2) * 300,
-        y: 88 + Math.floor(graph.nodes.length / 2) * 180
-      }
-    }));
+    setViewState((currentViewState) =>
+      reconcileViewStateWithGraph(nextGraph, {
+        ...currentViewState,
+        canvas: {
+          ...currentViewState.canvas,
+          nodes: {
+            ...currentViewState.canvas.nodes,
+            [node.id]: {
+              x: 88 + (graph.nodes.length % 2) * 300,
+              y: 88 + Math.floor(graph.nodes.length / 2) * 180
+            }
+          }
+        }
+      })
+    );
     setSelectedNodeId(node.id);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
-    setSelectedEdgeId(null);
   }
 
   function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
     setGraph(nextGraph);
+    setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
     recordGraphPatches(patches);
     setConnectionCheck(null);
     setRuntimeResult(null);
@@ -179,8 +193,19 @@ export default function App() {
     setPatchConflict(null);
   }
 
+  function clearRuntimeLocalSessionState() {
+    setRuntimeResult(null);
+    setRuntimeSession(null);
+    setRuntimeHistory(null);
+    setRuntimePreviewStatus(null);
+    setRuntimeTelemetry(null);
+    setGeneratedShader(null);
+    setLastLoadedGraphFingerprint(null);
+  }
+
   function acceptRuntimeGraph(nextGraph: GraphDocumentV01) {
     setGraph(nextGraph);
+    setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
     setSelectedNodeId((current) =>
       current && nextGraph.nodes.some((node) => node.id === current) ? current : nextGraph.nodes[0]?.id ?? null
     );
@@ -204,34 +229,51 @@ export default function App() {
 
       const normalizedGraph = normalizeLegacyGraphTypes(result.value);
       setGraph(normalizedGraph);
+      setViewState(createViewStateFromPositions(normalizedGraph, {}));
       setSelectedNodeId(normalizedGraph.nodes[0]?.id ?? null);
       setActiveHelpNodeId(null);
       setSelectedEdgeId(null);
-      setPositions({});
       clearPendingPatch();
+      clearRuntimeLocalSessionState();
       setImportError(null);
       setConnectionCheck(null);
-      setRuntimeResult(null);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Graph import failed.");
     }
   }
 
+  async function openProject(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const project = parseProjectDocument(JSON.parse(await file.text()) as unknown);
+      setGraph(project.graph);
+      setViewState(project.viewState);
+      setSelectedNodeId(project.graph.nodes[0]?.id ?? null);
+      setActiveHelpNodeId(null);
+      setSelectedEdgeId(null);
+      clearPendingPatch();
+      clearRuntimeLocalSessionState();
+      setImportError(null);
+      setConnectionCheck(null);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Project open failed.");
+    }
+  }
+
   function exportGraph() {
-    const blob = new Blob([`${JSON.stringify(graph, null, 2)}\n`], {
-      type: "application/json"
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${graph.id || "skenion-graph"}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadJson(graph, `${graph.id || "skenion-graph"}.json`);
+  }
+
+  function saveProject() {
+    downloadJson(createProjectDocument(graph, viewState), `${graph.id || "skenion-project"}.skenion.json`);
   }
 
   function resetSample() {
     setGraph(sampleGraph);
-    setPositions({});
+    setViewState(createViewStateFromPositions(sampleGraph, {}));
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
@@ -243,7 +285,7 @@ export default function App() {
 
   function loadRenderSample() {
     setGraph(renderSampleGraph);
-    setPositions({});
+    setViewState(createViewStateFromPositions(renderSampleGraph, {}));
     setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
@@ -255,7 +297,7 @@ export default function App() {
 
   function loadShaderUniformSample() {
     setGraph(shaderUniformSampleGraph);
-    setPositions(shaderUniformSamplePositions);
+    setViewState(shaderUniformSampleViewState);
     setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
@@ -267,7 +309,7 @@ export default function App() {
 
   function loadShaderMultiUniformSample() {
     setGraph(shaderMultiUniformSampleGraph);
-    setPositions(shaderMultiUniformSamplePositions);
+    setViewState(shaderMultiUniformSampleViewState);
     setSelectedNodeId(shaderMultiUniformSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
@@ -279,7 +321,7 @@ export default function App() {
 
   function loadPortDemoSample() {
     setGraph(portDemoSampleGraph);
-    setPositions(portDemoSamplePositions);
+    setViewState(portDemoSampleViewState);
     setSelectedNodeId(portDemoSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
@@ -291,7 +333,7 @@ export default function App() {
 
   function loadSendReceivePanelSample() {
     setGraph(sendReceivePanelSampleGraph);
-    setPositions(sendReceivePanelSamplePositions);
+    setViewState(sendReceivePanelSampleViewState);
     setSelectedNodeId(sendReceivePanelSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
@@ -303,7 +345,9 @@ export default function App() {
 
   function removeNode(node: GraphNodeV01) {
     const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
-    setGraph((currentGraph) => applyPatch(currentGraph, patch));
+    const nextGraph = applyPatch(graph, patch);
+    setGraph(nextGraph);
+    setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
     recordGraphPatches([patch]);
     setSelectedNodeId(null);
     setActiveHelpNodeId(null);
@@ -356,12 +400,13 @@ export default function App() {
     }
 
     const nextGraph = cloneGraph(helpGraph);
-    setGraph({
+    const editableGraph = {
       ...nextGraph,
       id: `${nextGraph.id}-copy`,
       revision: "1"
-    });
-    setPositions({});
+    };
+    setGraph(editableGraph);
+    setViewState(createViewStateFromPositions(editableGraph, {}));
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
     setActiveHelpNodeId(null);
@@ -751,6 +796,8 @@ export default function App() {
           validation={validation}
           onExport={exportGraph}
           onImport={importGraph}
+          onOpenProject={openProject}
+          onSaveProject={saveProject}
           onLoadPortDemoSample={loadPortDemoSample}
           onLoadRenderSample={loadRenderSample}
           onLoadSendReceivePanelSample={loadSendReceivePanelSample}
@@ -782,10 +829,10 @@ export default function App() {
           ) : null}
           <GraphCanvas
             graph={graph}
-            positions={positions}
+            viewState={viewState}
             onConnectionCheck={setConnectionCheck}
             onGraphChange={updateGraph}
-            onPositionsChange={setPositions}
+            onViewStateChange={setViewState}
             onSelectedEdgeChange={(edgeId) => {
               setSelectedEdgeId(edgeId);
               if (edgeId) {
@@ -949,4 +996,16 @@ export default function App() {
 
 function cloneGraph(graph: GraphDocumentV01): GraphDocumentV01 {
   return JSON.parse(JSON.stringify(graph)) as GraphDocumentV01;
+}
+
+function downloadJson(jsonDocument: unknown, filename: string) {
+  const blob = new Blob([`${JSON.stringify(jsonDocument, null, 2)}\n`], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = window.document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

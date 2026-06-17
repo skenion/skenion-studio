@@ -1,20 +1,21 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import type { GraphDocumentV01 } from "@skenion/contracts";
+import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
 import { GraphCanvas } from "../GraphCanvas";
 import {
   portDemoSampleGraph,
-  portDemoSamplePositions,
+  portDemoSampleViewState,
   renderSampleGraph,
   sampleGraph,
   sendReceivePanelSampleGraph,
-  sendReceivePanelSamplePositions,
+  sendReceivePanelSampleViewState,
   shaderMultiUniformSampleGraph,
-  shaderMultiUniformSamplePositions,
+  shaderMultiUniformSampleViewState,
   shaderUniformSampleGraph,
-  shaderUniformSamplePositions
+  shaderUniformSampleViewState
 } from "../../data/sampleGraph";
-import type { ConnectionCheck, GraphPatch, ViewPositions } from "../../graph/skenionGraph";
+import { createViewStateFromPositions, reconcileViewStateWithGraph } from "../../graph/projectDocument";
+import type { ConnectionCheck, GraphPatch } from "../../graph/skenionGraph";
 
 const meta = {
   title: "Graph/ReactFlowCanvas",
@@ -34,7 +35,7 @@ export const ShaderUniformGraph: Story = {
   render: () => (
     <GraphCanvasStory
       initialGraph={shaderUniformSampleGraph}
-      initialPositions={shaderUniformSamplePositions}
+      initialViewState={shaderUniformSampleViewState}
     />
   )
 };
@@ -43,7 +44,7 @@ export const ShaderMultiUniformGraph: Story = {
   render: () => (
     <GraphCanvasStory
       initialGraph={shaderMultiUniformSampleGraph}
-      initialPositions={shaderMultiUniformSamplePositions}
+      initialViewState={shaderMultiUniformSampleViewState}
     />
   )
 };
@@ -52,7 +53,7 @@ export const PortDemoGraph: Story = {
   render: () => (
     <GraphCanvasStory
       initialGraph={portDemoSampleGraph}
-      initialPositions={portDemoSamplePositions}
+      initialViewState={portDemoSampleViewState}
     />
   )
 };
@@ -61,7 +62,29 @@ export const SendReceivePanelGraph: Story = {
   render: () => (
     <GraphCanvasStory
       initialGraph={sendReceivePanelSampleGraph}
-      initialPositions={sendReceivePanelSamplePositions}
+      initialViewState={sendReceivePanelSampleViewState}
+    />
+  )
+};
+
+export const SavedProjectLayoutGraph: Story = {
+  render: () => (
+    <GraphCanvasStory
+      initialGraph={sendReceivePanelSampleGraph}
+      initialViewState={createViewStateFromPositions(
+        sendReceivePanelSampleGraph,
+        {
+          slider_speed: { x: 48, y: 72 },
+          send_speed: { x: 330, y: 72 },
+          receive_speed: { x: 330, y: 256 },
+          toggle_enabled: { x: 48, y: 396 },
+          send_enabled: { x: 330, y: 396 },
+          receive_enabled: { x: 330, y: 580 },
+          shader_1: { x: 676, y: 236 },
+          output_1: { x: 1016, y: 296 }
+        },
+        { x: -24, y: -16, zoom: 0.92 }
+      )}
     />
   )
 };
@@ -74,7 +97,7 @@ export const SelectedEdgeState: Story = {
   render: () => (
     <GraphCanvasStory
       initialGraph={shaderUniformSampleGraph}
-      initialPositions={shaderUniformSamplePositions}
+      initialViewState={shaderUniformSampleViewState}
       initialSelectedEdgeId="shader_1.out->output_1.in"
     />
   )
@@ -89,7 +112,7 @@ export const InvalidConnectionDiagnostic: Story = {
           "incompatible-edge-type: value_1.value->output_1.in connects value.f32 to render.frame without an explicit adapter."
       }}
       initialGraph={shaderUniformSampleGraph}
-      initialPositions={shaderUniformSamplePositions}
+      initialViewState={shaderUniformSampleViewState}
     />
   )
 };
@@ -97,16 +120,18 @@ export const InvalidConnectionDiagnostic: Story = {
 function GraphCanvasStory({
   initialGraph,
   initialConnectionCheck = null,
-  initialPositions = {},
+  initialViewState,
   initialSelectedEdgeId = null
 }: {
   initialGraph: GraphDocumentV01;
   initialConnectionCheck?: ConnectionCheck | null;
-  initialPositions?: ViewPositions;
+  initialViewState?: ViewStateV01;
   initialSelectedEdgeId?: string | null;
 }) {
   const [graph, setGraph] = useState(initialGraph);
-  const [positions, setPositions] = useState<ViewPositions>(initialPositions);
+  const [viewState, setViewState] = useState<ViewStateV01>(
+    () => initialViewState ?? createViewStateFromPositions(initialGraph, {})
+  );
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(initialSelectedEdgeId);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(
@@ -143,14 +168,15 @@ function GraphCanvasStory({
         onConnectionCheck={setConnectionCheck}
         onGraphChange={(nextGraph, patches = []) => {
           setGraph(nextGraph);
+          setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
           setPatches(patches);
         }}
-        onPositionsChange={setPositions}
+        onViewStateChange={setViewState}
         onSelectedEdgeChange={setSelectedEdgeId}
         onSelectedNodeChange={setSelectedNodeId}
-        positions={positions}
         selectedEdgeId={selectedEdgeId}
         selectedNodeId={selectedNodeId}
+        viewState={viewState}
       />
     </div>
   );

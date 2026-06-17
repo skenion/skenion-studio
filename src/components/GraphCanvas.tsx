@@ -12,9 +12,10 @@ import {
   type Node,
   type NodeTypes,
   type OnConnectEnd,
-  type OnConnectStart
+  type OnConnectStart,
+  type Viewport
 } from "@xyflow/react";
-import type { GraphDocumentV01 } from "@skenion/contracts";
+import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
 import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
 import {
   applyPatch,
@@ -23,9 +24,9 @@ import {
   isValidSkenionConnection,
   toSkenionPatch,
   type GraphPatch,
-  type ConnectionCheck,
-  type ViewPositions
+  type ConnectionCheck
 } from "../graph/skenionGraph";
+import { updateViewStateNodePosition, updateViewStateViewport } from "../graph/projectDocument";
 import {
   toReactFlowViewModel
 } from "../graph/reactFlowAdapter";
@@ -37,33 +38,34 @@ const nodeTypes: NodeTypes = {
 
 interface GraphCanvasProps {
   graph: GraphDocumentV01;
-  positions: ViewPositions;
+  viewState: ViewStateV01;
   selectedEdgeId: string | null;
   selectedNodeId: string | null;
   onConnectionCheck: (check: ConnectionCheck | null) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
   onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
-  onPositionsChange: (positions: ViewPositions) => void;
+  onViewStateChange: (viewState: ViewStateV01) => void;
   onSelectedNodeChange: (nodeId: string | null) => void;
 }
 
 export function GraphCanvas({
   graph,
-  positions,
+  viewState,
   selectedEdgeId,
   selectedNodeId,
   onConnectionCheck,
   onSelectedEdgeChange,
   onGraphChange,
-  onPositionsChange,
+  onViewStateChange,
   onSelectedNodeChange
 }: GraphCanvasProps) {
-  const viewModel = useMemo(() => toReactFlowViewModel(graph, positions), [graph, positions]);
+  const viewModel = useMemo(() => toReactFlowViewModel(graph, viewState), [graph, viewState]);
   const [nodes, setNodes, onNodesChange] = useNodesState(viewModel.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(viewModel.edges);
   const deletingNodeIdsRef = useRef<Set<string>>(new Set());
   const activeConnectionRef = useRef<string | null>(null);
   const [activeConnectionMessage, setActiveConnectionMessage] = useState<string | null>(null);
+  const viewport = viewState.canvas.viewport ?? { x: 0, y: 0, zoom: 1 };
   const defaultEdgeOptions = useMemo(
     () => ({
       type: "smoothstep",
@@ -145,12 +147,16 @@ export function GraphCanvas({
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
-      onPositionsChange({
-        ...positions,
-        [node.id]: node.position
-      });
+      onViewStateChange(updateViewStateNodePosition(graph, viewState, node.id, node.position));
     },
-    [onPositionsChange, positions]
+    [graph, onViewStateChange, viewState]
+  );
+
+  const onViewportChange = useCallback(
+    (nextViewport: Viewport) => {
+      onViewStateChange(updateViewStateViewport(graph, viewState, nextViewport));
+    },
+    [graph, onViewStateChange, viewState]
   );
 
   const onEdgesDelete = useCallback(
@@ -212,8 +218,6 @@ export function GraphCanvas({
       defaultEdgeOptions={defaultEdgeOptions}
       deleteKeyCode={["Backspace", "Delete"]}
       edges={selectedEdges}
-      fitView
-      fitViewOptions={{ padding: 0.18 }}
       nodeTypes={nodeTypes}
       nodes={selectedNodes}
       isValidConnection={isValidConnection}
@@ -237,6 +241,8 @@ export function GraphCanvas({
         onSelectedNodeChange(null);
         onSelectedEdgeChange(null);
       }}
+      onViewportChange={onViewportChange}
+      viewport={viewport}
     >
       <Background color="#d8dee6" gap={20} size={1} />
       {activeConnectionMessage ? (
