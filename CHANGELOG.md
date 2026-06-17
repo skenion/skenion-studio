@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.20.0...skenion-studio-v0.21.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** save project view state ([0eea041](https://github.com/echovisionlab/skenion-studio/commit/0eea041da6e8cc7b9b272e90c62c79c5fc607b7f))
+* **studio:** save project view state ([18fe51e](https://github.com/echovisionlab/skenion-studio/commit/18fe51e0478eb975e14d81663977558b101493db))
+
 ## [0.20.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.19.0...skenion-studio-v0.20.0) (2026-06-17)
 
 
