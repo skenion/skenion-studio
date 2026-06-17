@@ -18,6 +18,8 @@ import {
   portDemoSamplePositions,
   renderSampleGraph,
   sampleGraph,
+  shaderMultiUniformSampleGraph,
+  shaderMultiUniformSamplePositions,
   shaderUniformSampleGraph,
   shaderUniformSamplePositions
 } from "./data/sampleGraph";
@@ -237,6 +239,17 @@ export default function App() {
     setGraph(shaderUniformSampleGraph);
     setPositions(shaderUniformSamplePositions);
     setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
+    setSelectedEdgeId(null);
+    clearPendingPatch();
+    setImportError(null);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+  }
+
+  function loadShaderMultiUniformSample() {
+    setGraph(shaderMultiUniformSampleGraph);
+    setPositions(shaderMultiUniformSamplePositions);
+    setSelectedNodeId(shaderMultiUniformSampleGraph.nodes[0]?.id ?? null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -589,6 +602,7 @@ export default function App() {
           onImport={importGraph}
           onLoadPortDemoSample={loadPortDemoSample}
           onLoadRenderSample={loadRenderSample}
+          onLoadShaderMultiUniformSample={loadShaderMultiUniformSample}
           onLoadShaderUniformSample={loadShaderUniformSample}
           onReset={resetSample}
         />

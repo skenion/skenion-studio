@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Stack } from "@mantine/core";
 import { ClearColorControls } from "./ClearColorControls";
+import { ColorRgbaControls } from "./ColorRgbaControls";
 import { ConnectionDiagnosticsPanel } from "./ConnectionDiagnosticsPanel";
 import { EdgeInspector } from "./EdgeInspector";
 import { FeedbackPolicyDialog } from "./FeedbackPolicyDialog";
@@ -47,6 +48,10 @@ export const NodeControls: Story = {
 
 export const ClearColorControl: Story = {
   render: () => <ClearColorControls color={[0.1, 0.36, 0.84, 1]} onChange={noop} />
+};
+
+export const ColorRgbaControl: Story = {
+  render: () => <ColorRgbaControls color={[0.95, 0.25, 0.12, 1]} onChange={noop} />
 };
 
 export const FloatValueControl: Story = {

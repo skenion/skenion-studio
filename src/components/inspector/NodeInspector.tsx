@@ -2,6 +2,7 @@ import { Button, Divider, Group, Stack, Text } from "@mantine/core";
 import { Trash2 } from "lucide-react";
 import type { GraphNodeV01 } from "@skenion/contracts";
 import { ClearColorControls } from "./ClearColorControls";
+import { ColorRgbaControls } from "./ColorRgbaControls";
 import { FloatValueControls } from "./FloatValueControls";
 import { FullscreenShaderControls } from "./FullscreenShaderControls";
 import { PortTable } from "./PortTable";
@@ -9,6 +10,10 @@ import {
   isClearColorNode,
   readClearColorParam
 } from "../../graph/clearColor";
+import {
+  isColorRgbaNode,
+  readColorRgbaParam
+} from "../../graph/colorRgba";
 import {
   isFloatValueNode,
   readFloatValueParam
@@ -30,6 +35,7 @@ export function NodeInspector({
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }) {
   const clearColor = isClearColorNode(node) ? readClearColorParam(node) : null;
+  const colorRgba = isColorRgbaNode(node) ? readColorRgbaParam(node) : null;
   const floatValue = isFloatValueNode(node) ? readFloatValueParam(node) : null;
   const shaderSource = isFullscreenShaderNode(node) ? readShaderSourceParam(node) : null;
   const shaderLanguage = isFullscreenShaderNode(node) ? readShaderLanguageParam(node) : null;
@@ -73,6 +79,16 @@ export function NodeInspector({
           <FloatValueControls
             onChange={(value) => onSetNodeParam(node.id, "value", value)}
             value={floatValue}
+          />
+        </>
+      ) : null}
+
+      {colorRgba ? (
+        <>
+          <Divider />
+          <ColorRgbaControls
+            color={colorRgba}
+            onChange={(color) => onSetNodeParam(node.id, "value", color)}
           />
         </>
       ) : null}

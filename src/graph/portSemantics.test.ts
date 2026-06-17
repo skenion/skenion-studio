@@ -16,8 +16,10 @@ describe("port and edge semantics", () => {
     const shader = renderSampleGraph.nodes[0];
     const out = shader.ports.find((port) => port.id === "out")!;
     const uniform = shader.ports.find((port) => port.id === "u_value")!;
+    const colorUniform = shader.ports.find((port) => port.id === "u_color")!;
     const semantics = portSemanticsForPort(shader, out);
     const uniformSemantics = portSemanticsForPort(shader, uniform);
+    const colorSemantics = portSemanticsForPort(shader, colorUniform);
 
     expect(semantics).toMatchObject({
       direction: "output",
@@ -39,8 +41,14 @@ describe("port and edge semantics", () => {
       storedType: "value<number.f32>",
       type: "value.f32"
     });
+    expect(colorSemantics).toMatchObject({
+      direction: "input",
+      storedType: "value<color.rgba>",
+      type: "value.color.rgba"
+    });
     expect(semanticTypeColor("render.frame")).toBe("#d6336c");
     expect(semanticTypeColor("gpu.texture2d")).toBe("#7048e8");
+    expect(semanticTypeColor("value.color.rgba")).toBe("#e64980");
     expect(semanticTypeColor("event.bang")).toBe("#f08c00");
     expect(semanticTypeColor("signal.audio")).toBe("#0ca678");
     expect(semanticTypeColor("stream.video.frame")).toBe("#1c7ed6");

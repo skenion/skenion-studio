@@ -5,6 +5,7 @@ import {
   portDemoSampleGraph,
   renderSampleGraph,
   sampleGraph,
+  shaderMultiUniformSampleGraph,
   shaderUniformSampleGraph
 } from "../data/sampleGraph";
 import {
@@ -57,6 +58,8 @@ describe("skenion graph helpers", () => {
     expect(validateGraph(renderSampleGraph).ok).toBe(true);
     expect(graphSummary(shaderUniformSampleGraph)).toBe("3 nodes · 2 edges · rev 1");
     expect(validateGraph(shaderUniformSampleGraph).ok).toBe(true);
+    expect(graphSummary(shaderMultiUniformSampleGraph)).toBe("5 nodes · 4 edges · rev 1");
+    expect(validateGraph(shaderMultiUniformSampleGraph).ok).toBe(true);
     expect(graphSummary(portDemoSampleGraph)).toBe("6 nodes · 3 edges · rev 1");
     expect(validateGraph(portDemoSampleGraph).ok).toBe(true);
     expect(validateGraph({}).ok).toBe(false);

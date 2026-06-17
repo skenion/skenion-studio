@@ -15,7 +15,7 @@ describe("nodeCardView", () => {
       selected: true,
       typeBadgeLabel: "render.frame"
     });
-    expect(shaderCard.inputs).toHaveLength(1);
+    expect(shaderCard.inputs).toHaveLength(3);
     expect(shaderCard.inputs[0]).toMatchObject({
       id: "u_value",
       direction: "input",
@@ -25,6 +25,16 @@ describe("nodeCardView", () => {
         mergePolicy: "forbid",
         required: false
       }
+    });
+    expect(shaderCard.inputs[1]).toMatchObject({
+      id: "u_value2",
+      direction: "input",
+      typeLabel: "value.f32"
+    });
+    expect(shaderCard.inputs[2]).toMatchObject({
+      id: "u_color",
+      direction: "input",
+      typeLabel: "value.color.rgba"
     });
     expect(shaderCard.outputs).toHaveLength(1);
     expect(shaderCard.outputs[0]).toMatchObject({

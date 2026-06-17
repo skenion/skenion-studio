@@ -16,6 +16,11 @@ const captures = [
     waitFor: ".react-flow__edge"
   },
   {
+    name: "shader-multi-uniform-sample",
+    id: "graph-reactflowcanvas--shader-multi-uniform-graph",
+    waitFor: ".react-flow__edge"
+  },
+  {
     name: "port-demo-sample",
     id: "graph-reactflowcanvas--port-demo-graph",
     waitFor: ".react-flow__edge"

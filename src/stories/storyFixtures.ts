@@ -54,6 +54,24 @@ export const shaderUniformInputPort: NodePortView = {
   }
 };
 
+export const shaderUniform2InputPort: NodePortView = {
+  ...shaderUniformInputPort,
+  id: "u_value2",
+  label: "u_value2"
+};
+
+export const shaderColorInputPort: NodePortView = {
+  ...valueInputPort,
+  id: "u_color",
+  label: "u_color",
+  typeLabel: "color.rgba",
+  color: "#e64980",
+  metadata: {
+    ...valueInputPort.metadata,
+    required: false
+  }
+};
+
 export const renderFrameOutputPort: NodePortView = {
   id: "out",
   label: "out",
@@ -132,7 +150,7 @@ export const renderCard: NodeCardView = {
 
 export const shaderUniformCard: NodeCardView = {
   ...renderCard,
-  inputs: [shaderUniformInputPort]
+  inputs: [shaderUniformInputPort, shaderUniform2InputPort, shaderColorInputPort]
 };
 
 export const targetCard: NodeCardView = {

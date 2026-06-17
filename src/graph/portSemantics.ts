@@ -101,6 +101,9 @@ export function semanticTypeColor(type: string): string {
   if (type === "gpu.texture2d") {
     return "#7048e8";
   }
+  if (type === "value.color.rgba") {
+    return "#e64980";
+  }
   if (type.startsWith("event.")) {
     return "#f08c00";
   }
