@@ -1,7 +1,7 @@
 import { Button, Divider, Group, Stack, Text } from "@mantine/core";
 import { BookOpen, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { getBuiltinNodeHelp } from "@skenion/contracts";
+import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
 import type { GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
 import type { RuntimeControlEventRequest, RuntimeGeneratedShaderResponse } from "../../runtime/types";
 import { BooleanValueControls } from "./BooleanValueControls";
@@ -65,6 +65,7 @@ export function NodeInspector({
   node,
   onRemoveNode,
   onLoadGeneratedShader,
+  onOpenHelpGraph,
   onSendRuntimeControl,
   onSetNodeParam,
   onSyncShaderInputs,
@@ -79,6 +80,7 @@ export function NodeInspector({
   node: GraphNodeV01;
   runtimeShaderDiagnostics?: ShaderDiagnosticV01[];
   onLoadGeneratedShader?: () => void;
+  onOpenHelpGraph?: (nodeKind: string) => void;
   onRemoveNode: (node: GraphNodeV01) => void;
   onSendRuntimeControl: (request: RuntimeControlEventRequest) => void;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
@@ -107,6 +109,7 @@ export function NodeInspector({
     ? fullscreenShaderPortsAreSynced(node.ports, shaderSource, shaderLanguage ?? "unsupported")
     : false;
   const help = getBuiltinNodeHelp(node.kind);
+  const helpGraph = getBuiltinNodeHelpGraph(node.kind);
 
   return (
     <Stack gap="sm">
@@ -142,7 +145,13 @@ export function NodeInspector({
         </Group>
       </Group>
 
-      {help && helpOpen ? <NodeHelp help={help} /> : null}
+      {help && helpOpen ? (
+        <NodeHelp
+          help={help}
+          helpGraph={helpGraph}
+          onOpenAsNewGraph={helpGraph && onOpenHelpGraph ? () => onOpenHelpGraph(node.kind) : undefined}
+        />
+      ) : null}
 
       <PortTable node={node} />
 

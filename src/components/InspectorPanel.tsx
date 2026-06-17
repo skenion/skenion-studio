@@ -1,5 +1,6 @@
 import { Divider, Stack, Text } from "@mantine/core";
 import { useState } from "react";
+import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
 import type { GraphDocumentV01, GraphNodeV01, ShaderDiagnosticV01, ValidationResult } from "@skenion/contracts";
 import { ConnectionDiagnosticsPanel } from "./inspector/ConnectionDiagnosticsPanel";
 import { EdgeInspector } from "./inspector/EdgeInspector";
@@ -7,6 +8,7 @@ import { FeedbackPolicyDialog } from "./inspector/FeedbackPolicyDialog";
 import { GraphDiagnosticsPanel } from "./inspector/GraphDiagnosticsPanel";
 import { InspectorShell } from "./inspector/InspectorShell";
 import { NodeInspector } from "./inspector/NodeInspector";
+import { NodeHelp } from "./inspector/NodeHelp";
 import type {
   EdgeInspectorModel,
   GraphSemanticDiagnostic
@@ -19,12 +21,14 @@ interface InspectorPanelProps {
   edge: EdgeInspectorModel | null;
   graph: GraphDocumentV01;
   node: GraphNodeV01 | null;
+  helpNodeId: string | null;
   semanticDiagnostics: GraphSemanticDiagnostic[];
   validation: ValidationResult<GraphDocumentV01>;
   generatedShader: RuntimeGeneratedShaderResponse | null;
   generatedShaderBusy: boolean;
   runtimeShaderDiagnostics: ShaderDiagnosticV01[];
   onLoadGeneratedShader?: () => void;
+  onOpenHelpGraph?: (nodeKind: string) => void;
   onRemoveNode: (node: GraphNodeV01) => void;
   onSendRuntimeControl: (request: RuntimeControlEventRequest) => void;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
@@ -39,8 +43,10 @@ export function InspectorPanel({
   graph,
   generatedShader,
   generatedShaderBusy,
+  helpNodeId,
   node,
   onLoadGeneratedShader,
+  onOpenHelpGraph,
   onRemoveNode,
   onSendRuntimeControl,
   onSetNodeParam,
@@ -55,6 +61,8 @@ export function InspectorPanel({
   const selectedEdgeDiagnostics = edge
     ? semanticDiagnostics.filter((diagnostic) => diagnostic.edgeId === edge.id)
     : [];
+  const paletteHelp = helpNodeId ? getBuiltinNodeHelp(helpNodeId) : undefined;
+  const paletteHelpGraph = helpNodeId ? getBuiltinNodeHelpGraph(helpNodeId) : undefined;
 
   return (
     <InspectorShell edgeCount={graph.edges.length} nodeCount={graph.nodes.length}>
@@ -80,6 +88,7 @@ export function InspectorPanel({
             generatedShaderBusy={generatedShaderBusy}
             node={node}
             onLoadGeneratedShader={onLoadGeneratedShader}
+            onOpenHelpGraph={onOpenHelpGraph}
             onRemoveNode={onRemoveNode}
             onSendRuntimeControl={onSendRuntimeControl}
             onSetNodeParam={onSetNodeParam}
@@ -88,9 +97,17 @@ export function InspectorPanel({
             runtimeControlEnabled={runtimeControlEnabled}
             runtimeShaderDiagnostics={runtimeShaderDiagnostics}
           />
+        ) : paletteHelp ? (
+          <NodeHelp
+            help={paletteHelp}
+            helpGraph={paletteHelpGraph}
+            onOpenAsNewGraph={
+              paletteHelpGraph && onOpenHelpGraph ? () => onOpenHelpGraph(paletteHelp.id) : undefined
+            }
+          />
         ) : (
           <Text c="dimmed" size="sm">
-            Select a node or edge on the canvas.
+            Select a node or edge on the canvas, or choose Help from the palette.
           </Text>
         )}
       </Stack>

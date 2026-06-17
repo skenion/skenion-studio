@@ -46,6 +46,16 @@ const captures = [
     waitFor: ".mantine-Alert-root"
   },
   {
+    name: "help-panel-value-f32",
+    id: "help-nodehelp--value-f-32",
+    waitFor: ".help-graph-viewer"
+  },
+  {
+    name: "help-graph-value-bang-set",
+    id: "help-helpgraphviewer--value-bang-set",
+    waitFor: ".react-flow__edge"
+  },
+  {
     name: "invalid-connection",
     id: "graph-reactflowcanvas--invalid-connection-diagnostic",
     waitFor: ".storybook-diagnostic-card.is-error"

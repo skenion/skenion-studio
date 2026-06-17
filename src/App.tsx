@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, AppShell, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
-import type {
-  GraphDocumentV01,
-  GraphNodeV01,
-  GraphPatchHistoryV01,
-  GraphPatchOperationV01
+import {
+  getBuiltinNodeHelpGraph,
+  type GraphDocumentV01,
+  type GraphNodeV01,
+  type GraphPatchHistoryV01,
+  type GraphPatchOperationV01
 } from "@skenion/contracts";
 import { GraphCanvas } from "./components/GraphCanvas";
 import { InspectorPanel } from "./components/InspectorPanel";
@@ -73,6 +74,7 @@ export default function App() {
   const [positions, setPositions] = useState<ViewPositions>({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [activeHelpNodeId, setActiveHelpNodeId] = useState<string | null>(null);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [runtimeUrl, setRuntimeUrl] = useState(DEFAULT_RUNTIME_URL);
@@ -137,6 +139,7 @@ export default function App() {
       }
     }));
     setSelectedNodeId(node.id);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
@@ -200,6 +203,7 @@ export default function App() {
       const normalizedGraph = normalizeLegacyGraphTypes(result.value);
       setGraph(normalizedGraph);
       setSelectedNodeId(normalizedGraph.nodes[0]?.id ?? null);
+      setActiveHelpNodeId(null);
       setSelectedEdgeId(null);
       setPositions({});
       clearPendingPatch();
@@ -227,6 +231,7 @@ export default function App() {
     setGraph(sampleGraph);
     setPositions({});
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -238,6 +243,7 @@ export default function App() {
     setGraph(renderSampleGraph);
     setPositions({});
     setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -249,6 +255,7 @@ export default function App() {
     setGraph(shaderUniformSampleGraph);
     setPositions(shaderUniformSamplePositions);
     setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -260,6 +267,7 @@ export default function App() {
     setGraph(shaderMultiUniformSampleGraph);
     setPositions(shaderMultiUniformSamplePositions);
     setSelectedNodeId(shaderMultiUniformSampleGraph.nodes[0]?.id ?? null);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -271,6 +279,7 @@ export default function App() {
     setGraph(portDemoSampleGraph);
     setPositions(portDemoSamplePositions);
     setSelectedNodeId(portDemoSampleGraph.nodes[0]?.id ?? null);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     clearPendingPatch();
     setImportError(null);
@@ -283,6 +292,7 @@ export default function App() {
     setGraph((currentGraph) => applyPatch(currentGraph, patch));
     recordGraphPatches([patch]);
     setSelectedNodeId(null);
+    setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
     setRuntimeResult(null);
   }
@@ -310,6 +320,40 @@ export default function App() {
 
     setGraph((currentGraph) => applyPatch(currentGraph, patch));
     recordGraphPatches([patch]);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+    setGeneratedShader(null);
+  }
+
+  function showNodeHelp(definitionId: string) {
+    setActiveHelpNodeId(definitionId);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setConnectionCheck(null);
+  }
+
+  function openHelpGraphAsNewGraph(definitionId: string) {
+    const helpGraph = getBuiltinNodeHelpGraph(definitionId);
+    if (!helpGraph) {
+      return;
+    }
+    if (!window.confirm("Open this help patch as the current editable graph? Unsaved local edits will be replaced.")) {
+      return;
+    }
+
+    const nextGraph = cloneGraph(helpGraph);
+    setGraph({
+      ...nextGraph,
+      id: `${nextGraph.id}-copy`,
+      revision: "1"
+    });
+    setPositions({});
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setActiveHelpNodeId(null);
+    clearPendingPatch();
+    setLastLoadedGraphFingerprint(null);
+    setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
     setGeneratedShader(null);
@@ -702,7 +746,7 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        <PalettePanel registry={nodeRegistry} onAddNode={addNode} />
+        <PalettePanel registry={nodeRegistry} onAddNode={addNode} onShowHelp={showNodeHelp} />
       </AppShell.Navbar>
 
       <AppShell.Main>
@@ -727,8 +771,18 @@ export default function App() {
             onConnectionCheck={setConnectionCheck}
             onGraphChange={updateGraph}
             onPositionsChange={setPositions}
-            onSelectedEdgeChange={setSelectedEdgeId}
-            onSelectedNodeChange={setSelectedNodeId}
+            onSelectedEdgeChange={(edgeId) => {
+              setSelectedEdgeId(edgeId);
+              if (edgeId) {
+                setActiveHelpNodeId(null);
+              }
+            }}
+            onSelectedNodeChange={(nodeId) => {
+              setSelectedNodeId(nodeId);
+              if (nodeId) {
+                setActiveHelpNodeId(null);
+              }
+            }}
             selectedEdgeId={selectedEdgeId}
             selectedNodeId={selectedNodeId}
           />
@@ -851,8 +905,10 @@ export default function App() {
               generatedShaderBusy={runtimeBusyAction === "generatedShader"}
               graph={graph}
               edge={selectedEdge}
+              helpNodeId={activeHelpNodeId}
               node={selectedNode}
               onLoadGeneratedShader={runtimeSupportsGeneratedShader(runtimeInfo) ? loadGeneratedShader : undefined}
+              onOpenHelpGraph={openHelpGraphAsNewGraph}
               onRemoveNode={removeNode}
               onSendRuntimeControl={(request) => {
                 void sendRuntimeControlEvent(request);
@@ -874,4 +930,8 @@ export default function App() {
       </AppShell.Aside>
     </AppShell>
   );
+}
+
+function cloneGraph(graph: GraphDocumentV01): GraphDocumentV01 {
+  return JSON.parse(JSON.stringify(graph)) as GraphDocumentV01;
 }

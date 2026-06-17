@@ -1,14 +1,15 @@
-import { Badge, Button, Divider, Group, ScrollArea, Stack, Text } from "@mantine/core";
-import { Plus } from "lucide-react";
+import { ActionIcon, Badge, Button, Divider, Group, ScrollArea, Stack, Text, Tooltip } from "@mantine/core";
+import { HelpCircle, Plus } from "lucide-react";
 import type { NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { flowColor, flowName } from "../graph/reactFlowAdapter";
 
 interface PalettePanelProps {
   registry: NodeDefinitionManifestV01[];
   onAddNode: (definitionId: string) => void;
+  onShowHelp: (definitionId: string) => void;
 }
 
-export function PalettePanel({ registry, onAddNode }: PalettePanelProps) {
+export function PalettePanel({ registry, onAddNode, onShowHelp }: PalettePanelProps) {
   const categories = Array.from(new Set(registry.map((definition) => definition.category)));
 
   return (
@@ -41,27 +42,40 @@ export function PalettePanel({ registry, onAddNode }: PalettePanelProps) {
                   const swatchColor = primaryPort ? flowColor(primaryPort.type.flow, primaryPort.type.dataKind) : "#868e96";
 
                   return (
-                    <Button
-                      className="palette-node"
-                      color="gray"
-                      justify="space-between"
-                      key={definition.id}
-                      leftSection={<span className="flow-swatch" style={{ background: swatchColor }} />}
-                      onClick={() => onAddNode(definition.id)}
-                      radius="sm"
-                      rightSection={<Plus size={15} />}
-                      size="compact-md"
-                      variant="subtle"
-                    >
-                      <span>
-                        <Text component="span" fw={700} size="sm">
-                          {definition.displayName}
-                        </Text>
-                        <Text c="dimmed" component="span" display="block" size="xs">
-                          {primaryPort ? flowName(primaryPort.type.flow, primaryPort.type.dataKind) : definition.execution.model}
-                        </Text>
-                      </span>
-                    </Button>
+                    <Group gap={6} key={definition.id} wrap="nowrap">
+                      <Button
+                        className="palette-node"
+                        color="gray"
+                        fullWidth
+                        justify="space-between"
+                        leftSection={<span className="flow-swatch" style={{ background: swatchColor }} />}
+                        onClick={() => onAddNode(definition.id)}
+                        radius="sm"
+                        rightSection={<Plus size={15} />}
+                        size="compact-md"
+                        variant="subtle"
+                      >
+                        <span>
+                          <Text component="span" fw={700} size="sm">
+                            {definition.displayName}
+                          </Text>
+                          <Text c="dimmed" component="span" display="block" size="xs">
+                            {primaryPort ? flowName(primaryPort.type.flow, primaryPort.type.dataKind) : definition.execution.model}
+                          </Text>
+                        </span>
+                      </Button>
+                      <Tooltip label={`Help: ${definition.displayName}`}>
+                        <ActionIcon
+                          aria-label={`Show help for ${definition.displayName}`}
+                          onClick={() => onShowHelp(definition.id)}
+                          radius="sm"
+                          size={34}
+                          variant="light"
+                        >
+                          <HelpCircle size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Group>
                   );
                 })}
               <Divider />

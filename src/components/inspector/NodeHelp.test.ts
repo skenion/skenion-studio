@@ -17,9 +17,12 @@ describe("NodeHelp", () => {
     );
 
     expect(html).toContain("Stores and emits");
+    expect(html).toContain("control");
+    expect(html).toContain("Runtime:");
     expect(html).toContain("in: Updates the stored value and emits it.");
     expect(html).toContain("set: Updates the stored value without emitting.");
     expect(html).toContain("bang: Emits the current stored value without changing it.");
     expect(html).toContain("value: Saved default numeric value.");
+    expect(html).toContain("core.bang-button");
   });
 });

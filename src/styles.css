@@ -94,6 +94,19 @@ body {
   height: 100%;
 }
 
+.help-graph-viewer {
+  height: 320px;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid #dbe1e8;
+  border-radius: 8px;
+  background: #eef2f5;
+}
+
+.help-flow .react-flow__node-skenion {
+  width: 238px;
+}
+
 .connection-status {
   padding: 7px 10px;
   border: 1px solid #d0d7de;
