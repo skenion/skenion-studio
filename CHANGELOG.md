@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.17.0...skenion-studio-v0.18.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** add node help graph viewer ([a6e0574](https://github.com/echovisionlab/skenion-studio/commit/a6e0574bcd56ae513d58e66cf55e926c582964b4))
+
 ## [0.17.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.16.0...skenion-studio-v0.17.0) (2026-06-17)
 
 
