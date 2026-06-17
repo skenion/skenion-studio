@@ -2,21 +2,25 @@ import { describe, expect, it } from "vitest";
 import type { EdgeV01, GraphDocumentV01 } from "@skenion/contracts";
 import {
   portDemoSampleGraph,
-  portDemoSamplePositions,
+  portDemoSampleViewState,
   renderSampleGraph,
   sampleGraph,
   shaderMultiUniformSampleGraph,
-  shaderMultiUniformSamplePositions,
+  shaderMultiUniformSampleViewState,
   shaderUniformSampleGraph,
-  shaderUniformSamplePositions
+  shaderUniformSampleViewState
 } from "../data/sampleGraph";
+import { createViewStateFromPositions } from "./projectDocument";
 import { defaultPosition, flowColor, flowName, toReactFlowViewModel } from "./reactFlowAdapter";
 
 describe("React Flow adapter", () => {
   it("derives React Flow nodes and edges from a Skenion graph", () => {
-    const viewModel = toReactFlowViewModel(sampleGraph, {
-      value_1: { x: 10, y: 20 }
-    });
+    const viewModel = toReactFlowViewModel(
+      sampleGraph,
+      createViewStateFromPositions(sampleGraph, {
+        value_1: { x: 10, y: 20 }
+      })
+    );
 
     expect(viewModel.nodes[0]).toMatchObject({
       id: "value_1",
@@ -28,7 +32,7 @@ describe("React Flow adapter", () => {
         primaryFlow: "value"
       }
     });
-    expect(viewModel.nodes[1].position).toEqual(defaultPosition(1));
+    expect(viewModel.nodes[1].position).toEqual({ x: 376, y: 96 });
     expect(viewModel.edges[0]).toMatchObject({
       id: "value_1.value->target_1.value",
       source: "value_1",
@@ -51,7 +55,10 @@ describe("React Flow adapter", () => {
   });
 
   it("derives explicit render output sample edges", () => {
-    const viewModel = toReactFlowViewModel(renderSampleGraph, {});
+    const viewModel = toReactFlowViewModel(
+      renderSampleGraph,
+      createViewStateFromPositions(renderSampleGraph, {})
+    );
 
     expect(viewModel.nodes.map((node) => node.id)).toEqual(["shader_1", "output_1"]);
     expect(viewModel.nodes[0].data.card.inputs).toHaveLength(4);
@@ -76,13 +83,13 @@ describe("React Flow adapter", () => {
   it("preserves explicit sample graph handle mappings and positions", () => {
     const shaderUniformViewModel = toReactFlowViewModel(
       shaderUniformSampleGraph,
-      shaderUniformSamplePositions
+      shaderUniformSampleViewState
     );
     const shaderMultiUniformViewModel = toReactFlowViewModel(
       shaderMultiUniformSampleGraph,
-      shaderMultiUniformSamplePositions
+      shaderMultiUniformSampleViewState
     );
-    const portDemoViewModel = toReactFlowViewModel(portDemoSampleGraph, portDemoSamplePositions);
+    const portDemoViewModel = toReactFlowViewModel(portDemoSampleGraph, portDemoSampleViewState);
 
     expect(shaderUniformViewModel.nodes.map((node) => [node.id, node.position])).toEqual([
       ["value_1", { x: 64, y: 120 }],
@@ -126,7 +133,7 @@ describe("React Flow adapter", () => {
         ...renderSampleGraph,
         edges: [feedbackEdge]
       },
-      {}
+      createViewStateFromPositions(renderSampleGraph, {})
     );
 
     expect(viewModel.edges[0]).toMatchObject({
@@ -163,7 +170,7 @@ describe("React Flow adapter", () => {
       ]
     };
 
-    const viewModel = toReactFlowViewModel(graph, {});
+    const viewModel = toReactFlowViewModel(graph, createViewStateFromPositions(graph, {}));
 
     expect(viewModel.nodes[0].data.label).toBe("empty");
     expect(viewModel.nodes[0].data.primaryFlow).toBe("value");
@@ -178,6 +185,21 @@ describe("React Flow adapter", () => {
         strokeWidth: 2
       }
     });
+  });
+
+  it("falls back to adapter layout when view state omits a graph node", () => {
+    const viewModel = toReactFlowViewModel(sampleGraph, {
+      schema: "skenion.view-state",
+      schemaVersion: "0.1.0",
+      canvas: {
+        nodes: {
+          value_1: { x: 10, y: 20 }
+        },
+        viewport: { x: 0, y: 0, zoom: 1 }
+      }
+    });
+
+    expect(viewModel.nodes[1].position).toEqual(defaultPosition(1));
   });
 
   it("maps flow display color and names", () => {

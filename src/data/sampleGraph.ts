@@ -1,7 +1,7 @@
 import type { GraphDocumentV01 } from "@skenion/contracts";
 import { DEFAULT_FULLSCREEN_SHADER_SOURCE, portsForFullscreenShaderSource } from "../graph/fullscreenShader";
+import { createViewStateFromPositions, type ViewPositions } from "../graph/projectDocument";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
-import type { ViewPositions } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
 
 const byId = new Map(nodeRegistry.map((definition) => [definition.id, definition]));
@@ -179,6 +179,10 @@ export const shaderUniformSamplePositions: ViewPositions = {
   shader_1: { x: 364, y: 120 },
   output_1: { x: 664, y: 120 }
 };
+export const shaderUniformSampleViewState = createViewStateFromPositions(
+  shaderUniformSampleGraph,
+  shaderUniformSamplePositions
+);
 
 export const shaderMultiUniformSampleGraph: GraphDocumentV01 = {
   schema: "skenion.graph",
@@ -245,6 +249,10 @@ export const shaderMultiUniformSamplePositions: ViewPositions = {
   shader_1: { x: 440, y: 278 },
   output_1: { x: 780, y: 318 }
 };
+export const shaderMultiUniformSampleViewState = createViewStateFromPositions(
+  shaderMultiUniformSampleGraph,
+  shaderMultiUniformSamplePositions
+);
 
 export const sendReceivePanelSampleGraph: GraphDocumentV01 = {
   schema: "skenion.graph",
@@ -327,6 +335,10 @@ export const sendReceivePanelSamplePositions: ViewPositions = {
   shader_1: { x: 704, y: 260 },
   output_1: { x: 1044, y: 320 }
 };
+export const sendReceivePanelSampleViewState = createViewStateFromPositions(
+  sendReceivePanelSampleGraph,
+  sendReceivePanelSamplePositions
+);
 
 export const portDemoSampleGraph: GraphDocumentV01 = {
   schema: "skenion.graph",
@@ -383,3 +395,7 @@ export const portDemoSamplePositions: ViewPositions = {
   shader_1: { x: 64, y: 500 },
   output_1: { x: 384, y: 528 }
 };
+export const portDemoSampleViewState = createViewStateFromPositions(
+  portDemoSampleGraph,
+  portDemoSamplePositions
+);

@@ -26,6 +26,11 @@ const captures = [
     waitFor: ".react-flow__edge"
   },
   {
+    name: "project-saved-layout",
+    id: "graph-reactflowcanvas--saved-project-layout-graph",
+    waitFor: ".react-flow__edge"
+  },
+  {
     name: "nodecard-float-value",
     id: "node-nodecard--value-control-ports",
     waitFor: ".canvas-node"

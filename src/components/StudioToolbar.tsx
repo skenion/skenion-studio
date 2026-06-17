@@ -1,5 +1,16 @@
 import { ActionIcon, Badge, FileButton, Group, Text, Tooltip } from "@mantine/core";
-import { Cable, Download, FileJson, MonitorPlay, Palette, RefreshCcw, SlidersHorizontal, Upload } from "lucide-react";
+import {
+  Cable,
+  Download,
+  FileJson,
+  FolderOpen,
+  MonitorPlay,
+  Palette,
+  RefreshCcw,
+  Save,
+  SlidersHorizontal,
+  Upload
+} from "lucide-react";
 import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
 
 interface StudioToolbarProps {
@@ -8,6 +19,8 @@ interface StudioToolbarProps {
   validation: ValidationResult<GraphDocumentV01>;
   onExport: () => void;
   onImport: (file: File | null) => void;
+  onOpenProject: (file: File | null) => void;
+  onSaveProject: () => void;
   onLoadRenderSample: () => void;
   onLoadSendReceivePanelSample: () => void;
   onLoadShaderMultiUniformSample: () => void;
@@ -22,6 +35,8 @@ export function StudioToolbar({
   validation,
   onExport,
   onImport,
+  onOpenProject,
+  onSaveProject,
   onLoadPortDemoSample,
   onLoadRenderSample,
   onLoadSendReceivePanelSample,
@@ -49,6 +64,20 @@ export function StudioToolbar({
       </Group>
 
       <Group gap="xs" wrap="nowrap">
+        <Tooltip label="Open project (.skenion.json)">
+          <FileButton accept=".skenion.json,application/json,.json" onChange={onOpenProject}>
+            {(props) => (
+              <ActionIcon aria-label="Open project" radius="sm" size="lg" variant="subtle" {...props}>
+                <FolderOpen size={18} />
+              </ActionIcon>
+            )}
+          </FileButton>
+        </Tooltip>
+        <Tooltip label="Save project (.skenion.json)">
+          <ActionIcon aria-label="Save project" onClick={onSaveProject} radius="sm" size="lg" variant="subtle">
+            <Save size={18} />
+          </ActionIcon>
+        </Tooltip>
         <Tooltip label="Import graph JSON">
           <FileButton accept="application/json,.json" onChange={onImport}>
             {(props) => (
