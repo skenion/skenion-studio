@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.18.0...skenion-studio-v0.19.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** add send receive panel controls ([be81cdf](https://github.com/echovisionlab/skenion-studio/commit/be81cdfe080a6cd2b88bd1eaa2b5b614909f4b2c))
+
 ## [0.18.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.17.0...skenion-studio-v0.18.0) (2026-06-17)
 
 
