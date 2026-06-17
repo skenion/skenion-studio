@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.16.0...skenion-studio-v0.17.0) (2026-06-17)
+
+
+### Features
+
+* **studio:** add shader diagnostics ux ([#42](https://github.com/echovisionlab/skenion-studio/issues/42)) ([8735681](https://github.com/echovisionlab/skenion-studio/commit/8735681bc355381027309dea05c4fe1154ab2de5))
+
 ## [0.16.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.15.0...skenion-studio-v0.16.0) (2026-06-17)
 
 
