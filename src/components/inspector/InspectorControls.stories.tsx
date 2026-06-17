@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Stack } from "@mantine/core";
+import { BooleanValueControls } from "./BooleanValueControls";
 import { ClearColorControls } from "./ClearColorControls";
 import { ColorRgbaControls } from "./ColorRgbaControls";
 import { ConnectionDiagnosticsPanel } from "./ConnectionDiagnosticsPanel";
@@ -9,7 +10,9 @@ import { FloatValueControls } from "./FloatValueControls";
 import { FullscreenShaderControls } from "./FullscreenShaderControls";
 import { GraphDiagnosticsPanel } from "./GraphDiagnosticsPanel";
 import { InspectorShell } from "./InspectorShell";
+import { IntegerValueControls } from "./IntegerValueControls";
 import { NodeInspector } from "./NodeInspector";
+import { RuntimeControlValueControls } from "./RuntimeControlValueControls";
 import { DEFAULT_FULLSCREEN_SHADER_SOURCE } from "../../graph/fullscreenShader";
 import { renderSampleGraph } from "../../data/sampleGraph";
 import {
@@ -41,7 +44,14 @@ type Story = StoryObj<typeof meta>;
 export const NodeControls: Story = {
   render: () => (
     <InspectorShell edgeCount={1} nodeCount={2}>
-      <NodeInspector node={renderSampleGraph.nodes[0]!} onRemoveNode={noop} onSetNodeParam={noop} />
+      <NodeInspector
+        node={renderSampleGraph.nodes[0]!}
+        onRemoveNode={noop}
+        onSendRuntimeControl={noop}
+        onSetNodeParam={noop}
+        runtimeControlBusy={false}
+        runtimeControlEnabled
+      />
     </InspectorShell>
   )
 };
@@ -56,6 +66,26 @@ export const ColorRgbaControl: Story = {
 
 export const FloatValueControl: Story = {
   render: () => <FloatValueControls value={0.2} onChange={noop} />
+};
+
+export const IntegerValueControl: Story = {
+  render: () => <IntegerValueControls value={32} onChange={noop} />
+};
+
+export const BooleanValueControl: Story = {
+  render: () => <BooleanValueControls value onChange={noop} />
+};
+
+export const RuntimeControlValueControl: Story = {
+  render: () => (
+    <RuntimeControlValueControls
+      busy={false}
+      enabled
+      nodeId="value_1"
+      onSend={noop}
+      value={{ type: "f32", value: 1.25 }}
+    />
+  )
 };
 
 export const FullscreenShaderControl: Story = {

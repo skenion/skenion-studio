@@ -6,6 +6,9 @@ import {
 import type { GraphPatchHistoryV01 } from "@skenion/contracts";
 import type {
   RuntimeApiResponse,
+  RuntimeControlEventRequest,
+  RuntimeControlEventResponse,
+  RuntimeControlStateResponse,
   RuntimeHealth,
   RuntimeInfo,
   RuntimePatchResponse,
@@ -37,6 +40,8 @@ export interface RuntimeClient {
   getSessionHistory: () => Promise<GraphPatchHistoryV01>;
   undoSessionPatch: () => Promise<RuntimePatchResponse>;
   redoSessionPatch: () => Promise<RuntimePatchResponse>;
+  sendControlEvent: (request: RuntimeControlEventRequest) => Promise<RuntimeControlEventResponse>;
+  getControlState: () => Promise<RuntimeControlStateResponse>;
   getPreviewStatus: () => Promise<RuntimePreviewStatus>;
   startPreview: (options?: Partial<RuntimePreviewStartRequest>) => Promise<RuntimePreviewStatus>;
   stopPreview: () => Promise<RuntimePreviewStatus>;
@@ -116,6 +121,16 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         "/v0/session/redo",
         { method: "POST" },
         isRuntimePatchResponse
+      ),
+    sendControlEvent: (request) =>
+      postRuntimeControlEventResponse(fetchImpl, baseUrl, "/v0/session/control/event", request),
+    getControlState: () =>
+      requestJson<RuntimeControlStateResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/control/state",
+        { method: "GET" },
+        isRuntimeControlStateResponse
       ),
     getPreviewStatus: () =>
       requestJson<RuntimePreviewStatus>(
@@ -251,6 +266,27 @@ async function postRuntimePreviewStatus(
   );
 }
 
+async function postRuntimeControlEventResponse(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  path: string,
+  body: RuntimeControlEventRequest
+): Promise<RuntimeControlEventResponse> {
+  return requestJson<RuntimeControlEventResponse>(
+    fetchImpl,
+    baseUrl,
+    path,
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    },
+    isRuntimeControlEventResponse
+  );
+}
+
 async function requestJson<T>(
   fetchImpl: FetchLike,
   baseUrl: string,
@@ -337,6 +373,65 @@ function isRuntimePatchResponse(value: unknown): value is RuntimePatchResponse {
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic)
   );
+}
+
+function isRuntimeControlEventResponse(value: unknown): value is RuntimeControlEventResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    Array.isArray(value.emitted) &&
+    value.emitted.every(isRuntimeControlEmission) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
+  );
+}
+
+function isRuntimeControlStateResponse(value: unknown): value is RuntimeControlStateResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    isRecord(value.values) &&
+    Object.values(value.values).every(isRuntimeControlValue) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
+  );
+}
+
+function isRuntimeControlEmission(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.nodeId === "string" &&
+    value.portId === "value" &&
+    isRuntimeControlValue(value.value)
+  );
+}
+
+function isRuntimeControlValue(value: unknown): value is RuntimeControlEventRequest["value"] {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return false;
+  }
+
+  if (value.type === "bang") {
+    return !("value" in value);
+  }
+  if (value.type === "f32") {
+    return typeof value.value === "number" && Number.isFinite(value.value);
+  }
+  if (value.type === "i32") {
+    return typeof value.value === "number" && Number.isInteger(value.value);
+  }
+  if (value.type === "bool") {
+    return typeof value.value === "boolean";
+  }
+  if (value.type === "rgba") {
+    return (
+      Array.isArray(value.value) &&
+      value.value.length === 4 &&
+      value.value.every((component) => typeof component === "number" && Number.isFinite(component))
+    );
+  }
+
+  return false;
 }
 
 function isRuntimePreviewStatus(value: unknown): value is RuntimePreviewStatus {

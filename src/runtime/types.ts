@@ -147,6 +147,37 @@ export interface RuntimePreviewStartRequest {
   restart: boolean;
 }
 
+export type RuntimeControlValue =
+  | { type: "f32"; value: number }
+  | { type: "i32"; value: number }
+  | { type: "bool"; value: boolean }
+  | { type: "rgba"; value: [number, number, number, number] }
+  | { type: "bang" };
+
+export interface RuntimeControlEventRequest {
+  nodeId: string;
+  portId: "in" | "set" | "bang";
+  value: RuntimeControlValue;
+}
+
+export interface RuntimeControlEmission {
+  nodeId: string;
+  portId: "value";
+  value: RuntimeControlValue;
+}
+
+export interface RuntimeControlEventResponse {
+  ok: boolean;
+  emitted: RuntimeControlEmission[];
+  diagnostics: RuntimeDiagnostic[];
+}
+
+export interface RuntimeControlStateResponse {
+  ok: boolean;
+  values: Record<string, RuntimeControlValue>;
+  diagnostics: RuntimeDiagnostic[];
+}
+
 export interface RuntimeTelemetrySnapshot {
   schema: "skenion.runtime.telemetry";
   schemaVersion: "0.1.0";
@@ -210,9 +241,14 @@ export type RuntimeResultKind =
   | "applyPatch"
   | "undoPatch"
   | "redoPatch"
+  | "controlEvent"
   | "clearSession";
 
-export type RuntimeActionResponse = RuntimeApiResponse | RuntimePatchResponse | RuntimeSessionResponse;
+export type RuntimeActionResponse =
+  | RuntimeApiResponse
+  | RuntimePatchResponse
+  | RuntimeSessionResponse
+  | RuntimeControlEventResponse;
 
 export interface RuntimeActionResult {
   kind: RuntimeResultKind;

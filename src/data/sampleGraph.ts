@@ -212,11 +212,11 @@ export const shaderMultiUniformSampleGraph: GraphDocumentV01 = {
 };
 
 export const shaderMultiUniformSamplePositions: ViewPositions = {
-  value_1: { x: 64, y: 56 },
-  value_2: { x: 64, y: 212 },
-  color_1: { x: 64, y: 368 },
-  shader_1: { x: 408, y: 178 },
-  output_1: { x: 752, y: 218 }
+  value_1: { x: 64, y: 40 },
+  value_2: { x: 64, y: 250 },
+  color_1: { x: 64, y: 460 },
+  shader_1: { x: 440, y: 278 },
+  output_1: { x: 780, y: 318 }
 };
 
 export const portDemoSampleGraph: GraphDocumentV01 = {
@@ -267,10 +267,10 @@ export const portDemoSampleGraph: GraphDocumentV01 = {
 };
 
 export const portDemoSamplePositions: ViewPositions = {
-  value_1: { x: 64, y: 72 },
-  target_1: { x: 364, y: 72 },
-  bang_1: { x: 64, y: 244 },
-  event_log_1: { x: 364, y: 244 },
-  shader_1: { x: 64, y: 416 },
-  output_1: { x: 364, y: 416 }
+  value_1: { x: 64, y: 56 },
+  target_1: { x: 384, y: 84 },
+  bang_1: { x: 64, y: 300 },
+  event_log_1: { x: 384, y: 300 },
+  shader_1: { x: 64, y: 500 },
+  output_1: { x: 384, y: 528 }
 };

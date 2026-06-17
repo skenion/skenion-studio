@@ -23,6 +23,12 @@ describe("clear color graph helpers", () => {
     expect(defaultParamsForNodeKind("core.value-f32")).toEqual({
       value: 0.5
     });
+    expect(defaultParamsForNodeKind("core.value-i32")).toEqual({
+      value: 0
+    });
+    expect(defaultParamsForNodeKind("core.value-bool")).toEqual({
+      value: false
+    });
   });
 
   it("reads and clamps clear color params", () => {

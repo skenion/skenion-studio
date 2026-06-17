@@ -12,6 +12,7 @@ import type {
   GraphSemanticDiagnostic
 } from "../graph/portSemantics";
 import type { ConnectionCheck } from "../graph/skenionGraph";
+import type { RuntimeControlEventRequest } from "../runtime/types";
 
 interface InspectorPanelProps {
   connectionCheck: ConnectionCheck | null;
@@ -21,7 +22,10 @@ interface InspectorPanelProps {
   semanticDiagnostics: GraphSemanticDiagnostic[];
   validation: ValidationResult<GraphDocumentV01>;
   onRemoveNode: (node: GraphNodeV01) => void;
+  onSendRuntimeControl: (request: RuntimeControlEventRequest) => void;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
+  runtimeControlBusy: boolean;
+  runtimeControlEnabled: boolean;
 }
 
 export function InspectorPanel({
@@ -30,7 +34,10 @@ export function InspectorPanel({
   graph,
   node,
   onRemoveNode,
+  onSendRuntimeControl,
   onSetNodeParam,
+  runtimeControlBusy,
+  runtimeControlEnabled,
   semanticDiagnostics,
   validation
 }: InspectorPanelProps) {
@@ -58,7 +65,14 @@ export function InspectorPanel({
             onOpenFeedbackDialog={() => setFeedbackDialogOpen(true)}
           />
         ) : node ? (
-          <NodeInspector node={node} onRemoveNode={onRemoveNode} onSetNodeParam={onSetNodeParam} />
+          <NodeInspector
+            node={node}
+            onRemoveNode={onRemoveNode}
+            onSendRuntimeControl={onSendRuntimeControl}
+            onSetNodeParam={onSetNodeParam}
+            runtimeControlBusy={runtimeControlBusy}
+            runtimeControlEnabled={runtimeControlEnabled}
+          />
         ) : (
           <Text c="dimmed" size="sm">
             Select a node or edge on the canvas.

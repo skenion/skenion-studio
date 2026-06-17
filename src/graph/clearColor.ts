@@ -1,8 +1,10 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
+import { BOOL_VALUE_NODE_KIND, defaultBoolValueParams } from "./boolValue";
 import { COLOR_RGBA_NODE_KIND, defaultColorRgbaParams } from "./colorRgba";
 import { FLOAT_VALUE_NODE_KIND, defaultFloatValueParams } from "./floatValue";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "./fullscreenShader";
+import { INT_VALUE_NODE_KIND, defaultIntValueParams } from "./intValue";
 
 export const CLEAR_COLOR_NODE_KIND = "render.clear-color";
 export const DEFAULT_CLEAR_COLOR = [0.05, 0.08, 0.12, 1] as const;
@@ -23,6 +25,12 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   }
   if (kind === FLOAT_VALUE_NODE_KIND) {
     return defaultFloatValueParams();
+  }
+  if (kind === INT_VALUE_NODE_KIND) {
+    return defaultIntValueParams();
+  }
+  if (kind === BOOL_VALUE_NODE_KIND) {
+    return defaultBoolValueParams();
   }
   if (kind === COLOR_RGBA_NODE_KIND) {
     return defaultColorRgbaParams();

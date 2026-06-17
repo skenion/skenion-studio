@@ -9,6 +9,7 @@ import {
   renderCard,
   shaderUniformCard,
   targetCard,
+  valueControlCard,
   valueTransformCard,
   zeroPortCard
 } from "../../stories/storyFixtures";
@@ -40,17 +41,8 @@ export const SingleOutput: Story = {
   args: renderCard
 };
 
-export const ValueOutputOnly: Story = {
-  args: {
-    ...renderCard,
-    id: "value_1",
-    label: "Float Value",
-    kind: "core.value-f32",
-    typeBadgeLabel: "value.f32",
-    accentColor: "#495057",
-    inputs: [],
-    outputs: [valueTransformCard.outputs[0]!]
-  }
+export const ValueControlPorts: Story = {
+  args: valueControlCard
 };
 
 export const FullscreenShaderWithUniformInput: Story = {

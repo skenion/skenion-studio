@@ -1,27 +1,27 @@
 import { NumberInput, Stack, Text } from "@mantine/core";
 
-export interface FloatValueControlsProps {
+export interface IntegerValueControlsProps {
   value: number;
   onChange: (value: number) => void;
 }
 
-export function FloatValueControls({ onChange, value }: FloatValueControlsProps) {
+export function IntegerValueControls({ onChange, value }: IntegerValueControlsProps) {
   return (
     <Stack gap="xs">
       <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-        F32 Graph Param
+        I32 Graph Param
       </Text>
       <NumberInput
-        decimalScale={3}
+        allowDecimal={false}
         label="Value"
         onChange={(nextValue) => {
           if (typeof nextValue !== "number" || !Number.isFinite(nextValue)) {
             return;
           }
-          onChange(nextValue);
+          onChange(Math.trunc(nextValue));
         }}
         size="xs"
-        step={0.1}
+        step={1}
         value={value}
       />
     </Stack>

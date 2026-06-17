@@ -16,7 +16,7 @@ export function defaultFloatValueParams(): Record<string, unknown> {
 
 export function readFloatValueParam(node: GraphNodeV01): number {
   return typeof node.params.value === "number" && Number.isFinite(node.params.value)
-    ? clamp01(node.params.value)
+    ? node.params.value
     : DEFAULT_FLOAT_VALUE;
 }
 
@@ -25,10 +25,6 @@ export function setFloatValueParamPatch(nodeId: string, value: number): GraphPat
     type: "setNodeParam",
     nodeId,
     key: "value",
-    value: clamp01(value)
+    value: Number.isFinite(value) ? value : DEFAULT_FLOAT_VALUE
   };
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
 }

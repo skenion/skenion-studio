@@ -57,6 +57,7 @@ import type {
   RuntimeActionResult,
   RuntimeApiResponse,
   RuntimeConnectionStatus,
+  RuntimeControlEventRequest,
   RuntimeInfo,
   RuntimeResultKind,
   RuntimePatchResponse,
@@ -543,6 +544,37 @@ export default function App() {
     }
   }
 
+  async function sendRuntimeControlEvent(request: RuntimeControlEventRequest) {
+    if (runtimeStatus !== "connected" || !runtimeSession?.loaded || !runtimeSupportsControl(runtimeInfo)) {
+      return;
+    }
+
+    setRuntimeBusyAction("controlEvent");
+    setRuntimeError(null);
+    try {
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const response = await client.sendControlEvent(request);
+      setRuntimeResult({
+        kind: "controlEvent",
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+      const session = await client.getSession();
+      setRuntimeSession(session);
+      if (runtimeSupportsHistory(runtimeInfo)) {
+        await refreshRuntimeHistory(client);
+      }
+      await refreshRuntimePreview(client);
+      await refreshRuntimeTelemetry(client);
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
   function runtimeSupportsHistory(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.history") ?? false;
   }
@@ -553,6 +585,10 @@ export default function App() {
 
   function runtimeSupportsTelemetry(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.telemetry") ?? false;
+  }
+
+  function runtimeSupportsControl(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.control.event") ?? false;
   }
 
   useEffect(() => {
@@ -757,7 +793,16 @@ export default function App() {
               edge={selectedEdge}
               node={selectedNode}
               onRemoveNode={removeNode}
+              onSendRuntimeControl={(request) => {
+                void sendRuntimeControlEvent(request);
+              }}
               onSetNodeParam={setNodeParam}
+              runtimeControlBusy={runtimeBusyAction === "controlEvent"}
+              runtimeControlEnabled={
+                runtimeStatus === "connected" &&
+                Boolean(runtimeSession?.loaded) &&
+                runtimeSupportsControl(runtimeInfo)
+              }
               semanticDiagnostics={semanticDiagnostics}
               validation={validation}
             />

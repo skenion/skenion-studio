@@ -8,6 +8,7 @@ export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }
   const diagnostics = result.response.diagnostics;
   const plan = responsePlan(result.response);
   const report = responseReport(result.response);
+  const emitted = "emitted" in result.response ? result.response.emitted : null;
 
   return (
     <Stack gap="xs">
@@ -74,14 +75,32 @@ export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }
           )}
         </Code>
       ) : null}
+
+      {emitted ? (
+        <Code block className="runtime-json">
+          {JSON.stringify({ emitted }, null, 2)}
+        </Code>
+      ) : null}
     </Stack>
   );
 }
 
 function responsePlan(response: RuntimeActionResponse) {
-  return "plan" in response ? response.plan : response.session.plan;
+  if ("plan" in response) {
+    return response.plan;
+  }
+  if ("session" in response) {
+    return response.session.plan;
+  }
+  return null;
 }
 
 function responseReport(response: RuntimeActionResponse) {
-  return "report" in response ? response.report : response.session.report;
+  if ("report" in response) {
+    return response.report;
+  }
+  if ("session" in response) {
+    return response.session.report;
+  }
+  return null;
 }

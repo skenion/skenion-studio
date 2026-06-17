@@ -44,6 +44,28 @@ export const valueInputPort: NodePortView = {
   }
 };
 
+export const valueInPort: NodePortView = {
+  ...valueInputPort,
+  id: "in",
+  label: "in",
+  metadata: {
+    ...valueInputPort.metadata,
+    required: false,
+    triggerMode: "trigger"
+  }
+};
+
+export const valueSetPort: NodePortView = {
+  ...valueInputPort,
+  id: "set",
+  label: "set",
+  metadata: {
+    ...valueInputPort.metadata,
+    required: false,
+    triggerMode: "latched"
+  }
+};
+
 export const shaderUniformInputPort: NodePortView = {
   ...valueInputPort,
   id: "u_value",
@@ -127,6 +149,15 @@ export const eventInputPort: NodePortView = {
   }
 };
 
+export const valueBangPort: NodePortView = {
+  ...eventInputPort,
+  metadata: {
+    ...eventInputPort.metadata,
+    maxConnections: 1,
+    mergePolicy: "forbid"
+  }
+};
+
 export const zeroPortCard: NodeCardView = {
   id: "note_1",
   label: "Metadata",
@@ -172,6 +203,17 @@ export const valueTransformCard: NodeCardView = {
   typeBadgeLabel: "value.f32",
   accentColor: "#495057",
   inputs: [valueInputPort],
+  outputs: [valueOutputPort]
+};
+
+export const valueControlCard: NodeCardView = {
+  id: "value_1",
+  label: "Float Value",
+  kind: "core.value-f32",
+  kindVersion: "0.1.0",
+  typeBadgeLabel: "value.f32",
+  accentColor: "#495057",
+  inputs: [valueInPort, valueSetPort, valueBangPort],
   outputs: [valueOutputPort]
 };
 

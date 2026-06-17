@@ -27,7 +27,7 @@ const captures = [
   },
   {
     name: "nodecard-float-value",
-    id: "node-nodecard--value-output-only",
+    id: "node-nodecard--value-control-ports",
     waitFor: ".canvas-node"
   },
   {

@@ -91,12 +91,12 @@ describe("skenion graph helpers", () => {
         .flatMap((node) => node.ports)
         .filter((port) => port.type.flow === "value")
         .map((port) => port.type.dataKind)
-    ).toEqual(["number.f32", "number.f32"]);
+    ).toEqual(["number.f32", "number.f32", "number.f32", "number.f32"]);
     expect(
       legacyGraph.nodes
         .flatMap((node) => node.ports)
         .filter((port) => port.type.dataKind === "f32")
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     expect(normalizeLegacyGraphTypes(sampleGraph)).toBe(sampleGraph);
   });
 

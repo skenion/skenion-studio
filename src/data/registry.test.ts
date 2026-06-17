@@ -35,13 +35,35 @@ describe("node registry", () => {
       findStudioDefinition(FULLSCREEN_SHADER_NODE_KIND)?.ports.find((port) => port.id === "u_value")?.type
     ).toMatchObject({
       flow: "value",
-      dataKind: "number.f32",
-      range: {
-        min: 0,
-        max: 1,
-        step: 0.01
-      }
+      dataKind: "number.f32"
     });
+  });
+
+  it("exposes typed value node control ports", () => {
+    expect(findStudioDefinition("core.value-f32")?.ports.map((port) => port.id)).toEqual([
+      "in",
+      "set",
+      "bang",
+      "value"
+    ]);
+    expect(findStudioDefinition("core.value-i32")?.ports.map((port) => port.id)).toEqual([
+      "in",
+      "set",
+      "bang",
+      "value"
+    ]);
+    expect(findStudioDefinition("core.value-bool")?.ports.map((port) => port.id)).toEqual([
+      "in",
+      "set",
+      "bang",
+      "value"
+    ]);
+    expect(findStudioDefinition(COLOR_RGBA_NODE_KIND)?.ports.map((port) => port.id)).toEqual([
+      "in",
+      "set",
+      "bang",
+      "value"
+    ]);
   });
 
   it("creates fullscreen shader nodes with Studio default wgsl params", () => {

@@ -20,10 +20,10 @@ describe("float value graph helpers", () => {
     expect(defaultFloatValueParams()).toEqual({ value: DEFAULT_FLOAT_VALUE });
   });
 
-  it("reads finite values and clamps to the uniform range", () => {
+  it("reads finite values without a global uniform range", () => {
     expect(readFloatValueParam(floatNode(0.25))).toBe(0.25);
-    expect(readFloatValueParam(floatNode(-1))).toBe(0);
-    expect(readFloatValueParam(floatNode(2))).toBe(1);
+    expect(readFloatValueParam(floatNode(-1))).toBe(-1);
+    expect(readFloatValueParam(floatNode(2))).toBe(2);
     expect(readFloatValueParam(floatNode(Number.NaN))).toBe(DEFAULT_FLOAT_VALUE);
     expect(readFloatValueParam(floatNode("0.2"))).toBe(DEFAULT_FLOAT_VALUE);
   });
@@ -35,13 +35,16 @@ describe("float value graph helpers", () => {
       type: "setNodeParam",
       nodeId: "value_1",
       key: "value",
-      value: 1
+      value: 1.25
     });
     expect(graphPatchFromStudioAction(patch)).toEqual({
       op: "setNodeParam",
       nodeId: "value_1",
       key: "value",
-      value: 1
+      value: 1.25
+    });
+    expect(setFloatValueParamPatch("value_1", Number.NaN)).toMatchObject({
+      value: DEFAULT_FLOAT_VALUE
     });
   });
 

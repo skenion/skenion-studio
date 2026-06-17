@@ -6,6 +6,8 @@ import type {
 } from "@skenion/contracts";
 import { createRuntimeClient, normalizeRuntimeUrl, RuntimeClientError } from "./client";
 import type {
+  RuntimeControlEventResponse,
+  RuntimeControlStateResponse,
   RuntimePatchResponse,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
@@ -142,6 +144,68 @@ describe("runtime client", () => {
     expect(calls[7]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
     expect(calls[8]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
     expect(calls[9]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+  });
+
+  it("calls runtime control endpoints", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
+      String(_input).endsWith("/v0/session/control/state")
+        ? jsonResponse(controlStateResponse())
+        : jsonResponse(controlEventResponse())
+    );
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+
+    await client.sendControlEvent({
+      nodeId: "value_1",
+      portId: "in",
+      value: { type: "f32", value: 1.25 }
+    });
+    await client.getControlState();
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(calls[0][0]).toBe("http://runtime.local/v0/session/control/event");
+    expect(JSON.parse(String(calls[0][1].body))).toEqual({
+      nodeId: "value_1",
+      portId: "in",
+      value: { type: "f32", value: 1.25 }
+    });
+    expect(calls[1]).toEqual(["http://runtime.local/v0/session/control/state", { method: "GET" }]);
+  });
+
+  it("accepts runtime control event and state responses", async () => {
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async (_input: RequestInfo | URL) =>
+        String(_input).endsWith("/v0/session/control/state")
+          ? jsonResponse(
+              controlStateResponse({
+                values: {
+                  value_1: { type: "f32", value: 1.25 },
+                  value_2: { type: "i32", value: 32 },
+                  value_3: { type: "bool", value: true },
+                  color_1: { type: "rgba", value: [0.1, 0.2, 0.3, 1] }
+                }
+              })
+            )
+          : jsonResponse(controlEventResponse({ emitted: [{ nodeId: "value_1", portId: "value", value: { type: "bang" } }] }))
+      ) as typeof fetch
+    });
+
+    await expect(
+      client.sendControlEvent({
+        nodeId: "value_1",
+        portId: "bang",
+        value: { type: "bang" }
+      })
+    ).resolves.toMatchObject({
+      emitted: [{ value: { type: "bang" } }]
+    });
+    await expect(client.getControlState()).resolves.toMatchObject({
+      values: {
+        value_2: { type: "i32", value: 32 },
+        value_3: { type: "bool", value: true }
+      }
+    });
   });
 
   it("calls runtime preview endpoints", async () => {
@@ -533,6 +597,82 @@ describe("runtime client", () => {
     await expect(invalidHistoryClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
   });
 
+  it("rejects unsupported runtime control response shapes", async () => {
+    const invalidEventClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          controlEventResponse({
+            emitted: [{ nodeId: "value_1", portId: "other", value: { type: "f32", value: 1 } }]
+          } as unknown as Partial<RuntimeControlEventResponse>)
+        )
+      ) as typeof fetch
+    });
+    await expect(
+      invalidEventClient.sendControlEvent({
+        nodeId: "value_1",
+        portId: "in",
+        value: { type: "f32", value: 1 }
+      })
+    ).rejects.toThrow("unsupported response shape");
+
+    const invalidStateClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          controlStateResponse({
+            values: {
+              value_1: { type: "i32", value: 1.2 }
+            }
+          } as unknown as Partial<RuntimeControlStateResponse>)
+        )
+      ) as typeof fetch
+    });
+    await expect(invalidStateClient.getControlState()).rejects.toThrow("unsupported response shape");
+
+    const invalidBangClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          controlStateResponse({
+            values: {
+              value_1: { type: "bang", value: true }
+            }
+          } as unknown as Partial<RuntimeControlStateResponse>)
+        )
+      ) as typeof fetch
+    });
+    await expect(invalidBangClient.getControlState()).rejects.toThrow("unsupported response shape");
+
+    const invalidNullClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          controlStateResponse({
+            values: {
+              value_1: null
+            }
+          } as unknown as Partial<RuntimeControlStateResponse>)
+        )
+      ) as typeof fetch
+    });
+    await expect(invalidNullClient.getControlState()).rejects.toThrow("unsupported response shape");
+
+    const invalidUnknownTypeClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          controlStateResponse({
+            values: {
+              value_1: { type: "string", value: "hello" }
+            }
+          } as unknown as Partial<RuntimeControlStateResponse>)
+        )
+      ) as typeof fetch
+    });
+    await expect(invalidUnknownTypeClient.getControlState()).rejects.toThrow("unsupported response shape");
+  });
+
   it("rejects unsupported runtime history response shapes", async () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -702,6 +842,26 @@ function historyResponse(overrides: Partial<GraphPatchHistoryV01> = {}): GraphPa
     canRedo: false,
     undoDepth: 1,
     redoDepth: 0,
+    ...overrides
+  };
+}
+
+function controlEventResponse(overrides: Partial<RuntimeControlEventResponse> = {}): RuntimeControlEventResponse {
+  return {
+    ok: true,
+    emitted: [{ nodeId: "value_1", portId: "value", value: { type: "f32", value: 1.25 } }],
+    diagnostics: [],
+    ...overrides
+  };
+}
+
+function controlStateResponse(overrides: Partial<RuntimeControlStateResponse> = {}): RuntimeControlStateResponse {
+  return {
+    ok: true,
+    values: {
+      value_1: { type: "f32", value: 1.25 }
+    },
+    diagnostics: [],
     ...overrides
   };
 }
