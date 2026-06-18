@@ -10,7 +10,7 @@ describe("PanelControlInspector", () => {
     expect(sliderRuntimeRequest("node_1", 1.25)).toEqual({
       nodeId: "node_1",
       portId: "value",
-      value: { type: "f32", value: 1.25 }
+      message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] }
     });
   });
 
@@ -18,7 +18,7 @@ describe("PanelControlInspector", () => {
     expect(toggleRuntimeRequest("node_1")).toEqual({
       nodeId: "node_1",
       portId: "value",
-      value: { type: "bang" }
+      message: { selector: "bang", atoms: [] }
     });
   });
 

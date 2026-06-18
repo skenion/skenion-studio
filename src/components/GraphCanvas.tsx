@@ -18,7 +18,7 @@ import {
 } from "@xyflow/react";
 import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
 import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
-import type { RuntimeControlValue } from "../runtime/types";
+import type { RuntimeControlMessage } from "../runtime/types";
 import {
   applyPatch,
   checkConnection,
@@ -45,8 +45,8 @@ interface GraphCanvasProps {
   selectedNodeId: string | null;
   onConnectionCheck: (check: ConnectionCheck | null) => void;
   onAddNodeAtPosition?: (definitionId: string, position: { x: number; y: number }) => void;
-  onObjectControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
-  onObjectLiveControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
+  onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
+  onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   onShowNodeHelp?: (definitionId: string) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
@@ -98,8 +98,8 @@ export function GraphCanvas({
     objectParamChangeRef.current = onObjectParamChange;
   }, [onObjectParamChange]);
   const handleObjectControl = useCallback(
-    (nodeId: string, portId: string, value: RuntimeControlValue) => {
-      objectControlRef.current?.(nodeId, portId, value);
+    (nodeId: string, portId: string, message: RuntimeControlMessage) => {
+      objectControlRef.current?.(nodeId, portId, message);
     },
     []
   );
@@ -110,8 +110,8 @@ export function GraphCanvas({
     []
   );
   const handleObjectLiveControl = useCallback(
-    (nodeId: string, portId: string, value: RuntimeControlValue) => {
-      objectLiveControlRef.current?.(nodeId, portId, value);
+    (nodeId: string, portId: string, message: RuntimeControlMessage) => {
+      objectLiveControlRef.current?.(nodeId, portId, message);
     },
     []
   );

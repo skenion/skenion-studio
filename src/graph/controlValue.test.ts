@@ -32,9 +32,7 @@ describe("runtime control value helpers", () => {
       type: "f32",
       value: 0.75
     });
-    expect(runtimeControlValueForNode(valueNode("ui.button", undefined))).toEqual({
-      type: "bang"
-    });
+    expect(runtimeControlValueForNode(valueNode("ui.button", undefined))).toBeNull();
     expect(runtimeControlValueForNode(valueNode("core.message", "perform"))).toEqual({
       type: "string",
       value: "perform"

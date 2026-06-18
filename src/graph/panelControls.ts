@@ -77,11 +77,6 @@ export function runtimeControlValueForUiNode(node: GraphNodeV01): RuntimeControl
       value: readUiToggleValue(node)
     };
   }
-  if (isUiButtonNode(node)) {
-    return {
-      type: "bang"
-    };
-  }
   return null;
 }
 

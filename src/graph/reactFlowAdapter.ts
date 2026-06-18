@@ -16,7 +16,7 @@ import {
 } from "./portSemantics";
 import { toNodeCardView } from "./nodeCardView";
 import type { NodeCardView } from "../components/node/nodeTypes";
-import type { RuntimeControlValue } from "../runtime/types";
+import type { RuntimeControlMessage } from "../runtime/types";
 
 export interface SkenionNodeData extends Record<string, unknown> {
   card: NodeCardView;
@@ -24,8 +24,8 @@ export interface SkenionNodeData extends Record<string, unknown> {
   label: string;
   kind: string;
   kindVersion: string;
-  onObjectControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
-  onObjectLiveControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
+  onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
+  onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   primaryFlow: DataFlow;
 }

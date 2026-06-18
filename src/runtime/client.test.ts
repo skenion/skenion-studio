@@ -165,7 +165,7 @@ describe("runtime client", () => {
     await client.sendControlEvent({
       nodeId: "value_1",
       portId: "in",
-      value: { type: "f32", value: 1.25 }
+      message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] }
     });
     await client.getControlState();
     await client.readControl({ nodeId: "value_1", target: "state", id: "value" });
@@ -176,7 +176,7 @@ describe("runtime client", () => {
     expect(JSON.parse(String(calls[0][1].body))).toEqual({
       nodeId: "value_1",
       portId: "in",
-      value: { type: "f32", value: 1.25 }
+      message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] }
     });
     expect(calls[1]).toEqual(["http://runtime.local/v0/session/control/state", { method: "GET" }]);
     expect(calls[2][0]).toBe("http://runtime.local/v0/session/control/read");
@@ -203,7 +203,7 @@ describe("runtime client", () => {
                 }
               })
             )
-          : jsonResponse(controlEventResponse({ emitted: [{ nodeId: "value_1", portId: "value", value: { type: "bang" } }] }))
+          : jsonResponse(controlEventResponse({ emitted: [{ nodeId: "value_1", portId: "value", message: { selector: "bang", atoms: [] } }] }))
       ) as typeof fetch
     });
 
@@ -211,10 +211,10 @@ describe("runtime client", () => {
       client.sendControlEvent({
         nodeId: "value_1",
         portId: "bang",
-        value: { type: "bang" }
+        message: { selector: "bang", atoms: [] }
       })
     ).resolves.toMatchObject({
-      emitted: [{ value: { type: "bang" } }]
+      emitted: [{ message: { selector: "bang", atoms: [] } }]
     });
     await expect(client.getControlState()).resolves.toMatchObject({
       values: {
@@ -235,7 +235,7 @@ describe("runtime client", () => {
       nullRevisionClient.sendControlEvent({
         nodeId: "value_1",
         portId: "in",
-        value: { type: "f32", value: 1.25 }
+        message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] }
       })
     ).resolves.toMatchObject({
       changed: false,
@@ -795,7 +795,7 @@ describe("runtime client", () => {
       invalidEventNullClient.sendControlEvent({
         nodeId: "value_1",
         portId: "in",
-        value: { type: "f32", value: 1 }
+        message: { selector: "float", atoms: [{ type: "f32", value: 1 }] }
       })
     ).rejects.toThrow("unsupported response shape");
 
@@ -804,7 +804,7 @@ describe("runtime client", () => {
       fetchImpl: vi.fn(async () =>
         jsonResponse(
           controlEventResponse({
-            emitted: [{ nodeId: "value_1", portId: "other", value: { type: "f32", value: 1 } }]
+            emitted: [{ nodeId: "value_1", portId: "other", message: { selector: "float", atoms: [{ type: "f32", value: 1 }] } }]
           } as unknown as Partial<RuntimeControlEventResponse>)
         )
       ) as typeof fetch
@@ -813,7 +813,7 @@ describe("runtime client", () => {
       invalidEventClient.sendControlEvent({
         nodeId: "value_1",
         portId: "in",
-        value: { type: "f32", value: 1 }
+        message: { selector: "float", atoms: [{ type: "f32", value: 1 }] }
       })
     ).rejects.toThrow("unsupported response shape");
 
@@ -1198,7 +1198,7 @@ function controlEventResponse(overrides: Partial<RuntimeControlEventResponse> = 
     ok: true,
     changed: true,
     controlRevision: 1,
-    emitted: [{ nodeId: "value_1", portId: "value", value: { type: "f32", value: 1.25 } }],
+    emitted: [{ nodeId: "value_1", portId: "value", message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] } }],
     diagnostics: [],
     ...overrides
   };

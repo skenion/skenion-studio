@@ -34,7 +34,7 @@ describe("panel control graph helpers", () => {
     });
     expect(runtimeControlValueForUiNode(slider)).toEqual({ type: "f32", value: 1.5 });
     expect(runtimeControlValueForUiNode(toggle)).toEqual({ type: "bool", value: true });
-    expect(runtimeControlValueForUiNode(node("ui.button", {}))).toEqual({ type: "bang" });
+    expect(runtimeControlValueForUiNode(node("ui.button", {}))).toBeNull();
     expect(runtimeControlValueForUiNode(node("core.value-f32", {}))).toBeNull();
     expect(isUiButtonNode(node("ui.button", {}))).toBe(true);
     expect(isUiButtonNode(null)).toBe(false);
