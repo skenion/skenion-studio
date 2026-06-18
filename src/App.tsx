@@ -969,18 +969,18 @@ export default function App() {
             onAddNodeAtPosition={addNodeAtPosition}
             onConnectionCheck={setConnectionCheck}
             onGraphChange={updateGraph}
-            onObjectControl={(nodeId, portId, value) => {
+            onObjectControl={(nodeId, portId, message) => {
               void sendRuntimeControlEvent({
                 nodeId,
                 portId: portId as RuntimeControlEventRequest["portId"],
-                value
+                message
               });
             }}
-            onObjectLiveControl={(nodeId, portId, value) => {
+            onObjectLiveControl={(nodeId, portId, message) => {
               sendRuntimeLiveControlEvent({
                 nodeId,
                 portId: portId as RuntimeControlEventRequest["portId"],
-                value
+                message
               });
             }}
             onObjectParamChange={setNodeParam}

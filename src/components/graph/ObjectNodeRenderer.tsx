@@ -20,7 +20,8 @@ import { TOGGLE_NODE_KIND, readToggleParam } from "../../graph/toggleValue";
 import { VIDEO_ASSET_NODE_KIND, readVideoAssetParams } from "../../graph/videoAsset";
 import { PANEL_NODE_KIND, readPanelParams } from "../../graph/panelNode";
 import type { NodeCardView, NodePortHandleRenderer, NodePortView } from "../node/nodeTypes";
-import type { RuntimeControlValue } from "../../runtime/types";
+import type { RuntimeControlMessage } from "../../runtime/types";
+import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
 import { beginDeferredHorizontalNumberDrag } from "./deferredPointerDrag";
 import styles from "./ObjectNodeRenderer.module.css";
 import socketStyles from "../node/PortSocket.module.css";
@@ -28,8 +29,8 @@ import socketStyles from "../node/PortSocket.module.css";
 export interface ObjectNodeRendererProps {
   card: NodeCardView;
   node: GraphNodeV01;
-  onObjectControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
-  onObjectLiveControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
+  onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
+  onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   selected?: boolean;
   renderInputHandle?: NodePortHandleRenderer;
@@ -81,7 +82,7 @@ export function ObjectNodeRenderer({
         inputPorts={card.inputs}
         onActivate={(event) => {
           event.stopPropagation();
-          onObjectControl?.(node.id, "bang", { type: "bang" });
+          onObjectControl?.(node.id, "bang", bangControlMessage());
         }}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
@@ -100,7 +101,7 @@ export function ObjectNodeRenderer({
         inputPorts={card.inputs}
         onActivate={(event) => {
           event.stopPropagation();
-          onObjectControl?.(node.id, "in", { type: "bang" });
+          onObjectControl?.(node.id, "in", bangControlMessage());
         }}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
@@ -122,7 +123,7 @@ export function ObjectNodeRenderer({
         inputPorts={card.inputs}
         onActivate={(event) => {
           event.stopPropagation();
-          onObjectControl?.(node.id, "bang", { type: "bang" });
+          onObjectControl?.(node.id, "bang", bangControlMessage());
         }}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
@@ -218,7 +219,7 @@ function SliderControlObject({
 }: {
   card: NodeCardView;
   node: GraphNodeV01;
-  onLiveControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
+  onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   renderInputHandle?: NodePortHandleRenderer;
   renderOutputHandle?: NodePortHandleRenderer;
   selected?: boolean;
@@ -254,7 +255,7 @@ function SliderControlObject({
             return;
           }
           setValue(nextValue);
-          onLiveControl?.(node.id, "in", { type: "f32", value: nextValue });
+          onLiveControl?.(node.id, "in", controlMessageFromValue({ type: "f32", value: nextValue }));
         }}
         onPointerDown={(event) => event.stopPropagation()}
         step={slider.step}
@@ -371,7 +372,7 @@ function FloatValueDragObject({
   onCommit
 }: {
   node: GraphNodeV01;
-  onLiveControl?: (nodeId: string, portId: string, value: RuntimeControlValue) => void;
+  onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onCommit?: (nodeId: string, key: string, value: unknown) => void;
 }) {
   const graphValue = readFloatValueParam(node);
@@ -391,7 +392,7 @@ function FloatValueDragObject({
           onCommit: (value) => onCommit?.(node.id, "value", value),
           onPreview: (value) => {
             setDraftValue(value);
-            onLiveControl?.(node.id, "in", { type: "f32", value });
+            onLiveControl?.(node.id, "in", controlMessageFromValue({ type: "f32", value }));
           },
           startValue: graphValue
         })

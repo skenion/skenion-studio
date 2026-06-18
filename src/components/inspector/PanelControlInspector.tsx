@@ -3,6 +3,7 @@ import { MousePointerClick, Send } from "lucide-react";
 import { useState } from "react";
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { RuntimeControlEventRequest } from "../../runtime/types";
+import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
 import {
   isUiButtonNode,
   isUiSliderF32Node,
@@ -59,7 +60,7 @@ export function PanelControlInspector({
           disabled={!enabled}
           leftSection={<MousePointerClick size={14} />}
           loading={busy}
-          onClick={() => onSend({ nodeId: node.id, portId: "bang", value: { type: "bang" } })}
+          onClick={() => onSend({ nodeId: node.id, portId: "bang", message: bangControlMessage() })}
           radius="sm"
           size="xs"
           variant="light"
@@ -183,10 +184,10 @@ export function sliderRuntimeRequest(nodeId: string, value: number): RuntimeCont
   return {
     nodeId,
     portId: "value",
-    value: {
+    message: controlMessageFromValue({
       type: "f32",
       value
-    }
+    })
   };
 }
 
@@ -194,8 +195,6 @@ export function toggleRuntimeRequest(nodeId: string): RuntimeControlEventRequest
   return {
     nodeId,
     portId: "value",
-    value: {
-      type: "bang"
-    }
+    message: bangControlMessage()
   };
 }

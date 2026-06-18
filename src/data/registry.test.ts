@@ -86,7 +86,7 @@ describe("node registry", () => {
       "bang",
       "value"
     ]);
-    expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual(["set"]);
+    expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual([]);
     expect(findStudioDefinition("ui.slider-f32")?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",

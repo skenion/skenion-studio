@@ -186,19 +186,25 @@ export type RuntimeControlValue =
   | { type: "i32"; value: number }
   | { type: "bool"; value: boolean }
   | { type: "string"; value: string }
-  | { type: "rgba"; value: [number, number, number, number] }
-  | { type: "bang" };
+  | { type: "rgba"; value: [number, number, number, number] };
+
+export type RuntimeControlAtom = RuntimeControlValue;
+
+export interface RuntimeControlMessage {
+  selector: string;
+  atoms: RuntimeControlAtom[];
+}
 
 export interface RuntimeControlEventRequest {
   nodeId: string;
   portId: "in" | "set" | "bang" | "value";
-  value: RuntimeControlValue;
+  message: RuntimeControlMessage;
 }
 
 export interface RuntimeControlEmission {
   nodeId: string;
   portId: "in" | "bang" | "value";
-  value: RuntimeControlValue;
+  message: RuntimeControlMessage;
 }
 
 export interface RuntimeControlEventResponse {
@@ -213,7 +219,7 @@ export interface RuntimeControlStateResponse {
   ok: boolean;
   controlRevision: number;
   values: Record<string, RuntimeControlValue>;
-  channels: Record<string, RuntimeControlValue>;
+  channels: Record<string, RuntimeControlMessage>;
   diagnostics: RuntimeDiagnostic[];
 }
 

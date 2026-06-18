@@ -21,9 +21,9 @@ describe("RuntimeControlValueControls", () => {
     buttons[2]?.props.onClick?.();
 
     expect(requests).toEqual([
-      { nodeId: "value_1", portId: "set", value: { type: "f32", value: 1.25 } },
-      { nodeId: "value_1", portId: "in", value: { type: "f32", value: 1.25 } },
-      { nodeId: "value_1", portId: "bang", value: { type: "bang" } }
+      { nodeId: "value_1", portId: "set", message: { selector: "set", atoms: [{ type: "f32", value: 1.25 }] } },
+      { nodeId: "value_1", portId: "in", message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] } },
+      { nodeId: "value_1", portId: "bang", message: { selector: "bang", atoms: [] } }
     ]);
   });
 
@@ -55,7 +55,7 @@ describe("RuntimeControlValueControls", () => {
 
     expect(buttons).toHaveLength(1);
     buttons[0]?.props.onClick?.();
-    expect(requests).toEqual([{ nodeId: "message_1", portId: "bang", value: { type: "bang" } }]);
+    expect(requests).toEqual([{ nodeId: "message_1", portId: "bang", message: { selector: "bang", atoms: [] } }]);
   });
 
   it("returns null when no runtime input ports are available", () => {

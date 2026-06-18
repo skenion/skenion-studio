@@ -11,9 +11,11 @@ import type {
   RuntimeAssetListResponse,
   RuntimeControlEventRequest,
   RuntimeControlEventResponse,
+  RuntimeControlMessage,
   RuntimeControlReadRequest,
   RuntimeControlReadResponse,
   RuntimeControlStateResponse,
+  RuntimeControlValue,
   RuntimeHealth,
   RuntimeInfo,
   RuntimeGeneratedShaderResponse,
@@ -474,7 +476,7 @@ function isRuntimeControlStateResponse(value: unknown): value is RuntimeControlS
     isRecord(value.values) &&
     Object.values(value.values).every(isRuntimeControlValue) &&
     isRecord(value.channels) &&
-    Object.values(value.channels).every(isRuntimeControlValue) &&
+    Object.values(value.channels).every(isRuntimeControlMessage) &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic)
   );
@@ -512,18 +514,24 @@ function isRuntimeControlEmission(value: unknown): boolean {
     isRecord(value) &&
     typeof value.nodeId === "string" &&
     (value.portId === "value" || value.portId === "in" || value.portId === "bang") &&
-    isRuntimeControlValue(value.value)
+    isRuntimeControlMessage(value.message)
   );
 }
 
-function isRuntimeControlValue(value: unknown): value is RuntimeControlEventRequest["value"] {
+function isRuntimeControlMessage(value: unknown): value is RuntimeControlMessage {
+  return (
+    isRecord(value) &&
+    typeof value.selector === "string" &&
+    Array.isArray(value.atoms) &&
+    value.atoms.every(isRuntimeControlValue)
+  );
+}
+
+function isRuntimeControlValue(value: unknown): value is RuntimeControlValue {
   if (!isRecord(value) || typeof value.type !== "string") {
     return false;
   }
 
-  if (value.type === "bang") {
-    return !("value" in value);
-  }
   if (value.type === "f32") {
     return typeof value.value === "number" && Number.isFinite(value.value);
   }

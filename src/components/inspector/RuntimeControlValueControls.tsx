@@ -4,6 +4,7 @@ import type {
   RuntimeControlEventRequest,
   RuntimeControlValue
 } from "../../runtime/types";
+import { bangControlMessage, controlMessageFromValue, setControlMessage } from "../../runtime/controlMessage";
 
 export interface RuntimeControlValueControlsProps {
   availablePorts?: {
@@ -45,7 +46,7 @@ export function RuntimeControlValueControls({
             disabled={!enabled}
             leftSection={<SlidersHorizontal size={14} />}
             loading={busy}
-            onClick={() => onSend({ nodeId, portId: "set", value })}
+            onClick={() => onSend({ nodeId, portId: "set", message: setControlMessage(value) })}
             radius="sm"
             size="xs"
             variant="light"
@@ -58,7 +59,7 @@ export function RuntimeControlValueControls({
             disabled={!enabled}
             leftSection={<Send size={14} />}
             loading={busy}
-            onClick={() => onSend({ nodeId, portId: "in", value })}
+            onClick={() => onSend({ nodeId, portId: "in", message: controlMessageFromValue(value) })}
             radius="sm"
             size="xs"
             variant="light"
@@ -71,7 +72,7 @@ export function RuntimeControlValueControls({
             disabled={!enabled}
             leftSection={<Zap size={14} />}
             loading={busy}
-            onClick={() => onSend({ nodeId, portId: "bang", value: { type: "bang" } })}
+            onClick={() => onSend({ nodeId, portId: "bang", message: bangControlMessage() })}
             radius="sm"
             size="xs"
             variant="light"
