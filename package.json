@@ -8,16 +8,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
     "build-storybook": "storybook build",
-    "ci": "pnpm run lint && pnpm run coverage && pnpm run build && pnpm run ci:storybook && pnpm run ci:visual-gate",
-    "ci:storybook": "storybook build",
-    "ci:visual-gate": "node scripts/capture-studio-visual-gate.mjs",
+    "ci": "pnpm run lint && pnpm run coverage && pnpm run build",
     "coverage": "vitest run --coverage",
     "dev": "vite --host localhost",
     "lint": "eslint .",
     "preview": "vite preview --host localhost",
     "storybook": "storybook dev -p 6006 --host localhost",
     "test": "vitest run",
-    "visual-gate": "pnpm run build-storybook && pnpm run ci:visual-gate"
+    "visual-gate": "pnpm run build-storybook && pnpm run visual-gate:capture",
+    "visual-gate:capture": "node scripts/capture-studio-visual-gate.mjs"
   },
   "dependencies": {
     "@mantine/core": "^9.3.1",

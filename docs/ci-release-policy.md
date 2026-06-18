@@ -6,18 +6,21 @@ Studio treats graph UX and runtime-compatibility gates as release-relevant behav
 
 - Unit: lint and coverage.
 - Build: TypeScript and Vite production build.
-- Visual Gate: Storybook static build and Playwright screenshot capture.
 
-The Visual Gate job must upload `artifacts/studio-visual-gate` and must fail if expected PNG artifacts are missing or empty. Missing visual artifacts are not warnings, because downstream graph UX approval depends on those screenshots.
+Visual Gate is intentionally not part of default GitHub CI. It is a local,
+human-in-the-loop QA surface for graph editor changes where the Studio stays
+open and screenshots can be reviewed with the implementation.
 
 ## Visual Gate Artifacts
 
-The visual gate is expected to generate exactly thirteen PNG artifacts:
+The visual gate is expected to generate exactly fifteen PNG artifacts:
 
 - `shader-uniform-sample.png`
 - `shader-multi-uniform-sample.png`
 - `port-demo-sample.png`
 - `project-saved-layout.png`
+- `object-visual-objects.png`
+- `object-visual-pan-drag.png`
 - `nodecard-float-value.png`
 - `nodecard-fullscreen-shader.png`
 - `nodecard-render-output.png`
@@ -28,7 +31,9 @@ The visual gate is expected to generate exactly thirteen PNG artifacts:
 - `selected-edge.png`
 - `many-port-node.png`
 
-`pnpm run ci` remains the local full gate and includes lint, coverage, build, Storybook build, and visual capture.
+`pnpm run ci` is the automated local and GitHub CI gate: lint, coverage, and
+app build. `pnpm run visual-gate` is the explicit visual QA command and should
+be run when a graph editor change needs screenshot review.
 
 ## Release Hygiene
 

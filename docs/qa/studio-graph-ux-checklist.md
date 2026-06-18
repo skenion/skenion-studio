@@ -16,6 +16,8 @@ Expected output:
 - `artifacts/studio-visual-gate/shader-multi-uniform-sample.png`
 - `artifacts/studio-visual-gate/port-demo-sample.png`
 - `artifacts/studio-visual-gate/project-saved-layout.png`
+- `artifacts/studio-visual-gate/object-visual-objects.png`
+- `artifacts/studio-visual-gate/object-visual-pan-drag.png`
 - `artifacts/studio-visual-gate/nodecard-float-value.png`
 - `artifacts/studio-visual-gate/nodecard-fullscreen-shader.png`
 - `artifacts/studio-visual-gate/nodecard-render-output.png`
@@ -26,7 +28,8 @@ Expected output:
 - `artifacts/studio-visual-gate/selected-edge.png`
 - `artifacts/studio-visual-gate/many-port-node.png`
 
-CI uploads the same directory as the `studio-visual-gate` artifact.
+Visual gate screenshots are reviewed locally with the Studio/Storybook context
+open. They are intentionally not uploaded by default GitHub CI.
 
 ## Manual Review
 
@@ -58,7 +61,6 @@ Required checks:
 
 Do not merge a new graph feature PR if:
 
-- `pnpm run ci` does not regenerate the visual gate screenshots.
-- The GitHub Actions `studio-visual-gate` artifact is missing.
+- `pnpm run visual-gate` has not been run for a graph editor visual change.
 - Any required screenshot shows clipped handles, unclear IN/OUT orientation, or ambiguous edge attachment.
 - A manual Storybook check finds an invalid connection committed to the graph.

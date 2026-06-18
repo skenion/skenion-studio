@@ -98,8 +98,9 @@ New Studio UI work should either add the relevant story state in the same PR or 
 ```bash
 pnpm run storybook
 pnpm run build-storybook
-pnpm run ci:storybook
 pnpm run ci
+pnpm run visual-gate
 ```
 
-`pnpm run ci` includes lint, coverage, app build, and Storybook build.
+`pnpm run ci` includes lint, coverage, and the app build. `pnpm run visual-gate`
+is the explicit Storybook screenshot review pass for graph editor changes.
