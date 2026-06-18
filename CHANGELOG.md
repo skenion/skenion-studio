@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.21.0...skenion-studio-v0.22.0) (2026-06-18)
+
+
+### Features
+
+* **studio:** add max-style object controls ([#53](https://github.com/echovisionlab/skenion-studio/issues/53)) ([84cfd0c](https://github.com/echovisionlab/skenion-studio/commit/84cfd0cb234b1d6bea2aed81c36f66a9d1b1c92c))
+
 ## [0.21.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.20.0...skenion-studio-v0.21.0) (2026-06-17)
 
 
