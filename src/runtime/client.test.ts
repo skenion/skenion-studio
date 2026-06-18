@@ -50,7 +50,7 @@ const patch: GraphPatchV01 = {
 
 describe("runtime client", () => {
   it("normalizes runtime URLs", () => {
-    expect(normalizeRuntimeUrl(" http://127.0.0.1:3761/ ")).toBe("http://127.0.0.1:3761");
+    expect(normalizeRuntimeUrl(" http://localhost:3761/ ")).toBe("http://localhost:3761");
     expect(() => normalizeRuntimeUrl(" ")).toThrow(RuntimeClientError);
   });
 
@@ -86,7 +86,7 @@ describe("runtime client", () => {
     await expect(client.getHealth()).resolves.toMatchObject({
       service: "skenion-runtime"
     });
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:3761/health", { method: "GET" });
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3761/health", { method: "GET" });
     vi.unstubAllGlobals();
   });
 

@@ -27,7 +27,7 @@ import type {
 } from "./types";
 
 export const DEFAULT_RUNTIME_URL =
-  import.meta.env.VITE_SKENION_RUNTIME_URL?.trim() || "http://127.0.0.1:3761";
+  import.meta.env.VITE_SKENION_RUNTIME_URL?.trim() || "http://localhost:3761";
 
 type FetchLike = typeof fetch;
 

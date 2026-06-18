@@ -47,7 +47,7 @@ export const Disconnected: Story = {
       onRefreshSession={noop}
       onUrlChange={noop}
       status="disconnected"
-      url="http://127.0.0.1:3761"
+      url="http://localhost:3761"
     />
   )
 };
@@ -62,7 +62,7 @@ export const ConnectionAndSession: Story = {
         onRefreshSession={noop}
         onUrlChange={noop}
         status="connected"
-        url="http://127.0.0.1:3761"
+        url="http://localhost:3761"
       />
       <Divider />
       <RuntimeSessionPanel
@@ -193,7 +193,7 @@ export const FullRuntimePanel: Story = {
       sessionSynced={false}
       status="connected"
       telemetry={runtimeTelemetry}
-      url="http://127.0.0.1:3761"
+      url="http://localhost:3761"
     />
   )
 };

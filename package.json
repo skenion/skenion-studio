@@ -12,10 +12,10 @@
     "ci:storybook": "storybook build",
     "ci:visual-gate": "node scripts/capture-studio-visual-gate.mjs",
     "coverage": "vitest run --coverage",
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite --host localhost",
     "lint": "eslint .",
-    "preview": "vite preview --host 127.0.0.1",
-    "storybook": "storybook dev -p 6006 --host 127.0.0.1",
+    "preview": "vite preview --host localhost",
+    "storybook": "storybook dev -p 6006 --host localhost",
     "test": "vitest run",
     "visual-gate": "pnpm run build-storybook && pnpm run ci:visual-gate"
   },
