@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Alert, AppShell, Badge, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
 import {
@@ -65,8 +66,10 @@ import {
 import type {
   RuntimeActionResult,
   RuntimeConnectionStatus,
+  RuntimeControlEventResponse,
   RuntimeControlEventRequest,
   RuntimeControlStateResponse,
+  RuntimeControlValue,
   RuntimeGeneratedShaderResponse,
   RuntimeInfo,
   RuntimeResultKind,
@@ -94,6 +97,7 @@ export default function App() {
   const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
   const [runtimeControlState, setRuntimeControlState] = useState<RuntimeControlStateResponse | null>(null);
+  const [runtimeControlPulses, setRuntimeControlPulses] = useState<Record<string, number>>({});
   const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] = useState<RuntimePreviewStatus | null>(null);
   const [runtimeTelemetry, setRuntimeTelemetry] = useState<RuntimeTelemetrySnapshot | null>(null);
@@ -956,6 +960,7 @@ export default function App() {
     try {
       const client = createRuntimeClient({ baseUrl: runtimeUrl });
       const response = await client.sendControlEvent(request);
+      recordRuntimeControlPulses(response);
       setRuntimeResult({
         kind: "controlEvent",
         response,
@@ -983,8 +988,71 @@ export default function App() {
   }
 
   function sendRuntimeLiveControlEvent(request: RuntimeControlEventRequest) {
+    flushSync(() => {
+      applyOptimisticRuntimeControlEvent(request);
+    });
     liveControlQueueRef.current.request = request;
     void flushRuntimeLiveControlQueue();
+  }
+
+  function applyOptimisticRuntimeControlEvent(request: RuntimeControlEventRequest) {
+    const atom = request.message.atoms[0];
+    if (!atom || (request.portId !== "in" && request.portId !== "set")) {
+      return;
+    }
+
+    setRuntimeControlState((current) => {
+      if (!current) {
+        return current;
+      }
+      const values = { ...current.values };
+      values[request.nodeId] = atom;
+      if (request.portId === "in") {
+        propagateOptimisticValue(request.nodeId, atom, values);
+      }
+      return {
+        ...current,
+        values
+      };
+    });
+  }
+
+  function propagateOptimisticValue(
+    sourceNodeId: string,
+    value: RuntimeControlValue,
+    values: Record<string, RuntimeControlValue>
+  ) {
+    const queue = [sourceNodeId];
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const nodeId = queue.shift();
+      if (!nodeId || visited.has(nodeId)) {
+        continue;
+      }
+      visited.add(nodeId);
+      for (const edge of graph.edges) {
+        if (edge.from.node !== nodeId || edge.from.port !== "value" || edge.to.port !== "in") {
+          continue;
+        }
+        const targetNode = graph.nodes.find((node) => node.id === edge.to.node);
+        if (!targetNode || !isOptimisticValueTarget(targetNode, value)) {
+          continue;
+        }
+        values[targetNode.id] = value;
+        queue.push(targetNode.id);
+      }
+    }
+  }
+
+  function isOptimisticValueTarget(node: GraphNodeV01, value: RuntimeControlValue): boolean {
+    return (
+      (value.type === "float" && node.kind === "core.float") ||
+      (value.type === "int" && node.kind === "core.int") ||
+      (value.type === "uint" && node.kind === "core.uint") ||
+      (value.type === "bool" && node.kind === "core.bool") ||
+      (value.type === "color" && node.kind === "core.color") ||
+      (value.type === "string" && node.kind === "core.string")
+    );
   }
 
   async function flushRuntimeLiveControlQueue() {
@@ -1004,12 +1072,11 @@ export default function App() {
     try {
       const client = createRuntimeClient({ baseUrl: url });
       const response = await client.sendControlEvent(request);
+      recordRuntimeControlPulses(response);
       setRuntimeStatus("connected");
       setRuntimeError(null);
       if (response.controlRevision !== null) {
-        if (runtimeSupportsControlState(info)) {
-          await refreshRuntimeControlState(client, info);
-        }
+        applyRuntimeControlEventResponse(response);
         setRuntimeSession((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
         );
@@ -1030,6 +1097,46 @@ export default function App() {
 
   function runtimeSupportsHistory(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.history") ?? false;
+  }
+
+  function recordRuntimeControlPulses(response: RuntimeControlEventResponse) {
+    const pulseNodeIds = response.emitted
+      .filter((emission) => emission.portId === "bang" || emission.message.selector === "bang")
+      .map((emission) => emission.nodeId);
+    if (pulseNodeIds.length === 0) {
+      return;
+    }
+    const pulseKey = Date.now();
+    setRuntimeControlPulses((current) => {
+      const next = { ...current };
+      for (const nodeId of pulseNodeIds) {
+        next[nodeId] = pulseKey;
+      }
+      return next;
+    });
+  }
+
+  function applyRuntimeControlEventResponse(response: RuntimeControlEventResponse) {
+    if (response.controlRevision === null) {
+      return;
+    }
+    setRuntimeControlState((current) => {
+      if (!current) {
+        return current;
+      }
+      const values = { ...current.values };
+      for (const emission of response.emitted) {
+        const atom = emission.message.atoms[0];
+        if (atom && emission.portId === "value") {
+          values[emission.nodeId] = atom;
+        }
+      }
+      return {
+        ...current,
+        controlRevision: response.controlRevision ?? current.controlRevision,
+        values
+      };
+    });
   }
 
   function runtimeSupportsSessionProject(info: RuntimeInfo | null): boolean {
@@ -1173,6 +1280,7 @@ export default function App() {
               }}
               onObjectParamChange={setNodeParam}
               runtimeControlEnabled={runtimeControlInteractionEnabled}
+              runtimeControlPulses={runtimeControlPulses}
               runtimeControlValues={runtimeSessionSynced ? runtimeControlState?.values ?? {} : {}}
               onViewStateChange={setViewState}
               onSelectedEdgeChange={(edgeId) => {
