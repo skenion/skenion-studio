@@ -50,6 +50,19 @@ export function EdgeInspector({
           <MetadataRow label="Adapter">{edge.adapter ?? "none"}</MetadataRow>
           <MetadataRow label="Feedback">{edge.feedback ? edge.feedback.boundary : "none"}</MetadataRow>
           <MetadataRow label="Style">{edge.styleOverride ?? "default"}</MetadataRow>
+          <MetadataRow label="Conversion">
+            {edge.conversion ? (
+              <Stack gap={3}>
+                <Text size="xs">{edge.conversion.source} → {edge.conversion.target}</Text>
+                <Text c={edge.conversion.lossy ? "yellow" : "dimmed"} size="xs">
+                  {edge.conversion.policies.join("; ")}
+                </Text>
+                {edge.conversion.diagnostics.map((diagnostic) => (
+                  <Text c="dimmed" key={diagnostic} size="xs">{diagnostic}</Text>
+                ))}
+              </Stack>
+            ) : "identity"}
+          </MetadataRow>
         </Table.Tbody>
       </Table>
 

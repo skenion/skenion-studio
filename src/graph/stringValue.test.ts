@@ -13,7 +13,7 @@ describe("string value graph helpers", () => {
     const node = stringNode("ready");
 
     expect(isStringValueNode(node)).toBe(true);
-    expect(isStringValueNode({ ...node, kind: "core.value-f32" })).toBe(false);
+    expect(isStringValueNode({ ...node, kind: "core.float" })).toBe(false);
     expect(isStringValueNode(null)).toBe(false);
     expect(defaultStringValueParams()).toEqual({ value: "" });
     expect(readStringValueParam(node)).toBe("ready");

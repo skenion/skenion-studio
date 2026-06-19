@@ -12,7 +12,7 @@ describe("toggle graph helpers", () => {
     const node = toggleNode(true);
 
     expect(isToggleNode(node)).toBe(true);
-    expect(isToggleNode({ ...node, kind: "core.value-bool" })).toBe(false);
+    expect(isToggleNode({ ...node, kind: "core.bool" })).toBe(false);
     expect(isToggleNode(null)).toBe(false);
     expect(defaultToggleParams()).toEqual({ value: false });
     expect(readToggleParam(node)).toBe(true);

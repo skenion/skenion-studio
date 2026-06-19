@@ -19,7 +19,7 @@ describe("nodeCardView", () => {
     expect(shaderCard.inputs[0]).toMatchObject({
       id: "speed",
       direction: "input",
-      typeLabel: "value.f32",
+      typeLabel: "value.number.float",
       metadata: {
         maxConnections: 1,
         mergePolicy: "forbid",
@@ -34,12 +34,12 @@ describe("nodeCardView", () => {
     expect(shaderCard.inputs[2]).toMatchObject({
       id: "iterations",
       direction: "input",
-      typeLabel: "value.number.i32"
+      typeLabel: "value.number.int"
     });
     expect(shaderCard.inputs[3]).toMatchObject({
       id: "tint",
       direction: "input",
-      typeLabel: "value.color.rgba"
+      typeLabel: "value.color"
     });
     expect(shaderCard.outputs).toHaveLength(1);
     expect(shaderCard.outputs[0]).toMatchObject({

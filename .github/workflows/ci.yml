@@ -31,6 +31,18 @@ jobs:
         with:
           repository: echovisionlab/skenion-examples
           path: .deps/skenion-examples
+      - name: Align cross-repo dependency branches
+        if: github.event_name == 'pull_request'
+        run: |
+          for dep in .deps/skenion-contracts .deps/skenion-examples; do
+            (
+              cd "${dep}"
+              if git ls-remote --exit-code origin "refs/heads/${GITHUB_HEAD_REF}" >/dev/null 2>&1; then
+                git fetch --depth=1 origin "${GITHUB_HEAD_REF}"
+                git checkout FETCH_HEAD
+              fi
+            )
+          done
       - uses: pnpm/action-setup@v6
         with:
           version: 10.12.4
@@ -60,6 +72,18 @@ jobs:
         with:
           repository: echovisionlab/skenion-examples
           path: .deps/skenion-examples
+      - name: Align cross-repo dependency branches
+        if: github.event_name == 'pull_request'
+        run: |
+          for dep in .deps/skenion-contracts .deps/skenion-examples; do
+            (
+              cd "${dep}"
+              if git ls-remote --exit-code origin "refs/heads/${GITHUB_HEAD_REF}" >/dev/null 2>&1; then
+                git fetch --depth=1 origin "${GITHUB_HEAD_REF}"
+                git checkout FETCH_HEAD
+              fi
+            )
+          done
       - uses: pnpm/action-setup@v6
         with:
           version: 10.12.4

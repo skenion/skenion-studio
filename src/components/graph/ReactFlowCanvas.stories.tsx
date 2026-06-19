@@ -116,7 +116,7 @@ export const InvalidConnectionDiagnostic: Story = {
       initialConnectionCheck={{
         ok: false,
         message:
-          "incompatible-edge-type: value_1.value->output_1.in connects value.f32 to render.frame without an explicit adapter."
+          "incompatible-edge-type: value_1.value->output_1.in connects value.number.float to render.frame without an explicit adapter."
       }}
       initialGraph={shaderUniformSampleGraph}
       initialViewState={shaderUniformSampleViewState}

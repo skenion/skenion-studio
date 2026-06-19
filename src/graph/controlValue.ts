@@ -1,13 +1,14 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { RuntimeControlValue } from "../runtime/types";
 import { isBoolValueNode, readBoolValueParam } from "./boolValue";
-import { isColorRgbaNode, readColorRgbaParam } from "./colorRgba";
-import { isFloatValueNode, readFloatValueParam } from "./floatValue";
-import { isIntValueNode, readIntValueParam } from "./intValue";
+import { isColorRgbaNode, readColorRepresentationParam, readColorRgbaParam, readColorSpaceParam } from "./colorRgba";
+import { isFloatValueNode, readFloatRepresentationParam, readFloatValueParam } from "./floatValue";
+import { isIntValueNode, readIntRepresentationParam, readIntValueParam } from "./intValue";
 import { isMessageNode, readMessageValueParam } from "./messageNode";
 import { runtimeControlValueForUiNode } from "./panelControls";
 import { isStringValueNode, readStringValueParam } from "./stringValue";
 import { isToggleNode, readToggleParam } from "./toggleValue";
+import { isUIntValueNode, readUIntRepresentationParam, readUIntValueParam } from "./uintValue";
 
 export function runtimeControlValueForNode(node: GraphNodeV01): RuntimeControlValue | null {
   const uiValue = runtimeControlValueForUiNode(node);
@@ -17,14 +18,23 @@ export function runtimeControlValueForNode(node: GraphNodeV01): RuntimeControlVa
 
   if (isFloatValueNode(node)) {
     return {
-      type: "f32",
+      type: "float",
+      representation: readFloatRepresentationParam(node),
       value: readFloatValueParam(node)
     };
   }
   if (isIntValueNode(node)) {
     return {
-      type: "i32",
+      type: "int",
+      representation: readIntRepresentationParam(node),
       value: readIntValueParam(node)
+    };
+  }
+  if (isUIntValueNode(node)) {
+    return {
+      type: "uint",
+      representation: readUIntRepresentationParam(node),
+      value: readUIntValueParam(node)
     };
   }
   if (isBoolValueNode(node)) {
@@ -41,7 +51,9 @@ export function runtimeControlValueForNode(node: GraphNodeV01): RuntimeControlVa
   }
   if (isColorRgbaNode(node)) {
     return {
-      type: "rgba",
+      type: "color",
+      representation: readColorRepresentationParam(node),
+      colorSpace: readColorSpaceParam(node),
       value: readColorRgbaParam(node)
     };
   }

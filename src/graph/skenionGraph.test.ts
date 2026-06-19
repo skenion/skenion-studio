@@ -28,27 +28,27 @@ import {
 
 describe("skenion graph helpers", () => {
   it("formats type and port keys", () => {
-    const type = { flow: "value", dataKind: "number.f32", format: "float32" } as const;
+    const type = { flow: "value", dataKind: "number.float", format: "float32" } as const;
 
-    expect(typeLabel(type)).toBe("value<number.f32>");
-    expect(typeKey(type)).toBe('value:number.f32:"float32"');
+    expect(typeLabel(type)).toBe("value<number.float>");
+    expect(typeKey(type)).toBe('value:number.float:"float32"');
     expect(portKey("node", "out")).toBe("node:out");
   });
 
   it("creates unique graph nodes from node definitions", () => {
-    const definition = nodeRegistry.find((candidate) => candidate.id === "core.value-f32");
+    const definition = nodeRegistry.find((candidate) => candidate.id === "core.float");
     expect(definition).toBeDefined();
 
     const first = createGraphNodeFromDefinition(definition!, []);
     const second = createGraphNodeFromDefinition(definition!, [first]);
     const skipped = createGraphNodeFromDefinition(definition!, [
-      { ...first, id: "value-f32_2" }
+      { ...first, id: "float_2" }
     ]);
     const fallback = createGraphNodeFromDefinition({ ...definition!, id: "" }, []);
 
-    expect(first.id).toBe("value-f32_1");
-    expect(second.id).toBe("value-f32_2");
-    expect(skipped.id).toBe("value-f32_3");
+    expect(first.id).toBe("float_1");
+    expect(second.id).toBe("float_2");
+    expect(skipped.id).toBe("float_3");
     expect(fallback.id).toBe("node_1");
     expect(second.ports[0]).not.toBe(definition!.ports[0]);
   });
@@ -71,38 +71,7 @@ describe("skenion graph helpers", () => {
     expect(validateGraph({}).ok).toBe(false);
   });
 
-  it("normalizes legacy f32 port data kinds without mutating imported graphs", () => {
-    const legacyGraph = {
-      ...sampleGraph,
-      nodes: sampleGraph.nodes.map((node) => ({
-        ...node,
-        ports: node.ports.map((port) =>
-          port.type.dataKind === "number.f32"
-            ? {
-                ...port,
-                type: {
-                  ...port.type,
-                  dataKind: "f32"
-                }
-              }
-            : port
-        )
-      }))
-    };
-    const normalizedGraph = normalizeLegacyGraphTypes(legacyGraph);
-
-    expect(normalizedGraph).not.toBe(legacyGraph);
-    expect(
-      normalizedGraph.nodes
-        .flatMap((node) => node.ports)
-        .filter((port) => port.type.flow === "value")
-        .map((port) => port.type.dataKind)
-    ).toEqual(["number.f32", "number.f32", "number.f32", "number.f32"]);
-    expect(
-      legacyGraph.nodes
-        .flatMap((node) => node.ports)
-        .filter((port) => port.type.dataKind === "f32")
-    ).toHaveLength(4);
+  it("does not silently normalize legacy semantic type names", () => {
     expect(normalizeLegacyGraphTypes(sampleGraph)).toBe(sampleGraph);
   });
 
@@ -210,7 +179,7 @@ describe("skenion graph helpers", () => {
           to: { node: "event_log_1", port: "bang" }
         }
       }).message
-    ).toMatch(/incompatible-edge-type: .*value\.f32.*event\.bang/);
+    ).toMatch(/incompatible-edge-type: .*value\.number\.float.*event\.bang/);
     expect(
       checkConnection(sampleGraph, {
         type: "addEdge",
@@ -230,7 +199,7 @@ describe("skenion graph helpers", () => {
       )
     ).toEqual({
       ok: true,
-      message: "value<number.f32> connected to value<number.f32>."
+      message: "value<number.float> connected to value<number.float>."
     });
     expect(
       checkConnection(
@@ -280,7 +249,7 @@ describe("skenion graph helpers", () => {
       )
     ).toEqual({
       ok: true,
-      message: "value<number.f32> connected to value<number.f32>."
+      message: "value<number.float> connected to value<number.float>."
     });
     expect(
       checkConnection(
@@ -300,7 +269,7 @@ describe("skenion graph helpers", () => {
           }
         }
       ).message
-    ).toMatch(/incompatible-edge-type: .*event\.bang.*value\.f32/);
+    ).toMatch(/incompatible-edge-type: .*event\.bang.*value\.number\.float/);
     expect(
       checkConnection(renderSampleGraph, {
         type: "addEdge",

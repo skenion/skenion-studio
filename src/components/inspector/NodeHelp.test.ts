@@ -7,9 +7,9 @@ import { NodeHelp } from "./NodeHelp";
 
 describe("NodeHelp", () => {
   it("renders builtin help summary, port docs, and param docs", () => {
-    const help = getBuiltinNodeHelp("core.value-f32");
+    const help = getBuiltinNodeHelp("core.float");
     if (!help) {
-      throw new Error("core.value-f32 help is missing");
+      throw new Error("core.float help is missing");
     }
 
     const html = renderToStaticMarkup(

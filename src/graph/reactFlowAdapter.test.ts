@@ -27,7 +27,7 @@ describe("React Flow adapter", () => {
       position: { x: 10, y: 20 },
       data: {
         label: "Float",
-        kind: "core.value-f32",
+        kind: "core.float",
         kindVersion: "0.1.0",
         primaryFlow: "value"
       }
@@ -38,7 +38,7 @@ describe("React Flow adapter", () => {
       source: "value_1",
       target: "target_1",
       type: "smoothstep",
-      label: "value.f32",
+      label: "value.number.float",
       interactionWidth: 18,
       animated: false,
       style: {

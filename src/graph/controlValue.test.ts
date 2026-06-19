@@ -4,20 +4,29 @@ import { runtimeControlValueForNode } from "./controlValue";
 
 describe("runtime control value helpers", () => {
   it("maps value node params into runtime control values", () => {
-    expect(runtimeControlValueForNode(valueNode("core.value-f32", 1.25))).toEqual({
-      type: "f32",
+    expect(runtimeControlValueForNode(valueNode("core.float", 1.25))).toEqual({
+      type: "float",
+      representation: "f32",
       value: 1.25
     });
-    expect(runtimeControlValueForNode(valueNode("core.value-i32", 32))).toEqual({
-      type: "i32",
+    expect(runtimeControlValueForNode(valueNode("core.int", 32))).toEqual({
+      type: "int",
+      representation: "i32",
       value: 32
     });
-    expect(runtimeControlValueForNode(valueNode("core.value-bool", true))).toEqual({
+    expect(runtimeControlValueForNode(valueNode("core.uint", 42))).toEqual({
+      type: "uint",
+      representation: "u32",
+      value: 42
+    });
+    expect(runtimeControlValueForNode(valueNode("core.bool", true))).toEqual({
       type: "bool",
       value: true
     });
-    expect(runtimeControlValueForNode(valueNode("core.color-rgba", [0.1, 0.2, 0.3, 1]))).toEqual({
-      type: "rgba",
+    expect(runtimeControlValueForNode(valueNode("core.color", [0.1, 0.2, 0.3, 1]))).toEqual({
+      type: "color",
+      representation: "rgba32f",
+      colorSpace: "linear",
       value: [0.1, 0.2, 0.3, 1]
     });
     expect(runtimeControlValueForNode(valueNode("core.string", "ready"))).toEqual({
@@ -28,8 +37,9 @@ describe("runtime control value helpers", () => {
       type: "bool",
       value: true
     });
-    expect(runtimeControlValueForNode(valueNode("ui.slider-f32", 0.75))).toEqual({
-      type: "f32",
+    expect(runtimeControlValueForNode(valueNode("ui.slider-float", 0.75))).toEqual({
+      type: "float",
+      representation: "f32",
       value: 0.75
     });
     expect(runtimeControlValueForNode(valueNode("ui.button", undefined))).toBeNull();

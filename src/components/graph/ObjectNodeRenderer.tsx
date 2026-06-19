@@ -2,15 +2,16 @@ import type { GraphNodeV01 } from "@skenion/contracts";
 import { useEffect, useState } from "react";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { readCommentTextParam } from "../../graph/commentNode";
-import { FLOAT_VALUE_NODE_KIND, readFloatValueParam } from "../../graph/floatValue";
-import { INT_VALUE_NODE_KIND, readIntValueParam } from "../../graph/intValue";
+import { FLOAT_VALUE_NODE_KIND, readFloatRepresentationParam, readFloatValueParam } from "../../graph/floatValue";
+import { INT_VALUE_NODE_KIND, readIntRepresentationParam, readIntValueParam } from "../../graph/intValue";
 import { BOOL_VALUE_NODE_KIND, readBoolValueParam } from "../../graph/boolValue";
-import { COLOR_RGBA_NODE_KIND, readColorRgbaParam } from "../../graph/colorRgba";
+import { COLOR_NODE_KIND, readColorRepresentationParam, readColorRgbaParam, readColorSpaceParam } from "../../graph/colorRgba";
 import { STRING_VALUE_NODE_KIND, readStringValueParam } from "../../graph/stringValue";
+import { UINT_VALUE_NODE_KIND, readUIntRepresentationParam, readUIntValueParam } from "../../graph/uintValue";
 import { MESSAGE_NODE_KIND, readMessageValueParam } from "../../graph/messageNode";
 import {
   UI_BUTTON_NODE_KIND,
-  UI_SLIDER_F32_NODE_KIND,
+  UI_SLIDER_FLOAT_NODE_KIND,
   UI_TOGGLE_NODE_KIND,
   readPanelLabelParam,
   readUiSliderParams,
@@ -137,7 +138,7 @@ export function ObjectNodeRenderer({
     );
   }
 
-  if (node.kind === UI_SLIDER_F32_NODE_KIND) {
+  if (node.kind === UI_SLIDER_FLOAT_NODE_KIND) {
     return (
       <SliderControlObject
         card={card}
@@ -170,6 +171,7 @@ export function ObjectNodeRenderer({
         ) : (
           <span className={styles.valueText}>{valueLabel(node)}</span>
         )}
+        <span className={styles.representationBadge}>{representationLabel(node)}</span>
         <RoutingBadges node={node} />
       </ObjectBox>
     );
@@ -255,7 +257,11 @@ function SliderControlObject({
             return;
           }
           setValue(nextValue);
-          onLiveControl?.(node.id, "in", controlMessageFromValue({ type: "f32", value: nextValue }));
+          onLiveControl?.(
+            node.id,
+            "in",
+            controlMessageFromValue({ type: "float", representation: "f32", value: nextValue })
+          );
         }}
         onPointerDown={(event) => event.stopPropagation()}
         step={slider.step}
@@ -340,26 +346,37 @@ function isValueObject(node: GraphNodeV01): boolean {
   return [
     FLOAT_VALUE_NODE_KIND,
     INT_VALUE_NODE_KIND,
+    UINT_VALUE_NODE_KIND,
     BOOL_VALUE_NODE_KIND,
-    COLOR_RGBA_NODE_KIND,
+    COLOR_NODE_KIND,
     STRING_VALUE_NODE_KIND
   ].includes(node.kind);
 }
 
 function valueKindLabel(node: GraphNodeV01): string {
-  if (node.kind === FLOAT_VALUE_NODE_KIND) return "f32";
-  if (node.kind === INT_VALUE_NODE_KIND) return "i32";
+  if (node.kind === FLOAT_VALUE_NODE_KIND) return "float";
+  if (node.kind === INT_VALUE_NODE_KIND) return "int";
+  if (node.kind === UINT_VALUE_NODE_KIND) return "uint";
   if (node.kind === BOOL_VALUE_NODE_KIND) return "bool";
-  if (node.kind === COLOR_RGBA_NODE_KIND) return "rgba";
+  if (node.kind === COLOR_NODE_KIND) return "color";
   return "string";
 }
 
 function valueLabel(node: GraphNodeV01): string {
   if (node.kind === FLOAT_VALUE_NODE_KIND) return formatValue(readFloatValueParam(node));
   if (node.kind === INT_VALUE_NODE_KIND) return String(readIntValueParam(node));
+  if (node.kind === UINT_VALUE_NODE_KIND) return String(readUIntValueParam(node));
   if (node.kind === BOOL_VALUE_NODE_KIND) return readBoolValueParam(node) ? "true" : "false";
-  if (node.kind === COLOR_RGBA_NODE_KIND) return readColorRgbaParam(node).map(formatValue).join(" ");
+  if (node.kind === COLOR_NODE_KIND) return readColorRgbaParam(node).map(formatValue).join(" ");
   return readStringValueParam(node) || "\"\"";
+}
+
+function representationLabel(node: GraphNodeV01): string {
+  if (node.kind === FLOAT_VALUE_NODE_KIND) return readFloatRepresentationParam(node);
+  if (node.kind === INT_VALUE_NODE_KIND) return readIntRepresentationParam(node);
+  if (node.kind === UINT_VALUE_NODE_KIND) return readUIntRepresentationParam(node);
+  if (node.kind === COLOR_NODE_KIND) return `${readColorRepresentationParam(node)} ${readColorSpaceParam(node)}`;
+  return "";
 }
 
 function formatValue(value: number): string {
@@ -392,7 +409,11 @@ function FloatValueDragObject({
           onCommit: (value) => onCommit?.(node.id, "value", value),
           onPreview: (value) => {
             setDraftValue(value);
-            onLiveControl?.(node.id, "in", controlMessageFromValue({ type: "f32", value }));
+            onLiveControl?.(
+              node.id,
+              "in",
+              controlMessageFromValue({ type: "float", representation: "f32", value })
+            );
           },
           startValue: graphValue
         })

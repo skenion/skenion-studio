@@ -8,8 +8,8 @@ import {
 
 describe("control routing graph helpers", () => {
   it("identifies object-owned routing capable nodes", () => {
-    expect(isRoutingCapableObjectNode(node("core.value-f32", {}))).toBe(true);
-    expect(isRoutingCapableObjectNode(node("ui.slider-f32", {}))).toBe(true);
+    expect(isRoutingCapableObjectNode(node("core.float", {}))).toBe(true);
+    expect(isRoutingCapableObjectNode(node("ui.slider-float", {}))).toBe(true);
     expect(isRoutingCapableObjectNode(node("core.message", {}))).toBe(true);
     expect(isRoutingCapableObjectNode(node("core.panel", {}))).toBe(true);
     expect(isRoutingCapableObjectNode(node("render.fullscreen-shader", {}))).toBe(false);
@@ -17,10 +17,10 @@ describe("control routing graph helpers", () => {
   });
 
   it("reads sendName and receiveName params without defaults", () => {
-    expect(readSendNameParam(node("core.value-f32", { sendName: "speed" }))).toBe("speed");
-    expect(readReceiveNameParam(node("core.value-f32", { receiveName: "speed" }))).toBe("speed");
-    expect(readSendNameParam(node("core.value-f32", { sendName: 1 }))).toBe("");
-    expect(readReceiveNameParam(node("core.value-f32", {}))).toBe("");
+    expect(readSendNameParam(node("core.float", { sendName: "speed" }))).toBe("speed");
+    expect(readReceiveNameParam(node("core.float", { receiveName: "speed" }))).toBe("speed");
+    expect(readSendNameParam(node("core.float", { sendName: 1 }))).toBe("");
+    expect(readReceiveNameParam(node("core.float", {}))).toBe("");
   });
 });
 

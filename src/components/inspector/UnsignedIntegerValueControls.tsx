@@ -1,31 +1,31 @@
 import { NumberInput, Select, Stack, Text } from "@mantine/core";
-import { INT_REPRESENTATIONS, type IntRepresentation } from "../../graph/intValue";
+import { UINT_REPRESENTATIONS, type UIntRepresentation } from "../../graph/uintValue";
 
-export interface IntegerValueControlsProps {
-  representation: IntRepresentation;
+export interface UnsignedIntegerValueControlsProps {
+  representation: UIntRepresentation;
   value: number;
   onChange: (value: number) => void;
-  onRepresentationChange: (representation: IntRepresentation) => void;
+  onRepresentationChange: (representation: UIntRepresentation) => void;
 }
 
-export function IntegerValueControls({
+export function UnsignedIntegerValueControls({
   onChange,
   onRepresentationChange,
   representation,
   value
-}: IntegerValueControlsProps) {
+}: UnsignedIntegerValueControlsProps) {
   return (
     <Stack gap="xs">
       <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-        Int Graph Param
+        UInt Graph Param
       </Text>
       <Select
         allowDeselect={false}
-        data={[...INT_REPRESENTATIONS]}
+        data={[...UINT_REPRESENTATIONS]}
         label="Representation"
         onChange={(nextValue) => {
-          if (nextValue && INT_REPRESENTATIONS.includes(nextValue as IntRepresentation)) {
-            onRepresentationChange(nextValue as IntRepresentation);
+          if (nextValue && UINT_REPRESENTATIONS.includes(nextValue as UIntRepresentation)) {
+            onRepresentationChange(nextValue as UIntRepresentation);
           }
         }}
         size="xs"
@@ -34,11 +34,12 @@ export function IntegerValueControls({
       <NumberInput
         allowDecimal={false}
         label="Value"
+        min={0}
         onChange={(nextValue) => {
           if (typeof nextValue !== "number" || !Number.isFinite(nextValue)) {
             return;
           }
-          onChange(Math.trunc(nextValue));
+          onChange(Math.max(0, Math.trunc(nextValue)));
         }}
         size="xs"
         step={1}

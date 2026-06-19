@@ -12,10 +12,10 @@ import type { GraphPatch } from "./skenionGraph";
 export const FULLSCREEN_SHADER_NODE_KIND = "render.fullscreen-shader";
 export const FULLSCREEN_SHADER_LANGUAGE = "wgsl";
 
-export const DEFAULT_FULLSCREEN_SHADER_SOURCE = `// @skenion.uniform speed number.f32 default=0.5 min=0 max=2 step=0.01 label="Speed"
+export const DEFAULT_FULLSCREEN_SHADER_SOURCE = `// @skenion.uniform speed number.float default=0.5 min=0 max=2 step=0.01 label="Speed"
 // @skenion.uniform enabled boolean default=true label="Enabled"
-// @skenion.uniform iterations number.i32 default=8 min=1 max=32 step=1 label="Iterations"
-// @skenion.uniform tint color.rgba default=[1,0.2,0.1,1] label="Tint"
+// @skenion.uniform iterations number.int default=8 min=1 max=32 step=1 label="Iterations"
+// @skenion.uniform tint color default=[1,0.2,0.1,1] label="Tint"
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
   let uv = skenion.resolution / max(skenion.resolution.y, 1.0);

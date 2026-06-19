@@ -532,11 +532,19 @@ function isRuntimeControlValue(value: unknown): value is RuntimeControlValue {
     return false;
   }
 
-  if (value.type === "f32") {
-    return typeof value.value === "number" && Number.isFinite(value.value);
+  if (value.type === "float") {
+    return (
+      typeof value.representation === "string" &&
+      typeof value.value === "number" &&
+      Number.isFinite(value.value)
+    );
   }
-  if (value.type === "i32") {
-    return typeof value.value === "number" && Number.isInteger(value.value);
+  if (value.type === "int" || value.type === "uint") {
+    return (
+      typeof value.representation === "string" &&
+      typeof value.value === "number" &&
+      Number.isInteger(value.value)
+    );
   }
   if (value.type === "bool") {
     return typeof value.value === "boolean";
@@ -544,8 +552,10 @@ function isRuntimeControlValue(value: unknown): value is RuntimeControlValue {
   if (value.type === "string") {
     return typeof value.value === "string";
   }
-  if (value.type === "rgba") {
+  if (value.type === "color") {
     return (
+      typeof value.representation === "string" &&
+      typeof value.colorSpace === "string" &&
       Array.isArray(value.value) &&
       value.value.length === 4 &&
       value.value.every((component) => typeof component === "number" && Number.isFinite(component))

@@ -11,7 +11,7 @@ describe("RuntimeControlValueControls", () => {
       enabled: true,
       nodeId: "value_1",
       onSend: (request) => requests.push(request),
-      value: { type: "f32", value: 1.25 }
+      value: { type: "float", representation: "f32", value: 1.25 }
     });
     const buttons = findElementsByType(element, Button);
 
@@ -21,8 +21,8 @@ describe("RuntimeControlValueControls", () => {
     buttons[2]?.props.onClick?.();
 
     expect(requests).toEqual([
-      { nodeId: "value_1", portId: "set", message: { selector: "set", atoms: [{ type: "f32", value: 1.25 }] } },
-      { nodeId: "value_1", portId: "in", message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] } },
+      { nodeId: "value_1", portId: "set", message: { selector: "set", atoms: [{ type: "float", representation: "f32", value: 1.25 }] } },
+      { nodeId: "value_1", portId: "in", message: { selector: "float", atoms: [{ type: "float", representation: "f32", value: 1.25 }] } },
       { nodeId: "value_1", portId: "bang", message: { selector: "bang", atoms: [] } }
     ]);
   });

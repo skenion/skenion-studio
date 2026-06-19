@@ -7,8 +7,10 @@ describe("FloatValueControls", () => {
   it("emits finite numeric value changes only", () => {
     const changes: number[] = [];
     const element = FloatValueControls({
+      representation: "f32",
       value: 0.2,
-      onChange: (value) => changes.push(value)
+      onChange: (value) => changes.push(value),
+      onRepresentationChange: () => undefined
     });
     const input = findElementByType(element, NumberInput);
     if (!input?.props.onChange) {

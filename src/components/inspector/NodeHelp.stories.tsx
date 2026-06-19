@@ -20,10 +20,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const ValueF32: Story = {
+export const Float: Story = {
   args: {
-    help: getRequiredHelp("core.value-f32"),
-    helpGraph: getBuiltinNodeHelpGraph("core.value-f32")
+    help: getRequiredHelp("core.float"),
+    helpGraph: getBuiltinNodeHelpGraph("core.float")
   },
   render: (args) => <NodeHelp {...args} />
 };
@@ -52,10 +52,10 @@ export const Panel: Story = {
   render: (args) => <NodeHelp {...args} />
 };
 
-export const SliderF32: Story = {
+export const SliderFloat: Story = {
   args: {
-    help: getRequiredHelp("ui.slider-f32"),
-    helpGraph: getBuiltinNodeHelpGraph("ui.slider-f32")
+    help: getRequiredHelp("ui.slider-float"),
+    helpGraph: getBuiltinNodeHelpGraph("ui.slider-float")
   },
   render: (args) => <NodeHelp {...args} />
 };

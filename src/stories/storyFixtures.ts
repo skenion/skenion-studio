@@ -20,7 +20,7 @@ export const valueOutputPort: NodePortView = {
   id: "value",
   label: "value",
   direction: "output",
-  typeLabel: "value.f32",
+  typeLabel: "value.number.float",
   color: "#495057",
   metadata: {
     rate: "control",
@@ -33,7 +33,7 @@ export const valueInputPort: NodePortView = {
   id: "amount",
   label: "amount",
   direction: "input",
-  typeLabel: "value.f32",
+  typeLabel: "value.number.float",
   color: "#495057",
   metadata: {
     rate: "control",
@@ -86,7 +86,7 @@ export const shaderColorInputPort: NodePortView = {
   ...valueInputPort,
   id: "tint",
   label: "tint",
-  typeLabel: "color.rgba",
+  typeLabel: "color",
   color: "#e64980",
   metadata: {
     ...valueInputPort.metadata,
@@ -198,9 +198,9 @@ export const targetCard: NodeCardView = {
 export const valueTransformCard: NodeCardView = {
   id: "scale_1",
   label: "Scale Value",
-  kind: "core.scale-f32",
+  kind: "core.scale-float",
   kindVersion: "0.2.0",
-  typeBadgeLabel: "value.f32",
+  typeBadgeLabel: "value.number.float",
   accentColor: "#495057",
   inputs: [valueInputPort],
   outputs: [valueOutputPort]
@@ -209,9 +209,9 @@ export const valueTransformCard: NodeCardView = {
 export const valueControlCard: NodeCardView = {
   id: "value_1",
   label: "Float Value",
-  kind: "core.value-f32",
+  kind: "core.float",
   kindVersion: "0.1.0",
-  typeBadgeLabel: "value.f32",
+  typeBadgeLabel: "value.number.float",
   accentColor: "#495057",
   inputs: [valueInPort, valueSetPort, valueBangPort],
   outputs: [valueOutputPort]
@@ -355,7 +355,8 @@ export const edgeInspectorModel: EdgeInspectorModel = {
   feedback: null,
   styleOverride: null,
   sourcePort: null,
-  targetPort: null
+  targetPort: null,
+  conversion: null
 };
 
 export const feedbackEdgeInspectorModel: EdgeInspectorModel = {

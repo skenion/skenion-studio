@@ -13,13 +13,17 @@ describe("runtime control messages", () => {
   });
 
   it("wraps typed values as selector and atom messages", () => {
-    expect(controlMessageFromValue({ type: "f32", value: 1.25 })).toEqual({
+    expect(controlMessageFromValue({ type: "float", representation: "f32", value: 1.25 })).toEqual({
       selector: "float",
-      atoms: [{ type: "f32", value: 1.25 }]
+      atoms: [{ type: "float", representation: "f32", value: 1.25 }]
     });
-    expect(controlMessageFromValue({ type: "i32", value: 7 })).toEqual({
+    expect(controlMessageFromValue({ type: "int", representation: "i32", value: 7 })).toEqual({
       selector: "int",
-      atoms: [{ type: "i32", value: 7 }]
+      atoms: [{ type: "int", representation: "i32", value: 7 }]
+    });
+    expect(controlMessageFromValue({ type: "uint", representation: "u32", value: 7 })).toEqual({
+      selector: "uint",
+      atoms: [{ type: "uint", representation: "u32", value: 7 }]
     });
     expect(controlMessageFromValue({ type: "bool", value: true })).toEqual({
       selector: "bool",
@@ -29,9 +33,9 @@ describe("runtime control messages", () => {
       selector: "symbol",
       atoms: [{ type: "string", value: "ready" }]
     });
-    expect(controlMessageFromValue({ type: "rgba", value: [1, 0.5, 0, 1] })).toEqual({
-      selector: "rgba",
-      atoms: [{ type: "rgba", value: [1, 0.5, 0, 1] }]
+    expect(controlMessageFromValue({ type: "color", representation: "rgba32f", colorSpace: "linear", value: [1, 0.5, 0, 1] })).toEqual({
+      selector: "color",
+      atoms: [{ type: "color", representation: "rgba32f", colorSpace: "linear", value: [1, 0.5, 0, 1] }]
     });
   });
 

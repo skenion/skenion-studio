@@ -10,7 +10,7 @@ describe("PanelControlInspector", () => {
     expect(sliderRuntimeRequest("node_1", 1.25)).toEqual({
       nodeId: "node_1",
       portId: "value",
-      message: { selector: "float", atoms: [{ type: "f32", value: 1.25 }] }
+      message: { selector: "float", atoms: [{ type: "float", representation: "f32", value: 1.25 }] }
     });
   });
 
@@ -25,7 +25,7 @@ describe("PanelControlInspector", () => {
   it("edits object routing names as graph params", () => {
     const patched: unknown[] = [];
     const element = RoutingNodeControls({
-      node: node("ui.slider-f32", { sendName: "speed", receiveName: "" }),
+      node: node("ui.slider-float", { sendName: "speed", receiveName: "" }),
       onSetNodeParam: (...args) => patched.push(args)
     });
     const inputs = findElementsByType(element, TextInput);

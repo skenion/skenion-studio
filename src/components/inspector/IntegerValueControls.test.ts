@@ -7,8 +7,10 @@ describe("IntegerValueControls", () => {
   it("emits truncated finite integer value changes only", () => {
     const changes: number[] = [];
     const element = IntegerValueControls({
+      representation: "i32",
       value: 12,
-      onChange: (value) => changes.push(value)
+      onChange: (value) => changes.push(value),
+      onRepresentationChange: () => undefined
     });
     const input = findElementByType(element, NumberInput);
     if (!input?.props.onChange) {

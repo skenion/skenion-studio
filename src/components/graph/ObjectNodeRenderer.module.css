@@ -216,7 +216,7 @@
 }
 
 .valueObject .content {
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   column-gap: 7px;
 }
@@ -247,6 +247,18 @@
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.representationBadge {
+  padding: 1px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 2px;
+  background: #eef2f7;
+  color: #4b5563;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: none;
   white-space: nowrap;
 }
 

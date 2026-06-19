@@ -76,29 +76,7 @@ export function validateGraph(graph: unknown): ValidationResult<GraphDocumentV01
 }
 
 export function normalizeLegacyGraphTypes(graph: GraphDocumentV01): GraphDocumentV01 {
-  let changed = false;
-  const nodes = graph.nodes.map((node) => {
-    let nodeChanged = false;
-    const ports = node.ports.map((port) => {
-      if (port.type.dataKind !== "f32") {
-        return port;
-      }
-
-      changed = true;
-      nodeChanged = true;
-      return {
-        ...port,
-        type: {
-          ...port.type,
-          dataKind: "number.f32"
-        }
-      };
-    });
-
-    return nodeChanged ? { ...node, ports } : node;
-  });
-
-  return changed ? { ...graph, nodes } : graph;
+  return graph;
 }
 
 export function toSkenionPatch(connection: Connection): GraphPatch | null {

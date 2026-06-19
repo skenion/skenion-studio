@@ -38,22 +38,22 @@ describe("port and edge semantics", () => {
       mergePolicy: "forbid",
       rate: "control",
       required: false,
-      storedType: "value<number.f32>",
-      type: "value.f32"
+      storedType: "value<number.float>",
+      type: "value.number.float"
     });
     expect(colorSemantics).toMatchObject({
       direction: "input",
-      storedType: "value<color.rgba>",
-      type: "value.color.rgba"
+      storedType: "value<color>",
+      type: "value.color"
     });
     expect(semanticTypeColor("render.frame")).toBe("#d6336c");
     expect(semanticTypeColor("gpu.texture2d")).toBe("#7048e8");
-    expect(semanticTypeColor("value.color.rgba")).toBe("#e64980");
+    expect(semanticTypeColor("value.color")).toBe("#e64980");
     expect(semanticTypeColor("event.bang")).toBe("#f08c00");
     expect(semanticTypeColor("signal.audio")).toBe("#0ca678");
     expect(semanticTypeColor("stream.video.frame")).toBe("#1c7ed6");
     expect(semanticTypeColor("resource.asset.video")).toBe("#7950f2");
-    expect(semanticTypeColor("value.f32")).toBe("#495057");
+    expect(semanticTypeColor("value.number.float")).toBe("#495057");
   });
 
   it("builds edge inspector metadata with v0.2 defaults and explicit overrides", () => {
@@ -93,6 +93,133 @@ describe("port and edge semantics", () => {
     expect(findEdgeInspectorModel(graph, null)).toBeNull();
     expect(findEdgeInspectorModel(graph, "explicit_edge")?.feedback?.boundary).toBe("render-frame");
     expect(findEdgeInspectorModel(graph, "missing")).toBeNull();
+  });
+
+  it("shows implicit numeric conversion metadata in the edge inspector", () => {
+    const graph: GraphDocumentV01 = {
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "conversion-preview",
+      revision: "1",
+      nodes: [
+        {
+          id: "float_1",
+          kind: "core.float",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "value",
+              direction: "output",
+              type: { flow: "value", dataKind: "number.float", format: "f32" }
+            }
+          ]
+        },
+        {
+          id: "uint_1",
+          kind: "core.uint",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "in",
+              direction: "input",
+              type: { flow: "value", dataKind: "number.uint", format: "u8" },
+              activation: "trigger"
+            }
+          ]
+        }
+      ],
+      edges: [{ from: { node: "float_1", port: "value" }, to: { node: "uint_1", port: "in" } }]
+    };
+
+    const conversion = edgeInspectorModel(graph, graph.edges[0]!).conversion;
+
+    expect(conversion).toMatchObject({
+      source: "number.float/f32",
+      target: "number.uint/u8",
+      lossy: true,
+      policies: ["float-to-integer clamp=saturating trunc=toward-zero sanitize=nan-inf-to-finite"]
+    });
+    expect(conversion?.diagnostics[0]).toContain("implicit-lossy-conversion");
+    expect(analyzeGraphPortSemantics(graph)).toEqual([]);
+  });
+
+  it("shows signedness and color representation conversion policies", () => {
+    const graph: GraphDocumentV01 = {
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "conversion-policy-shapes",
+      revision: "1",
+      nodes: [
+        {
+          id: "int_1",
+          kind: "core.int",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "value",
+              direction: "output",
+              type: { flow: "value", dataKind: "number.int", format: "i32" }
+            }
+          ]
+        },
+        {
+          id: "uint_1",
+          kind: "core.uint",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "in",
+              direction: "input",
+              type: { flow: "value", dataKind: "number.uint", format: "u8" },
+              activation: "trigger"
+            }
+          ]
+        },
+        {
+          id: "color_1",
+          kind: "core.color",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "value",
+              direction: "output",
+              type: { flow: "value", dataKind: "color", format: "rgba32f" }
+            }
+          ]
+        },
+        {
+          id: "color_target_1",
+          kind: "core.color-target",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "in",
+              direction: "input",
+              type: { flow: "value", dataKind: "color", format: "rgba8unorm" },
+              activation: "trigger"
+            }
+          ]
+        }
+      ],
+      edges: [
+        { from: { node: "int_1", port: "value" }, to: { node: "uint_1", port: "in" } },
+        { from: { node: "color_1", port: "value" }, to: { node: "color_target_1", port: "in" } }
+      ]
+    };
+
+    expect(edgeInspectorModel(graph, graph.edges[0]!).conversion?.policies).toEqual([
+      "integer-signedness clamp=saturating"
+    ]);
+    expect(edgeInspectorModel(graph, graph.edges[1]!).conversion?.policies).toEqual([
+      "color-cast clamp=unit quantize sanitize=nan-inf-to-finite"
+    ]);
+    expect(analyzeGraphPortSemantics(graph)).toEqual([]);
   });
 
   it("reports fan-in and type diagnostics without mutating graph documents", () => {
@@ -189,13 +316,13 @@ function twoNodeValueCycle(): GraphDocumentV01 {
     {
       id: "in",
       direction: "input",
-      type: { flow: "value", dataKind: "number.f32" },
+      type: { flow: "value", dataKind: "number.float" },
       activation: "latched"
     },
     {
       id: "out",
       direction: "output",
-      type: { flow: "value", dataKind: "number.f32" }
+      type: { flow: "value", dataKind: "number.float" }
     }
   ];
 

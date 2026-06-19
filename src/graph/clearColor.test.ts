@@ -15,18 +15,24 @@ describe("clear color graph helpers", () => {
     const node = clearNode([0.05, 0.08, 0.12, 1]);
 
     expect(isClearColorNode(node)).toBe(true);
-    expect(isClearColorNode({ ...node, kind: "core.value-f32" })).toBe(false);
+    expect(isClearColorNode({ ...node, kind: "core.float" })).toBe(false);
     expect(isClearColorNode(null)).toBe(false);
     expect(defaultParamsForNodeKind(CLEAR_COLOR_NODE_KIND)).toEqual({
       color: [...DEFAULT_CLEAR_COLOR]
     });
-    expect(defaultParamsForNodeKind("core.value-f32")).toEqual({
+    expect(defaultParamsForNodeKind("core.float")).toEqual({
+      representation: "f32",
       value: 0.5
     });
-    expect(defaultParamsForNodeKind("core.value-i32")).toEqual({
+    expect(defaultParamsForNodeKind("core.int")).toEqual({
+      representation: "i32",
       value: 0
     });
-    expect(defaultParamsForNodeKind("core.value-bool")).toEqual({
+    expect(defaultParamsForNodeKind("core.uint")).toEqual({
+      representation: "u32",
+      value: 0
+    });
+    expect(defaultParamsForNodeKind("core.bool")).toEqual({
       value: false
     });
     expect(defaultParamsForNodeKind("core.string")).toEqual({
@@ -45,7 +51,7 @@ describe("clear color graph helpers", () => {
       color: "transparent",
       label: "Panel"
     });
-    expect(defaultParamsForNodeKind("ui.slider-f32")).toEqual({
+    expect(defaultParamsForNodeKind("ui.slider-float")).toEqual({
       label: "Value",
       value: 0,
       min: 0,

@@ -2,7 +2,7 @@ import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
 import { BOOL_VALUE_NODE_KIND, defaultBoolValueParams } from "./boolValue";
 import { COMMENT_NODE_KIND, defaultCommentParams } from "./commentNode";
-import { COLOR_RGBA_NODE_KIND, defaultColorRgbaParams } from "./colorRgba";
+import { COLOR_NODE_KIND, defaultColorRgbaParams } from "./colorRgba";
 import { FLOAT_VALUE_NODE_KIND, defaultFloatValueParams } from "./floatValue";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "./fullscreenShader";
 import { INT_VALUE_NODE_KIND, defaultIntValueParams } from "./intValue";
@@ -10,14 +10,15 @@ import { MESSAGE_NODE_KIND, defaultMessageParams } from "./messageNode";
 import { PANEL_NODE_KIND, defaultPanelParams } from "./panelNode";
 import {
   UI_BUTTON_NODE_KIND,
-  UI_SLIDER_F32_NODE_KIND,
+  UI_SLIDER_FLOAT_NODE_KIND,
   UI_TOGGLE_NODE_KIND,
   defaultUiButtonParams,
-  defaultUiSliderF32Params,
+  defaultUiSliderFloatParams,
   defaultUiToggleParams
 } from "./panelControls";
 import { STRING_VALUE_NODE_KIND, defaultStringValueParams } from "./stringValue";
 import { TOGGLE_NODE_KIND, defaultToggleParams } from "./toggleValue";
+import { UINT_VALUE_NODE_KIND, defaultUIntValueParams } from "./uintValue";
 import { VIDEO_ASSET_NODE_KIND, defaultVideoAssetParams } from "./videoAsset";
 
 export const CLEAR_COLOR_NODE_KIND = "render.clear-color";
@@ -43,10 +44,13 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   if (kind === INT_VALUE_NODE_KIND) {
     return defaultIntValueParams();
   }
+  if (kind === UINT_VALUE_NODE_KIND) {
+    return defaultUIntValueParams();
+  }
   if (kind === BOOL_VALUE_NODE_KIND) {
     return defaultBoolValueParams();
   }
-  if (kind === COLOR_RGBA_NODE_KIND) {
+  if (kind === COLOR_NODE_KIND) {
     return defaultColorRgbaParams();
   }
   if (kind === STRING_VALUE_NODE_KIND) {
@@ -70,8 +74,8 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   if (kind === UI_BUTTON_NODE_KIND) {
     return defaultUiButtonParams();
   }
-  if (kind === UI_SLIDER_F32_NODE_KIND) {
-    return defaultUiSliderF32Params();
+  if (kind === UI_SLIDER_FLOAT_NODE_KIND) {
+    return defaultUiSliderFloatParams();
   }
   if (kind === UI_TOGGLE_NODE_KIND) {
     return defaultUiToggleParams();

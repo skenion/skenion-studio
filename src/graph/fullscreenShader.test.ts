@@ -71,10 +71,10 @@ describe("fullscreen shader graph helpers", () => {
 
     expect(analysis.ok).toBe(true);
     expect(analysis.shaderInterface.uniforms.map((uniform) => [uniform.id, uniform.type.dataKind])).toEqual([
-      ["speed", "number.f32"],
+      ["speed", "number.float"],
       ["enabled", "boolean"],
-      ["iterations", "number.i32"],
-      ["tint", "color.rgba"]
+      ["iterations", "number.int"],
+      ["tint", "color"]
     ]);
     expect(ports.map((port) => port.id)).toEqual(["speed", "enabled", "iterations", "tint", "out"]);
     expect(patch).toMatchObject({
@@ -87,7 +87,7 @@ describe("fullscreen shader graph helpers", () => {
   });
 
   it("falls back to output-only ports when shader analysis fails", () => {
-    const source = "// @skenion.uniform out number.f32\n@fragment\nfn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }";
+    const source = "// @skenion.uniform out number.float\n@fragment\nfn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }";
     const analysis = analyzeFullscreenShaderInterface(source);
 
     expect(analysis.ok).toBe(false);

@@ -6,7 +6,7 @@ import type { RuntimeControlEventRequest } from "../../runtime/types";
 import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
 import {
   isUiButtonNode,
-  isUiSliderF32Node,
+  isUiSliderFloatNode,
   isUiToggleNode,
   readPanelLabelParam,
   readUiSliderParams,
@@ -28,7 +28,7 @@ export function PanelControlInspector({
   onSend,
   onSetNodeParam
 }: PanelControlInspectorProps) {
-  if (!isUiButtonNode(node) && !isUiSliderF32Node(node) && !isUiToggleNode(node)) {
+  if (!isUiButtonNode(node) && !isUiSliderFloatNode(node) && !isUiToggleNode(node)) {
     return null;
   }
 
@@ -44,7 +44,7 @@ export function PanelControlInspector({
           size="xs"
           value={readPanelLabelParam(node)}
         />
-        {isUiSliderF32Node(node) ? <SliderGraphParams node={node} onSetNodeParam={onSetNodeParam} /> : null}
+        {isUiSliderFloatNode(node) ? <SliderGraphParams node={node} onSetNodeParam={onSetNodeParam} /> : null}
         {isUiToggleNode(node) ? (
           <Switch
             checked={readUiToggleValue(node)}
@@ -68,7 +68,7 @@ export function PanelControlInspector({
           Bang
         </Button>
       ) : null}
-      {isUiSliderF32Node(node) ? (
+      {isUiSliderFloatNode(node) ? (
         <RuntimeSlider node={node} busy={busy} enabled={enabled} onSend={onSend} />
       ) : null}
       {isUiToggleNode(node) ? (
@@ -185,7 +185,8 @@ export function sliderRuntimeRequest(nodeId: string, value: number): RuntimeCont
     nodeId,
     portId: "value",
     message: controlMessageFromValue({
-      type: "f32",
+      type: "float",
+      representation: "f32",
       value
     })
   };

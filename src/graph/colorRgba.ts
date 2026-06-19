@@ -1,24 +1,32 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
 
-export const COLOR_RGBA_NODE_KIND = "core.color-rgba";
-export const DEFAULT_COLOR_RGBA = [1, 1, 1, 1] as const;
+export const COLOR_NODE_KIND = "core.color";
+export const DEFAULT_COLOR_VALUE = [1, 1, 1, 1] as const;
+export const COLOR_REPRESENTATIONS = ["rgba32f", "rgba16f", "rgba8unorm", "rgb8unorm"] as const;
+export type ColorRepresentation = (typeof COLOR_REPRESENTATIONS)[number];
+export const DEFAULT_COLOR_REPRESENTATION: ColorRepresentation = "rgba32f";
+export const COLOR_SPACES = ["linear", "srgb"] as const;
+export type ColorSpace = (typeof COLOR_SPACES)[number];
+export const DEFAULT_COLOR_SPACE: ColorSpace = "linear";
 export type RgbaColor = [number, number, number, number];
 
 export function isColorRgbaNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
-  return node?.kind === COLOR_RGBA_NODE_KIND;
+  return node?.kind === COLOR_NODE_KIND;
 }
 
 export function defaultColorRgbaParams(): Record<string, unknown> {
   return {
-    value: [...DEFAULT_COLOR_RGBA]
+    colorSpace: DEFAULT_COLOR_SPACE,
+    representation: DEFAULT_COLOR_REPRESENTATION,
+    value: [...DEFAULT_COLOR_VALUE]
   };
 }
 
 export function readColorRgbaParam(node: GraphNodeV01): RgbaColor {
   const color = node.params.value;
   if (!Array.isArray(color) || color.length !== 4) {
-    return [...DEFAULT_COLOR_RGBA];
+    return [...DEFAULT_COLOR_VALUE];
   }
 
   const values = color.map((component) =>
@@ -27,10 +35,22 @@ export function readColorRgbaParam(node: GraphNodeV01): RgbaColor {
       : null
   );
   if (values.some((component) => component === null)) {
-    return [...DEFAULT_COLOR_RGBA];
+    return [...DEFAULT_COLOR_VALUE];
   }
 
   return values as RgbaColor;
+}
+
+export function readColorRepresentationParam(node: GraphNodeV01): ColorRepresentation {
+  return COLOR_REPRESENTATIONS.includes(node.params.representation as ColorRepresentation)
+    ? node.params.representation as ColorRepresentation
+    : DEFAULT_COLOR_REPRESENTATION;
+}
+
+export function readColorSpaceParam(node: GraphNodeV01): ColorSpace {
+  return COLOR_SPACES.includes(node.params.colorSpace as ColorSpace)
+    ? node.params.colorSpace as ColorSpace
+    : DEFAULT_COLOR_SPACE;
 }
 
 export function setColorRgbaParamPatch(nodeId: string, color: RgbaColor): GraphPatch {

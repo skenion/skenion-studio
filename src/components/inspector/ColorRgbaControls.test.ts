@@ -8,7 +8,11 @@ describe("ColorRgbaControls", () => {
     const changes: unknown[] = [];
     const element = ColorRgbaControls({
       color: [0.1, 0.2, 0.3, 1],
-      onChange: (color) => changes.push(color)
+      colorSpace: "linear",
+      representation: "rgba32f",
+      onChange: (color) => changes.push(color),
+      onColorSpaceChange: () => undefined,
+      onRepresentationChange: () => undefined
     });
     const inputs = findElementsByType(element, NumberInput);
 

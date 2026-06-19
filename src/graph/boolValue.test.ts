@@ -14,7 +14,7 @@ describe("boolean value graph helpers", () => {
     const node = boolNode(true);
 
     expect(isBoolValueNode(node)).toBe(true);
-    expect(isBoolValueNode({ ...node, kind: "core.value-f32" })).toBe(false);
+    expect(isBoolValueNode({ ...node, kind: "core.float" })).toBe(false);
     expect(isBoolValueNode(null)).toBe(false);
     expect(defaultBoolValueParams()).toEqual({ value: DEFAULT_BOOL_VALUE });
   });

@@ -1,7 +1,7 @@
 import { builtinNodeDefinitionsV01 } from "@skenion/contracts";
 import { describe, expect, it } from "vitest";
 import { CLEAR_COLOR_NODE_KIND } from "../graph/clearColor";
-import { COLOR_RGBA_NODE_KIND } from "../graph/colorRgba";
+import { COLOR_NODE_KIND } from "../graph/colorRgba";
 import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "../graph/fullscreenShader";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
@@ -30,8 +30,8 @@ describe("node registry", () => {
     expect(findStudioDefinition(CLEAR_COLOR_NODE_KIND)?.ports).toEqual(
       findContractsDefinition(CLEAR_COLOR_NODE_KIND)?.ports
     );
-    expect(findStudioDefinition(COLOR_RGBA_NODE_KIND)?.ports).toEqual(
-      findContractsDefinition(COLOR_RGBA_NODE_KIND)?.ports
+    expect(findStudioDefinition(COLOR_NODE_KIND)?.ports).toEqual(
+      findContractsDefinition(COLOR_NODE_KIND)?.ports
     );
   });
 
@@ -39,30 +39,30 @@ describe("node registry", () => {
     expect(findDataKinds(nodeRegistry)).not.toContain("f32");
     expect(shaderUniformSampleGraph.nodes.find((node) => node.id === "shader_1")?.ports.find((port) => port.id === "speed")?.type).toMatchObject({
       flow: "value",
-      dataKind: "number.f32"
+      dataKind: "number.float"
     });
   });
 
   it("exposes typed value node control ports", () => {
-    expect(findStudioDefinition("core.value-f32")?.ports.map((port) => port.id)).toEqual([
+    expect(findStudioDefinition("core.float")?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",
       "bang",
       "value"
     ]);
-    expect(findStudioDefinition("core.value-i32")?.ports.map((port) => port.id)).toEqual([
+    expect(findStudioDefinition("core.int")?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",
       "bang",
       "value"
     ]);
-    expect(findStudioDefinition("core.value-bool")?.ports.map((port) => port.id)).toEqual([
+    expect(findStudioDefinition("core.bool")?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",
       "bang",
       "value"
     ]);
-    expect(findStudioDefinition(COLOR_RGBA_NODE_KIND)?.ports.map((port) => port.id)).toEqual([
+    expect(findStudioDefinition(COLOR_NODE_KIND)?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",
       "bang",
@@ -87,7 +87,7 @@ describe("node registry", () => {
       "value"
     ]);
     expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual([]);
-    expect(findStudioDefinition("ui.slider-f32")?.ports.map((port) => port.id)).toEqual([
+    expect(findStudioDefinition("ui.slider-float")?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",
       "bang",
@@ -124,11 +124,11 @@ describe("node registry", () => {
       .find((node) => node.id === "shader_1")
       ?.ports.find((port) => port.id === "tint");
 
-    expect(valuePort?.type.dataKind).toBe("number.f32");
-    expect(uniformPort?.type.dataKind).toBe("number.f32");
-    expect(secondUniformPort?.type.dataKind).toBe("number.f32");
-    expect(colorPort?.type.dataKind).toBe("color.rgba");
-    expect(colorUniformPort?.type.dataKind).toBe("color.rgba");
+    expect(valuePort?.type.dataKind).toBe("number.float");
+    expect(uniformPort?.type.dataKind).toBe("number.float");
+    expect(secondUniformPort?.type.dataKind).toBe("number.float");
+    expect(colorPort?.type.dataKind).toBe("color");
+    expect(colorUniformPort?.type.dataKind).toBe("color");
     expect(
       findDataKinds([
         renderSampleGraph,

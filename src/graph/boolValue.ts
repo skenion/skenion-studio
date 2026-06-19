@@ -1,7 +1,7 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
 
-export const BOOL_VALUE_NODE_KIND = "core.value-bool";
+export const BOOL_VALUE_NODE_KIND = "core.bool";
 export const DEFAULT_BOOL_VALUE = false;
 
 export function isBoolValueNode(node: GraphNodeV01 | null): node is GraphNodeV01 {

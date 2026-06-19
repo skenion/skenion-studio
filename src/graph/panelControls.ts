@@ -2,15 +2,15 @@ import type { GraphNodeV01 } from "@skenion/contracts";
 import type { RuntimeControlValue } from "../runtime/types";
 
 export const UI_BUTTON_NODE_KIND = "ui.button";
-export const UI_SLIDER_F32_NODE_KIND = "ui.slider-f32";
+export const UI_SLIDER_FLOAT_NODE_KIND = "ui.slider-float";
 export const UI_TOGGLE_NODE_KIND = "ui.toggle";
 
 export function isUiButtonNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
   return node?.kind === UI_BUTTON_NODE_KIND;
 }
 
-export function isUiSliderF32Node(node: GraphNodeV01 | null): node is GraphNodeV01 {
-  return node?.kind === UI_SLIDER_F32_NODE_KIND;
+export function isUiSliderFloatNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+  return node?.kind === UI_SLIDER_FLOAT_NODE_KIND;
 }
 
 export function isUiToggleNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
@@ -23,7 +23,7 @@ export function defaultUiButtonParams(): Record<string, unknown> {
   };
 }
 
-export function defaultUiSliderF32Params(): Record<string, unknown> {
+export function defaultUiSliderFloatParams(): Record<string, unknown> {
   return {
     label: "Value",
     value: 0,
@@ -65,9 +65,10 @@ export function readUiToggleValue(node: GraphNodeV01): boolean {
 }
 
 export function runtimeControlValueForUiNode(node: GraphNodeV01): RuntimeControlValue | null {
-  if (isUiSliderF32Node(node)) {
+  if (isUiSliderFloatNode(node)) {
     return {
-      type: "f32",
+      type: "float",
+      representation: "f32",
       value: readUiSliderParams(node).value
     };
   }

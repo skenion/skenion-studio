@@ -531,8 +531,8 @@ function ReactFlowContextMenu({
           <button onClick={() => onAddNode("core.message")} type="button">Add Message</button>
           <button onClick={() => onAddNode("ui.button")} type="button">Add Bang</button>
           <button onClick={() => onAddNode("ui.toggle")} type="button">Add Toggle</button>
-          <button onClick={() => onAddNode("ui.slider-f32")} type="button">Add Slider</button>
-          <button onClick={() => onAddNode("core.value-f32")} type="button">Add F32</button>
+          <button onClick={() => onAddNode("ui.slider-float")} type="button">Add Slider</button>
+          <button onClick={() => onAddNode("core.float")} type="button">Add Float</button>
           <button onClick={() => onAddNode("core.video-asset")} type="button">Add Video Asset</button>
           <button onClick={() => { fitView({ padding: 0.2 }); onClose(); }} type="button">Fit View</button>
         </>

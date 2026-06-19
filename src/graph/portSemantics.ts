@@ -1,4 +1,5 @@
-import type { DataTypeV01, EdgeV01, GraphDocumentV01, GraphNodeV01, PortV01 } from "@skenion/contracts";
+import { planConversion } from "@skenion/contracts";
+import type { ConversionPlanV01, DataTypeV01, EdgeV01, GraphDocumentV01, GraphNodeV01, PortV01 } from "@skenion/contracts";
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
 export type MergePolicyV02 = "forbid" | "ordered-events" | "mix" | "array" | "latest" | "first" | "custom";
@@ -39,6 +40,15 @@ export interface EdgeInspectorModel {
   styleOverride: string | null;
   sourcePort: PortSemanticsV02 | null;
   targetPort: PortSemanticsV02 | null;
+  conversion: EdgeConversionPreview | null;
+}
+
+export interface EdgeConversionPreview {
+  source: string;
+  target: string;
+  lossy: boolean;
+  policies: string[];
+  diagnostics: string[];
 }
 
 export interface GraphSemanticDiagnostic {
@@ -101,7 +111,7 @@ export function semanticTypeColor(type: string): string {
   if (type === "gpu.texture2d") {
     return "#7048e8";
   }
-  if (type === "value.color.rgba") {
+  if (type === "value.color") {
     return "#e64980";
   }
   if (type.startsWith("event.")) {
@@ -132,6 +142,7 @@ export function edgeInspectorModel(graph: GraphDocumentV01, edge: EdgeV01): Edge
   const targetPort = targetNode?.ports.find((port) => port.id === edge.to.port);
   const sourceSemantics = sourceNode && sourcePort ? portSemanticsForPort(sourceNode, sourcePort) : null;
   const targetSemantics = targetNode && targetPort ? portSemanticsForPort(targetNode, targetPort) : null;
+  const conversion = sourcePort && targetPort ? conversionPreview(planConversion(sourcePort.type, targetPort.type)) : null;
 
   return {
     id: edgeId(edge),
@@ -144,7 +155,8 @@ export function edgeInspectorModel(graph: GraphDocumentV01, edge: EdgeV01): Edge
     feedback: extras.feedback ?? null,
     styleOverride: extras.styleOverride ?? null,
     sourcePort: sourceSemantics,
-    targetPort: targetSemantics
+    targetPort: targetSemantics,
+    conversion
   };
 }
 
@@ -190,7 +202,8 @@ export function analyzeGraphPortSemantics(graph: GraphDocumentV01): GraphSemanti
 
     const sourceSemantics = portSemanticsForPort(source.node, source.port);
     const targetSemantics = portSemanticsForPort(target.node, target.port);
-    if (!typesCompatible(sourceSemantics.type, targetSemantics.type)) {
+    const conversion = planConversion(source.port.type, target.port.type);
+    if (!conversion.ok) {
       diagnostics.push({
         severity: "error",
         code: "incompatible-edge-type",
@@ -276,9 +289,6 @@ function artistFacingType(node: GraphNodeV01, port: PortV01): string {
   if (port.type.dataKind === "gpu.texture2d") {
     return "gpu.texture2d";
   }
-  if (port.type.flow === "value" && port.type.dataKind === "number.f32") {
-    return "value.f32";
-  }
   if (port.type.flow === "event" && port.type.dataKind === "event.bang") {
     return "event.bang";
   }
@@ -302,12 +312,27 @@ function defaultRate(type: string, port: PortV01): string {
   return port.type.flow;
 }
 
-function typesCompatible(sourceType: string, targetType: string): boolean {
-  return sourceType === targetType;
-}
-
 function storedTypeLabel(type: DataTypeV01): string {
   return `${type.flow}<${type.dataKind}>`;
+}
+
+function conversionPreview(plan: ConversionPlanV01): EdgeConversionPreview | null {
+  if (!plan.ok || plan.steps.every((step) => step.policy === "identity")) {
+    return null;
+  }
+  return {
+    source: `${plan.source.dataKind}/${plan.source.representation}`,
+    target: `${plan.target.dataKind}/${plan.target.representation}`,
+    lossy: plan.lossy,
+    policies: plan.steps.map((step) => [
+      step.policy,
+      `clamp=${step.clamp}`,
+      step.trunc ? `trunc=${step.trunc}` : null,
+      step.quantize ? "quantize" : null,
+      step.sanitize ? `sanitize=${step.sanitize}` : null
+    ].filter(Boolean).join(" ")),
+    diagnostics: plan.diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+  };
 }
 
 function findDirectedCycles(graph: GraphDocumentV01): EdgeV01[][] {

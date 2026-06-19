@@ -65,8 +65,8 @@ const captures = [
     waitFor: ".mantine-Alert-root"
   },
   {
-    name: "help-panel-value-f32",
-    id: "help-nodehelp--value-f-32",
+    name: "help-panel-float",
+    id: "help-nodehelp--float",
     waitFor: ".help-graph-viewer"
   },
   {

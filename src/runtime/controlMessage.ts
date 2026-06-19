@@ -24,17 +24,20 @@ export function firstControlAtom(message: RuntimeControlMessage): RuntimeControl
 }
 
 function selectorForControlValue(value: RuntimeControlValue): string {
-  if (value.type === "f32") {
+  if (value.type === "float") {
     return "float";
   }
-  if (value.type === "i32") {
+  if (value.type === "int") {
     return "int";
+  }
+  if (value.type === "uint") {
+    return "uint";
   }
   if (value.type === "bool") {
     return "bool";
   }
-  if (value.type === "rgba") {
-    return "rgba";
+  if (value.type === "color") {
+    return "color";
   }
   return "symbol";
 }

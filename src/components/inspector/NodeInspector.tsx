@@ -18,6 +18,7 @@ import { PortTable } from "./PortTable";
 import { RoutingNodeControls } from "./RoutingNodeControls";
 import { RuntimeControlValueControls } from "./RuntimeControlValueControls";
 import { StringValueControls } from "./StringValueControls";
+import { UnsignedIntegerValueControls } from "./UnsignedIntegerValueControls";
 import {
   isBoolValueNode,
   readBoolValueParam
@@ -28,7 +29,9 @@ import {
 } from "../../graph/clearColor";
 import {
   isColorRgbaNode,
-  readColorRgbaParam
+  readColorRepresentationParam,
+  readColorRgbaParam,
+  readColorSpaceParam
 } from "../../graph/colorRgba";
 import {
   isCommentNode,
@@ -37,6 +40,7 @@ import {
 import { runtimeControlValueForNode } from "../../graph/controlValue";
 import {
   isFloatValueNode,
+  readFloatRepresentationParam,
   readFloatValueParam
 } from "../../graph/floatValue";
 import {
@@ -49,8 +53,14 @@ import {
 } from "../../graph/fullscreenShader";
 import {
   isIntValueNode,
+  readIntRepresentationParam,
   readIntValueParam
 } from "../../graph/intValue";
+import {
+  isUIntValueNode,
+  readUIntRepresentationParam,
+  readUIntValueParam
+} from "../../graph/uintValue";
 import {
   isMessageNode,
   readMessageValueParam
@@ -65,7 +75,7 @@ import {
 } from "../../graph/toggleValue";
 import {
   isUiButtonNode,
-  isUiSliderF32Node,
+  isUiSliderFloatNode,
   isUiToggleNode
 } from "../../graph/panelControls";
 import { isVideoAssetNode } from "../../graph/videoAsset";
@@ -107,14 +117,20 @@ export function NodeInspector({
   const clearColor = isClearColorNode(node) ? readClearColorParam(node) : null;
   const commentText = isCommentNode(node) ? readCommentTextParam(node) : null;
   const colorRgba = isColorRgbaNode(node) ? readColorRgbaParam(node) : null;
+  const colorRepresentation = isColorRgbaNode(node) ? readColorRepresentationParam(node) : null;
+  const colorSpace = isColorRgbaNode(node) ? readColorSpaceParam(node) : null;
   const floatValue = isFloatValueNode(node) ? readFloatValueParam(node) : null;
+  const floatRepresentation = isFloatValueNode(node) ? readFloatRepresentationParam(node) : null;
   const intValue = isIntValueNode(node) ? readIntValueParam(node) : null;
+  const intRepresentation = isIntValueNode(node) ? readIntRepresentationParam(node) : null;
+  const uintValue = isUIntValueNode(node) ? readUIntValueParam(node) : null;
+  const uintRepresentation = isUIntValueNode(node) ? readUIntRepresentationParam(node) : null;
   const boolValue = isBoolValueNode(node) ? readBoolValueParam(node) : null;
   const stringValue = isStringValueNode(node) ? readStringValueParam(node) : null;
   const toggleValue = isToggleNode(node) ? readToggleParam(node) : null;
   const messageValue = isMessageNode(node) ? readMessageValueParam(node) : null;
   const isAssetNode = isVideoAssetNode(node);
-  const isPanelControl = isUiButtonNode(node) || isUiSliderF32Node(node) || isUiToggleNode(node);
+  const isPanelControl = isUiButtonNode(node) || isUiSliderFloatNode(node) || isUiToggleNode(node);
   const runtimeControlValue = isPanelControl ? null : runtimeControlValueForNode(node);
   const runtimeControlPorts = runtimeControlPortsForNode(node);
   const shaderSource = isFullscreenShaderNode(node) ? readShaderSourceParam(node) : null;
@@ -214,6 +230,8 @@ export function NodeInspector({
           <Divider />
           <FloatValueControls
             onChange={(value) => onSetNodeParam(node.id, "value", value)}
+            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+            representation={floatRepresentation!}
             value={floatValue}
           />
         </>
@@ -224,7 +242,21 @@ export function NodeInspector({
           <Divider />
           <IntegerValueControls
             onChange={(value) => onSetNodeParam(node.id, "value", value)}
+            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+            representation={intRepresentation!}
             value={intValue}
+          />
+        </>
+      ) : null}
+
+      {uintValue !== null ? (
+        <>
+          <Divider />
+          <UnsignedIntegerValueControls
+            onChange={(value) => onSetNodeParam(node.id, "value", value)}
+            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+            representation={uintRepresentation!}
+            value={uintValue}
           />
         </>
       ) : null}
@@ -287,7 +319,11 @@ export function NodeInspector({
           <Divider />
           <ColorRgbaControls
             color={colorRgba}
+            colorSpace={colorSpace!}
             onChange={(color) => onSetNodeParam(node.id, "value", color)}
+            onColorSpaceChange={(nextColorSpace) => onSetNodeParam(node.id, "colorSpace", nextColorSpace)}
+            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+            representation={colorRepresentation!}
           />
         </>
       ) : null}

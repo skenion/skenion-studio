@@ -23,7 +23,7 @@ type Story = StoryObj<typeof meta>;
 
 export const ValueBangSet: Story = {
   args: {
-    graph: getRequiredHelpGraph("core.value-f32")
+    graph: getRequiredHelpGraph("core.float")
   },
   render: (args) => <HelpGraphViewer {...args} />
 };

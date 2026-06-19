@@ -29,9 +29,9 @@ function node(kind: string, id: string, label: string, params: Record<string, un
   };
 }
 
-export const MULTI_UNIFORM_SHADER_SOURCE = `// @skenion.uniform speed number.f32 default=0.25 min=0 max=2 step=0.01 label="Speed"
-// @skenion.uniform phase number.f32 default=0.65 min=0 max=1 step=0.01 label="Phase"
-// @skenion.uniform tint color.rgba default=[0.95,0.25,0.12,1] label="Tint"
+export const MULTI_UNIFORM_SHADER_SOURCE = `// @skenion.uniform speed number.float default=0.25 min=0 max=2 step=0.01 label="Speed"
+// @skenion.uniform phase number.float default=0.65 min=0 max=1 step=0.01 label="Phase"
+// @skenion.uniform tint color default=[0.95,0.25,0.12,1] label="Tint"
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
   let pulse = 0.5 + 0.5 * sin(skenion.time * (1.0 + skenion.speed * 2.0) + skenion.phase * 6.28318);
@@ -39,7 +39,7 @@ fn fs_main() -> @location(0) vec4<f32> {
   return vec4<f32>(mix(base, skenion.tint.rgb, 0.5), skenion.tint.a);
 }`;
 
-export const OBJECT_ROUTING_PANEL_SHADER_SOURCE = `// @skenion.uniform speed number.f32 default=0.75 min=0 max=2 step=0.01
+export const OBJECT_ROUTING_PANEL_SHADER_SOURCE = `// @skenion.uniform speed number.float default=0.75 min=0 max=2 step=0.01
 // @skenion.uniform enabled boolean default=true
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
@@ -54,7 +54,7 @@ export const sampleGraph: GraphDocumentV01 = {
   id: "studio-sample",
   revision: "1",
   nodes: [
-    node("core.value-f32", "value_1", "Float"),
+    node("core.float", "value_1", "Float"),
     node("core.target", "target_1", "Target"),
     node("core.bang-button", "bang_1", "Trigger"),
     node("core.event-log", "event_log_1", "Log"),
@@ -146,7 +146,7 @@ export const shaderUniformSampleGraph: GraphDocumentV01 = {
   id: "studio-shader-uniform-sample",
   revision: "1",
   nodes: [
-    node("core.value-f32", "value_1", "speed", { value: 0.2 }),
+    node("core.float", "value_1", "speed", { value: 0.2 }),
     node("render.fullscreen-shader", "shader_1", "Fullscreen Shader"),
     node("render.output", "output_1", "Preview Output")
   ],
@@ -190,9 +190,9 @@ export const shaderMultiUniformSampleGraph: GraphDocumentV01 = {
   id: "studio-shader-multi-uniform-sample",
   revision: "1",
   nodes: [
-    node("core.value-f32", "value_1", "speed", { value: 0.25 }),
-    node("core.value-f32", "value_2", "phase", { value: 0.65 }),
-    node("core.color-rgba", "color_1", "tint", { value: [0.95, 0.25, 0.12, 1] }),
+    node("core.float", "value_1", "speed", { value: 0.25 }),
+    node("core.float", "value_2", "phase", { value: 0.65 }),
+    node("core.color", "color_1", "tint", { value: [0.95, 0.25, 0.12, 1] }),
     node("render.fullscreen-shader", "shader_1", "Fullscreen Shader", {
       source: MULTI_UNIFORM_SHADER_SOURCE
     }),
@@ -260,7 +260,7 @@ export const objectRoutingPanelSampleGraph: GraphDocumentV01 = {
   id: "studio-object-routing-panel-sample",
   revision: "1",
   nodes: [
-    node("ui.slider-f32", "slider_speed", "Speed", {
+    node("ui.slider-float", "slider_speed", "Speed", {
       value: 0.75,
       min: 0,
       max: 2,
@@ -346,7 +346,7 @@ export const objectVisualSampleGraph: GraphDocumentV01 = {
       label: "Enabled",
       value: true
     }),
-    node("ui.slider-f32", "slider_1", "Slider", {
+    node("ui.slider-float", "slider_1", "Slider", {
       label: "Speed",
       value: 0.65,
       min: 0,
@@ -354,7 +354,7 @@ export const objectVisualSampleGraph: GraphDocumentV01 = {
       step: 0.01,
       sendName: "speed"
     }),
-    node("core.value-f32", "value_1", "F32", {
+    node("core.float", "value_1", "Float", {
       value: 0.5,
       receiveName: "speed"
     }),
@@ -409,7 +409,7 @@ export const portDemoSampleGraph: GraphDocumentV01 = {
   id: "studio-port-demo-sample",
   revision: "1",
   nodes: [
-    node("core.value-f32", "value_1", "Float Value", { value: 0.65 }),
+    node("core.float", "value_1", "Float Value", { value: 0.65 }),
     node("core.target", "target_1", "Value Target"),
     node("core.bang-button", "bang_1", "Bang Button"),
     node("core.event-log", "event_log_1", "Event Log"),

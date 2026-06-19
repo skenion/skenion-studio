@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { GraphNodeV01 } from "@skenion/contracts";
 import { graphPatchFromStudioAction } from "./graphPatch";
 import {
+  DEFAULT_FLOAT_REPRESENTATION,
   DEFAULT_FLOAT_VALUE,
   FLOAT_VALUE_NODE_KIND,
   defaultFloatValueParams,
   isFloatValueNode,
+  readFloatRepresentationParam,
   readFloatValueParam,
   setFloatValueParamPatch
 } from "./floatValue";
@@ -15,9 +17,12 @@ describe("float value graph helpers", () => {
     const node = floatNode(0.25);
 
     expect(isFloatValueNode(node)).toBe(true);
-    expect(isFloatValueNode({ ...node, kind: "core.value-i32" })).toBe(false);
+    expect(isFloatValueNode({ ...node, kind: "core.int" })).toBe(false);
     expect(isFloatValueNode(null)).toBe(false);
-    expect(defaultFloatValueParams()).toEqual({ value: DEFAULT_FLOAT_VALUE });
+    expect(defaultFloatValueParams()).toEqual({
+      representation: DEFAULT_FLOAT_REPRESENTATION,
+      value: DEFAULT_FLOAT_VALUE
+    });
   });
 
   it("reads finite values without a global uniform range", () => {
@@ -26,6 +31,8 @@ describe("float value graph helpers", () => {
     expect(readFloatValueParam(floatNode(2))).toBe(2);
     expect(readFloatValueParam(floatNode(Number.NaN))).toBe(DEFAULT_FLOAT_VALUE);
     expect(readFloatValueParam(floatNode("0.2"))).toBe(DEFAULT_FLOAT_VALUE);
+    expect(readFloatRepresentationParam(floatNode(0.25, "f16"))).toBe("f16");
+    expect(readFloatRepresentationParam(floatNode(0.25, "bad"))).toBe(DEFAULT_FLOAT_REPRESENTATION);
   });
 
   it("creates setNodeParam patch operations for value edits", () => {
@@ -48,12 +55,13 @@ describe("float value graph helpers", () => {
     });
   });
 
-  function floatNode(value: unknown): GraphNodeV01 {
+  function floatNode(value: unknown, representation?: unknown): GraphNodeV01 {
     return {
       id: "value_1",
       kind: FLOAT_VALUE_NODE_KIND,
       kindVersion: "0.1.0",
       params: {
+        representation,
         value
       },
       ports: []

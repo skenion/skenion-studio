@@ -74,15 +74,24 @@ export const ClearColorControl: Story = {
 };
 
 export const ColorRgbaControl: Story = {
-  render: () => <ColorRgbaControls color={[0.95, 0.25, 0.12, 1]} onChange={noop} />
+  render: () => (
+    <ColorRgbaControls
+      color={[0.95, 0.25, 0.12, 1]}
+      colorSpace="linear"
+      onChange={noop}
+      onColorSpaceChange={noop}
+      onRepresentationChange={noop}
+      representation="rgba32f"
+    />
+  )
 };
 
 export const FloatValueControl: Story = {
-  render: () => <FloatValueControls value={0.2} onChange={noop} />
+  render: () => <FloatValueControls value={0.2} onChange={noop} onRepresentationChange={noop} representation="f32" />
 };
 
 export const IntegerValueControl: Story = {
-  render: () => <IntegerValueControls value={32} onChange={noop} />
+  render: () => <IntegerValueControls value={32} onChange={noop} onRepresentationChange={noop} representation="i32" />
 };
 
 export const BooleanValueControl: Story = {
@@ -104,7 +113,7 @@ export const RuntimeControlValueControl: Story = {
       enabled
       nodeId="value_1"
       onSend={noop}
-      value={{ type: "f32", value: 1.25 }}
+      value={{ type: "float", representation: "f32", value: 1.25 }}
     />
   )
 };

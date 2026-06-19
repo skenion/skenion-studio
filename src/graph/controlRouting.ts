@@ -1,17 +1,17 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 
 const ROUTING_CAPABLE_NODE_KINDS = new Set([
-  "core.value-f32",
-  "core.value-i32",
-  "core.value-bool",
-  "core.color-rgba",
+  "core.float",
+  "core.int",
+  "core.bool",
+  "core.color",
   "core.string",
   "core.message",
   "core.toggle",
   "core.comment",
   "core.panel",
   "ui.button",
-  "ui.slider-f32",
+  "ui.slider-float",
   "ui.toggle"
 ]);
 
