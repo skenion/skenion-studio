@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.3...skenion-studio-v0.27.0) (2026-06-19)
+
+
+### Features
+
+* **studio:** add object box authoring v0 ([ae29e85](https://github.com/echovisionlab/skenion-studio/commit/ae29e85441a334acd194838108581f3cc182679e))
+
 ## [0.26.3](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.2...skenion-studio-v0.26.3) (2026-06-19)
 
 
