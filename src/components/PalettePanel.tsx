@@ -4,12 +4,13 @@ import type { NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { flowColor, flowName } from "../graph/reactFlowAdapter";
 
 interface PalettePanelProps {
+  addDisabled?: boolean;
   registry: NodeDefinitionManifestV01[];
   onAddNode: (definitionId: string) => void;
   onShowHelp: (definitionId: string) => void;
 }
 
-export function PalettePanel({ registry, onAddNode, onShowHelp }: PalettePanelProps) {
+export function PalettePanel({ addDisabled = false, registry, onAddNode, onShowHelp }: PalettePanelProps) {
   const categories = Array.from(new Set(registry.map((definition) => definition.category)));
 
   return (
@@ -46,6 +47,7 @@ export function PalettePanel({ registry, onAddNode, onShowHelp }: PalettePanelPr
                       <Button
                         className="palette-node"
                         color="gray"
+                        disabled={addDisabled}
                         fullWidth
                         justify="space-between"
                         leftSection={<span className="flow-swatch" style={{ background: swatchColor }} />}

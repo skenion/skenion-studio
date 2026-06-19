@@ -2,8 +2,8 @@ import { ActionIcon, Badge, FileButton, Group, Text, Tooltip } from "@mantine/co
 import {
   Cable,
   Download,
-  FileJson,
   FolderOpen,
+  Lock,
   MonitorPlay,
   Palette,
   PanelRightClose,
@@ -11,6 +11,7 @@ import {
   RefreshCcw,
   Save,
   SlidersHorizontal,
+  Unlock,
   Upload
 } from "lucide-react";
 import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
@@ -18,6 +19,7 @@ import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
 interface StudioToolbarProps {
   graph: GraphDocumentV01;
   runtimeGraphAvailable: boolean;
+  graphLocked: boolean;
   summary: string;
   validation: ValidationResult<GraphDocumentV01>;
   onExport: () => void;
@@ -30,6 +32,7 @@ interface StudioToolbarProps {
   onLoadShaderUniformSample: () => void;
   onLoadPortDemoSample: () => void;
   onReset: () => void;
+  onToggleGraphLock: () => void;
   onToggleInspector: () => void;
   inspectorOpen: boolean;
 }
@@ -37,6 +40,7 @@ interface StudioToolbarProps {
 export function StudioToolbar({
   graph,
   runtimeGraphAvailable,
+  graphLocked,
   summary,
   validation,
   onExport,
@@ -49,6 +53,7 @@ export function StudioToolbar({
   onLoadShaderMultiUniformSample,
   onLoadShaderUniformSample,
   onReset,
+  onToggleGraphLock,
   onToggleInspector,
   inspectorOpen
 }: StudioToolbarProps) {
@@ -68,7 +73,7 @@ export function StudioToolbar({
             </Badge>
           </Group>
           <Text c="dimmed" size="xs">
-            {runtimeGraphAvailable ? `${graph.id} · ${summary}` : "No Runtime session"}
+            {runtimeGraphAvailable ? `${graph.id} · ${summary} · graph v0.1` : "No Runtime session"}
           </Text>
         </div>
       </Group>
@@ -105,6 +110,18 @@ export function StudioToolbar({
         <Tooltip label="Restore sample graph">
           <ActionIcon aria-label="Restore sample graph" disabled={graphActionDisabled} onClick={onReset} radius="sm" size="lg" variant="subtle">
             <RefreshCcw size={18} />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip label={graphLocked ? "Unlock graph layout editing" : "Lock graph layout editing"}>
+          <ActionIcon
+            aria-label={graphLocked ? "Unlock graph" : "Lock graph"}
+            disabled={graphActionDisabled}
+            onClick={onToggleGraphLock}
+            radius="sm"
+            size="lg"
+            variant="subtle"
+          >
+            {graphLocked ? <Lock size={18} /> : <Unlock size={18} />}
           </ActionIcon>
         </Tooltip>
         <Tooltip label="Load render sample">
@@ -178,9 +195,6 @@ export function StudioToolbar({
             {inspectorOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
           </ActionIcon>
         </Tooltip>
-        <Badge leftSection={<FileJson size={13} />} radius="sm" variant="outline">
-          graph v0.1
-        </Badge>
       </Group>
     </Group>
   );

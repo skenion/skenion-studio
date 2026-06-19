@@ -2,7 +2,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  min-width: 32px;
+  min-width: max(32px, var(--object-port-min-width, 32px));
   max-width: 260px;
   min-height: 20px;
   border: 1px solid #8a949f;
@@ -21,6 +21,14 @@
   box-shadow:
     0 0 0 2px rgb(28 126 214 / 34%),
     0 4px 10px rgb(31 41 51 / 14%);
+}
+
+.layoutEditable {
+  cursor: grab;
+}
+
+.layoutEditable:active {
+  cursor: grabbing;
 }
 
 .disabled {
@@ -136,6 +144,22 @@
 .bangObject .content {
   justify-items: center;
   padding: 3px;
+}
+
+.bangTrigger {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.bangTrigger:disabled {
+  cursor: not-allowed;
 }
 
 .bangDot {

@@ -86,6 +86,7 @@ export default function App() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [activeHelpNodeId, setActiveHelpNodeId] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [graphLocked, setGraphLocked] = useState(true);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [runtimeUrl, setRuntimeUrl] = useState(DEFAULT_RUNTIME_URL);
@@ -161,6 +162,10 @@ export default function App() {
   }, [runtimeInfo, runtimeSession?.loaded, runtimeSessionSynced, runtimeStatus, runtimeUrl]);
 
   function addNode(definitionId: string, paramsOverride: Record<string, unknown> = {}) {
+    if (graphLocked) {
+      setRuntimeError("Unlock the graph before adding or moving objects.");
+      return;
+    }
     const definition = nodeRegistry.find((candidate) => candidate.id === definitionId);
     if (!definition) {
       return;
@@ -198,6 +203,10 @@ export default function App() {
     position: { x: number; y: number },
     paramsOverride: Record<string, unknown> = {}
   ) {
+    if (graphLocked) {
+      setRuntimeError("Unlock the graph before adding or moving objects.");
+      return;
+    }
     const definition = nodeRegistry.find((candidate) => candidate.id === definitionId);
     if (!definition) {
       return;
@@ -1215,6 +1224,7 @@ export default function App() {
       <AppShell.Header>
         <StudioToolbar
           graph={graph}
+          graphLocked={graphLocked}
           runtimeGraphAvailable={runtimeGraphAvailable}
           summary={graphSummary(graph)}
           validation={validation}
@@ -1228,6 +1238,7 @@ export default function App() {
           onLoadShaderMultiUniformSample={loadShaderMultiUniformSample}
           onLoadShaderUniformSample={loadShaderUniformSample}
           onReset={resetSample}
+          onToggleGraphLock={() => setGraphLocked((locked) => !locked)}
           inspectorOpen={inspectorOpen}
           onToggleInspector={() => setInspectorOpen((open) => !open)}
         />
@@ -1235,7 +1246,7 @@ export default function App() {
 
       <AppShell.Navbar p="md">
         {runtimeGraphAvailable ? (
-          <PalettePanel registry={nodeRegistry} onAddNode={addNode} onShowHelp={showNodeHelp} />
+          <PalettePanel addDisabled={graphLocked} registry={nodeRegistry} onAddNode={addNode} onShowHelp={showNodeHelp} />
         ) : (
           <RuntimeRequiredPanel status={runtimeStatus} />
         )}
@@ -1260,6 +1271,7 @@ export default function App() {
           {runtimeGraphAvailable ? (
             <GraphCanvas
               graph={graph}
+              graphLocked={graphLocked}
               viewState={viewState}
               onAddNodeAtPosition={addNodeAtPosition}
               onConnectionCheck={setConnectionCheck}
@@ -1391,6 +1403,7 @@ export default function App() {
                 generatedShader={generatedShader}
                 generatedShaderBusy={runtimeBusyAction === "generatedShader"}
                 graph={graph}
+                graphLocked={graphLocked}
                 edge={selectedEdge}
                 helpNodeId={activeHelpNodeId}
                 node={selectedNode}

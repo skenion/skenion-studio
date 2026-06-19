@@ -24,6 +24,7 @@ export interface SkenionNodeData extends Record<string, unknown> {
   label: string;
   kind: string;
   kindVersion: string;
+  layoutEditable?: boolean;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;

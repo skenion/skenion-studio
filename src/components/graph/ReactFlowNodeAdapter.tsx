@@ -11,6 +11,7 @@ export function ReactFlowNodeAdapter({ data, selected }: ReactFlowNodeAdapterPro
   const objectNode = ObjectNodeRenderer({
     card: data.card,
     node: data.node,
+    layoutEditable: data.layoutEditable,
     onObjectControl: data.onObjectControl,
     onObjectLiveControl: data.onObjectLiveControl,
     onObjectParamChange: data.onObjectParamChange,

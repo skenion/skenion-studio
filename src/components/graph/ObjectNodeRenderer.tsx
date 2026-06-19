@@ -1,6 +1,6 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { readCommentTextParam } from "../../graph/commentNode";
 import { FLOAT_VALUE_NODE_KIND, readFloatRepresentationParam, readFloatValueParam } from "../../graph/floatValue";
 import { INT_VALUE_NODE_KIND, readIntRepresentationParam, readIntValueParam } from "../../graph/intValue";
@@ -22,12 +22,13 @@ import { PANEL_NODE_KIND, readPanelParams } from "../../graph/panelNode";
 import type { NodeCardView, NodePortHandleRenderer, NodePortView } from "../node/nodeTypes";
 import type { RuntimeControlMessage, RuntimeControlValue } from "../../runtime/types";
 import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
-import { beginDeferredHorizontalNumberDrag } from "./deferredPointerDrag";
+import { beginDeferredHorizontalMouseNumberDrag, beginDeferredHorizontalNumberDrag } from "./deferredPointerDrag";
 import styles from "./ObjectNodeRenderer.module.css";
 import socketStyles from "../node/PortSocket.module.css";
 
 export interface ObjectNodeRendererProps {
   card: NodeCardView;
+  layoutEditable?: boolean;
   node: GraphNodeV01;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
@@ -42,6 +43,7 @@ export interface ObjectNodeRendererProps {
 
 export function ObjectNodeRenderer({
   card,
+  layoutEditable = false,
   node,
   onObjectControl,
   onObjectLiveControl,
@@ -57,6 +59,7 @@ export function ObjectNodeRenderer({
       <ObjectBox
         className={styles.commentObject}
         inputPorts={card.inputs}
+        layoutEditable={layoutEditable}
         renderInputHandle={renderInputHandle}
         selected={selected}
       >
@@ -71,6 +74,7 @@ export function ObjectNodeRenderer({
       <ObjectBox
         className={styles.panelObject}
         inputPorts={card.inputs}
+        layoutEditable={layoutEditable}
         renderInputHandle={renderInputHandle}
         selected={selected}
         style={{ background: panel.color }}
@@ -86,6 +90,7 @@ export function ObjectNodeRenderer({
         className={styles.messageObject}
         disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
+        layoutEditable={layoutEditable}
         onActivate={() => {
           if (!runtimeControlEnabled) {
             return;
@@ -106,6 +111,7 @@ export function ObjectNodeRenderer({
     return (
       <BangControlObject
         card={card}
+        layoutEditable={layoutEditable}
         node={node}
         onObjectControl={onObjectControl}
         pulseKey={runtimeControlPulseKey}
@@ -126,6 +132,7 @@ export function ObjectNodeRenderer({
         className={styles.toggleObject}
         disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
+        layoutEditable={layoutEditable}
         onActivate={() => {
           if (!runtimeControlEnabled) {
             return;
@@ -151,6 +158,7 @@ export function ObjectNodeRenderer({
     return (
       <SliderControlObject
         card={card}
+        layoutEditable={layoutEditable}
         node={sliderNode}
         onLiveControl={onObjectLiveControl ?? onObjectControl}
         runtimeControlEnabled={runtimeControlEnabled}
@@ -169,6 +177,7 @@ export function ObjectNodeRenderer({
         className={styles.valueObject}
         disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
+        layoutEditable={layoutEditable}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
         renderOutputHandle={renderOutputHandle}
@@ -192,6 +201,7 @@ export function ObjectNodeRenderer({
       <ObjectBox
         className={styles.assetObject}
         inputPorts={card.inputs}
+        layoutEditable={layoutEditable}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
         renderOutputHandle={renderOutputHandle}
@@ -208,6 +218,7 @@ export function ObjectNodeRenderer({
     <ObjectBox
       className={styles.genericObject}
       inputPorts={card.inputs}
+      layoutEditable={layoutEditable}
       outputPorts={card.outputs}
       renderInputHandle={renderInputHandle}
       renderOutputHandle={renderOutputHandle}
@@ -222,6 +233,7 @@ export function ObjectNodeRenderer({
 
 function SliderControlObject({
   card,
+  layoutEditable,
   node,
   onLiveControl,
   runtimeControlEnabled,
@@ -231,6 +243,7 @@ function SliderControlObject({
   selected
 }: {
   card: NodeCardView;
+  layoutEditable: boolean;
   node: GraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   runtimeControlEnabled: boolean;
@@ -255,6 +268,7 @@ function SliderControlObject({
       className={styles.sliderObject}
       disabled={!runtimeControlEnabled}
       inputPorts={card.inputs}
+      layoutEditable={layoutEditable}
       outputPorts={card.outputs}
       renderInputHandle={renderInputHandle}
       renderOutputHandle={renderOutputHandle}
@@ -295,6 +309,7 @@ function SliderControlObject({
 
 function BangControlObject({
   card,
+  layoutEditable,
   node,
   onObjectControl,
   pulseKey,
@@ -304,6 +319,7 @@ function BangControlObject({
   selected
 }: {
   card: NodeCardView;
+  layoutEditable: boolean;
   node: GraphNodeV01;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   pulseKey: number;
@@ -324,25 +340,38 @@ function BangControlObject({
     }
   }, [pulseKey]);
 
+  const activate = () => {
+    if (!runtimeControlEnabled) {
+      return;
+    }
+    pulse();
+    onObjectControl?.(node.id, "in", bangControlMessage());
+  };
+
   return (
     <ObjectBox
       className={styles.bangObject}
       disabled={!runtimeControlEnabled}
       inputPorts={card.inputs}
-      onActivate={() => {
-        if (!runtimeControlEnabled) {
-          return;
-        }
-        pulse();
-        onObjectControl?.(node.id, "in", bangControlMessage());
-      }}
+      layoutEditable={layoutEditable}
       outputPorts={card.outputs}
       renderInputHandle={renderInputHandle}
       renderOutputHandle={renderOutputHandle}
-      role="button"
       selected={selected}
     >
-      <span className={[styles.bangDot, active ? styles.bangActive : ""].filter(Boolean).join(" ")} />
+      <button
+        aria-label="Bang"
+        className={[styles.bangTrigger, "nodrag", "nopan"].join(" ")}
+        disabled={!runtimeControlEnabled}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          activate();
+        }}
+        type="button"
+      >
+        <span className={[styles.bangDot, active ? styles.bangActive : ""].filter(Boolean).join(" ")} />
+      </button>
     </ObjectBox>
   );
 }
@@ -352,6 +381,7 @@ function ObjectBox({
   className,
   disabled = false,
   inputPorts = [],
+  layoutEditable,
   onActivate,
   outputPorts = [],
   renderInputHandle,
@@ -364,6 +394,7 @@ function ObjectBox({
   className: string;
   disabled?: boolean;
   inputPorts?: NodePortView[];
+  layoutEditable: boolean;
   onActivate?: () => void;
   outputPorts?: NodePortView[];
   renderInputHandle?: NodePortHandleRenderer;
@@ -372,56 +403,13 @@ function ObjectBox({
   selected?: boolean;
   style?: CSSProperties;
 }) {
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
-  const pointerMovedRef = useRef(false);
-  const skipClickRef = useRef(false);
-  const activationThreshold = 4;
-
-  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!onActivate || disabled || event.button !== 0) {
-      pointerStartRef.current = null;
-      return;
-    }
-    pointerStartRef.current = {
-      x: event.clientX,
-      y: event.clientY
-    };
-    pointerMovedRef.current = false;
-  };
-
-  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const start = pointerStartRef.current;
-    if (!start) {
-      return;
-    }
-    const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-    if (distance > activationThreshold) {
-      pointerMovedRef.current = true;
-    }
-  };
-
-  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    if (onActivate && !disabled && pointerStartRef.current && !pointerMovedRef.current) {
-      event.preventDefault();
-      event.stopPropagation();
-      skipClickRef.current = true;
-      onActivate();
-    }
-    pointerStartRef.current = null;
-  };
+  const objectStyle = {
+    ...style,
+    "--object-port-min-width": `${minimumWidthForPorts(inputPorts.length, outputPorts.length)}px`
+  } as CSSProperties;
 
   const handleClick = (event: MouseEvent<HTMLDivElement>) => {
     if (!onActivate || disabled) {
-      return;
-    }
-    if (skipClickRef.current) {
-      skipClickRef.current = false;
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-    if (pointerMovedRef.current) {
-      pointerMovedRef.current = false;
       return;
     }
     event.preventDefault();
@@ -444,8 +432,8 @@ function ObjectBox({
       className={[
         styles.objectNode,
         className,
-        onActivate ? "nodrag" : "",
-        onActivate ? "nopan" : "",
+        layoutEditable ? styles.layoutEditable : "",
+        !layoutEditable ? "nopan" : "",
         selected ? styles.selected : "",
         disabled ? styles.disabled : ""
       ]
@@ -453,11 +441,8 @@ function ObjectBox({
         .join(" ")}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
       role={role}
-      style={style}
+      style={objectStyle}
       tabIndex={role === "button" && !disabled ? 0 : undefined}
     >
       {renderInputHandle && inputPorts.length > 0 ? (
@@ -481,6 +466,17 @@ function ObjectBox({
       ) : null}
     </div>
   );
+}
+
+function minimumWidthForPorts(inputCount: number, outputCount: number): number {
+  const portCount = Math.max(inputCount, outputCount);
+  if (portCount <= 1) {
+    return 32;
+  }
+  const socketWidth = 12;
+  const socketGap = 4;
+  const sidePadding = 10;
+  return portCount * socketWidth + (portCount - 1) * socketGap + sidePadding;
 }
 
 function RoutingBadges({ node }: { node: GraphNodeV01 }) {
@@ -600,6 +596,7 @@ function NumericValueDragObject({
 }) {
   const displayValue = numericDisplayValue(mode, node, runtimeControlValue);
   const [draftValue, setDraftValue] = useState(displayValue);
+  const suppressMouseDragRef = useRef(false);
 
   useEffect(() => {
     setDraftValue(displayValue);
@@ -637,23 +634,47 @@ function NumericValueDragObject({
     return Math.trunc(value);
   };
 
+  const previewValue = (value: number) => {
+    const normalized = normalize(value);
+    setDraftValue(normalized);
+    onLiveControl?.(node.id, "in", controlMessageFromValue(toControlValue(normalized)));
+  };
+
   return (
     <button
       className={[styles.valueDrag, "nodrag", "nopan"].join(" ")}
       disabled={!runtimeControlEnabled}
+      onMouseDown={(event) => {
+        if (!runtimeControlEnabled || event.button !== 0) {
+          return;
+        }
+        if (suppressMouseDragRef.current) {
+          return;
+        }
+        beginDeferredHorizontalMouseNumberDrag({
+          event,
+          onCancel: () => setDraftValue(displayValue),
+          onCommit: () => undefined,
+          onPreview: previewValue,
+          precision: mode === "float" ? 4 : 0,
+          shiftStep: mode === "float" ? 0.1 : 10,
+          startValue: displayValue,
+          step: mode === "float" ? 0.01 : 1
+        });
+      }}
       onPointerDown={(event) => {
         if (!runtimeControlEnabled) {
           return;
         }
+        suppressMouseDragRef.current = true;
+        window.setTimeout(() => {
+          suppressMouseDragRef.current = false;
+        }, 0);
         beginDeferredHorizontalNumberDrag({
           event,
           onCancel: () => setDraftValue(displayValue),
           onCommit: () => undefined,
-          onPreview: (value) => {
-            const normalized = normalize(value);
-            setDraftValue(normalized);
-            onLiveControl?.(node.id, "in", controlMessageFromValue(toControlValue(normalized)));
-          },
+          onPreview: previewValue,
           precision: mode === "float" ? 4 : 0,
           shiftStep: mode === "float" ? 0.1 : 10,
           startValue: displayValue,

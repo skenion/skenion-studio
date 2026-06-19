@@ -81,6 +81,7 @@ import {
 import { isVideoAssetNode } from "../../graph/videoAsset";
 
 export function NodeInspector({
+  graphLocked = false,
   node,
   onRemoveNode,
   onLoadGeneratedShader,
@@ -99,6 +100,7 @@ export function NodeInspector({
 }: {
   generatedShader?: RuntimeGeneratedShaderResponse | null;
   generatedShaderBusy?: boolean;
+  graphLocked?: boolean;
   node: GraphNodeV01;
   runtimeShaderDiagnostics?: ShaderDiagnosticV01[];
   onLoadGeneratedShader?: () => void;
@@ -167,6 +169,7 @@ export function NodeInspector({
           ) : null}
           <Button
             color="red"
+            disabled={graphLocked}
             leftSection={<Trash2 size={15} />}
             onClick={() => onRemoveNode(node)}
             radius="sm"
