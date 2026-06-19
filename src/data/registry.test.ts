@@ -74,7 +74,7 @@ describe("node registry", () => {
       "out"
     ]);
     expect(findStudioDefinition("core.bang")?.ports.map((port) => port.id)).toEqual(["in", "out"]);
-    expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual([]);
+    expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual(["in"]);
     expect(nodeRegistry.map((definition) => definition.id)).not.toEqual(
       expect.arrayContaining([
         removedKind("core", "target"),
