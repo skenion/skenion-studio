@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.23.0...skenion-studio-v0.24.0) (2026-06-19)
+
+
+### Features
+
+* **studio:** expose semantic representation controls ([a018d2b](https://github.com/echovisionlab/skenion-studio/commit/a018d2b5b7c16c63be9757e02b943800a284ee10))
+
 ## [0.23.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.22.0...skenion-studio-v0.23.0) (2026-06-18)
 
 
