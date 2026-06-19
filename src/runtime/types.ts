@@ -182,7 +182,7 @@ export interface RuntimePreviewStartRequest {
 }
 
 export type RuntimeControlValue =
-  | { type: "float"; representation: "f64" | "f32" | "f16" | "f8.e4m3" | "f8.e5m2"; value: number }
+  | { type: "float"; representation: "f64" | "f32" | "f16" | "f8.e4m3" | "f8.e5m2" | "ufloat16" | "ufloat8"; value: number }
   | { type: "int"; representation: "i64" | "i32" | "i16" | "i8"; value: number }
   | { type: "uint"; representation: "u64" | "u32" | "u16" | "u8"; value: number }
   | { type: "bool"; value: boolean }
