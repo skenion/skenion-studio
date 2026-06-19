@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.24.0...skenion-studio-v0.25.0) (2026-06-19)
+
+
+### Features
+
+* **studio:** require runtime-owned graph sessions ([c925a64](https://github.com/echovisionlab/skenion-studio/commit/c925a644ed2cb7ffdd96a028523a2dbbbad02109))
+
 ## [0.24.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.23.0...skenion-studio-v0.24.0) (2026-06-19)
 
 
