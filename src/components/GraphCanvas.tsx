@@ -18,7 +18,7 @@ import {
 } from "@xyflow/react";
 import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
 import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
-import type { RuntimeControlMessage } from "../runtime/types";
+import type { RuntimeControlMessage, RuntimeControlValue } from "../runtime/types";
 import {
   applyPatch,
   checkConnection,
@@ -44,10 +44,16 @@ interface GraphCanvasProps {
   selectedEdgeId: string | null;
   selectedNodeId: string | null;
   onConnectionCheck: (check: ConnectionCheck | null) => void;
-  onAddNodeAtPosition?: (definitionId: string, position: { x: number; y: number }) => void;
+  onAddNodeAtPosition?: (
+    definitionId: string,
+    position: { x: number; y: number },
+    paramsOverride?: Record<string, unknown>
+  ) => void;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
+  runtimeControlEnabled?: boolean;
+  runtimeControlValues?: Record<string, RuntimeControlValue>;
   onShowNodeHelp?: (definitionId: string) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
   onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
@@ -65,6 +71,8 @@ export function GraphCanvas({
   onObjectControl,
   onObjectLiveControl,
   onObjectParamChange,
+  runtimeControlEnabled = false,
+  runtimeControlValues = {},
   onShowNodeHelp,
   onSelectedEdgeChange,
   onGraphChange,
@@ -84,7 +92,10 @@ export function GraphCanvas({
       }) satisfies ViewStateV01,
     [nodeViewStateKey]
   );
-  const viewModel = useMemo(() => toReactFlowViewModel(graph, graphLayoutViewState), [graph, graphLayoutViewState]);
+  const viewModel = useMemo(
+    () => toReactFlowViewModel(graph, graphLayoutViewState, runtimeControlValues),
+    [graph, graphLayoutViewState, runtimeControlValues]
+  );
   const objectControlRef = useRef(onObjectControl);
   const objectLiveControlRef = useRef(onObjectLiveControl);
   const objectParamChangeRef = useRef(onObjectParamChange);
@@ -123,10 +134,11 @@ export function GraphCanvas({
           ...node.data,
           onObjectControl: handleObjectControl,
           onObjectLiveControl: handleObjectLiveControl,
-          onObjectParamChange: handleObjectParamChange
+          onObjectParamChange: handleObjectParamChange,
+          runtimeControlEnabled
         }
       })),
-    [handleObjectControl, handleObjectLiveControl, handleObjectParamChange, viewModel.nodes]
+    [handleObjectControl, handleObjectLiveControl, handleObjectParamChange, runtimeControlEnabled, viewModel.nodes]
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(viewModel.edges);
@@ -273,11 +285,11 @@ export function GraphCanvas({
   );
 
   const addNodeAtMenuPosition = useCallback(
-    (definitionId: string) => {
+    (definitionId: string, paramsOverride: Record<string, unknown> = {}) => {
       if (!contextMenu || contextMenu.type !== "pane") {
         return;
       }
-      onAddNodeAtPosition?.(definitionId, contextMenu.flowPosition);
+      onAddNodeAtPosition?.(definitionId, contextMenu.flowPosition, paramsOverride);
       setContextMenu(null);
     },
     [contextMenu, onAddNodeAtPosition]
@@ -486,7 +498,7 @@ function ReactFlowContextMenu({
   onShowHelp
 }: {
   menu: CanvasContextMenuState | null;
-  onAddNode: (definitionId: string) => void;
+  onAddNode: (definitionId: string, paramsOverride?: Record<string, unknown>) => void;
   onClose: () => void;
   onCopy: (text: string) => void;
   onDeleteEdge: (edgeId: string) => void;
@@ -529,9 +541,14 @@ function ReactFlowContextMenu({
           <button onClick={() => onAddNode("core.comment")} type="button">Add Comment</button>
           <button onClick={() => onAddNode("core.panel")} type="button">Add Panel</button>
           <button onClick={() => onAddNode("core.message")} type="button">Add Message</button>
-          <button onClick={() => onAddNode("ui.button")} type="button">Add Bang</button>
-          <button onClick={() => onAddNode("ui.toggle")} type="button">Add Toggle</button>
-          <button onClick={() => onAddNode("ui.slider-float")} type="button">Add Slider</button>
+          <button onClick={() => onAddNode("core.bang")} type="button">Add Bang</button>
+          <button onClick={() => onAddNode("core.bool", { label: "Enabled", widget: "toggle" })} type="button">Add Toggle</button>
+          <button
+            onClick={() => onAddNode("core.float", { label: "Value", max: 1, min: 0, step: 0.01, widget: "slider" })}
+            type="button"
+          >
+            Add Slider
+          </button>
           <button onClick={() => onAddNode("core.float")} type="button">Add Float</button>
           <button onClick={() => onAddNode("core.video-asset")} type="button">Add Video Asset</button>
           <button onClick={() => { fitView({ padding: 0.2 }); onClose(); }} type="button">Fit View</button>

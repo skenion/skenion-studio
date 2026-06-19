@@ -55,9 +55,9 @@ export const sampleGraph: GraphDocumentV01 = {
   revision: "1",
   nodes: [
     node("core.float", "value_1", "Float"),
-    node("core.target", "target_1", "Target"),
-    node("core.bang-button", "bang_1", "Trigger"),
-    node("core.event-log", "event_log_1", "Log"),
+    node("core.float", "target_1", "Target"),
+    node("core.bang", "bang_1", "Trigger"),
+    node("core.message", "event_log_1", "Log"),
     node("core.video-asset", "video_asset_1", "Clip"),
     node("core.video-decode", "decode_1", "Decode"),
     node("core.gpu-upload", "gpu_upload_1", "Upload"),
@@ -71,7 +71,7 @@ export const sampleGraph: GraphDocumentV01 = {
       },
       to: {
         node: "target_1",
-        port: "value"
+        port: "in"
       }
     },
     {
@@ -260,15 +260,17 @@ export const objectRoutingPanelSampleGraph: GraphDocumentV01 = {
   id: "studio-object-routing-panel-sample",
   revision: "1",
   nodes: [
-    node("ui.slider-float", "slider_speed", "Speed", {
+    node("core.float", "slider_speed", "Speed", {
       value: 0.75,
       min: 0,
       max: 2,
       step: 0.01,
+      widget: "slider",
       sendName: "speed"
     }),
-    node("ui.toggle", "toggle_enabled", "Enabled", {
+    node("core.bool", "toggle_enabled", "Enabled", {
       value: true,
+      widget: "toggle",
       sendName: "enabled"
     }),
     node("render.fullscreen-shader", "shader_1", "Fullscreen Shader", {
@@ -339,19 +341,21 @@ export const objectVisualSampleGraph: GraphDocumentV01 = {
     node("core.message", "message_1", "Message", {
       value: "set #00ff00"
     }),
-    node("ui.button", "button_1", "Bang", {
+    node("core.bang", "button_1", "Bang", {
       label: "Bang"
     }),
-    node("ui.toggle", "toggle_1", "Toggle", {
+    node("core.bool", "toggle_1", "Toggle", {
       label: "Enabled",
+      widget: "toggle",
       value: true
     }),
-    node("ui.slider-float", "slider_1", "Slider", {
+    node("core.float", "slider_1", "Slider", {
       label: "Speed",
       value: 0.65,
       min: 0,
       max: 1,
       step: 0.01,
+      widget: "slider",
       sendName: "speed"
     }),
     node("core.float", "value_1", "Float", {
@@ -410,9 +414,9 @@ export const portDemoSampleGraph: GraphDocumentV01 = {
   revision: "1",
   nodes: [
     node("core.float", "value_1", "Float Value", { value: 0.65 }),
-    node("core.target", "target_1", "Value Target"),
-    node("core.bang-button", "bang_1", "Bang Button"),
-    node("core.event-log", "event_log_1", "Event Log"),
+    node("core.float", "target_1", "Value Target"),
+    node("core.bang", "bang_1", "Bang"),
+    node("core.message", "event_log_1", "Event Log"),
     node("render.fullscreen-shader", "shader_1", "Fullscreen Shader"),
     node("render.output", "output_1", "Render Output")
   ],
@@ -424,7 +428,7 @@ export const portDemoSampleGraph: GraphDocumentV01 = {
       },
       to: {
         node: "target_1",
-        port: "value"
+        port: "in"
       }
     },
     {

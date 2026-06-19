@@ -1,59 +1,69 @@
 import { describe, expect, it } from "vitest";
 import type { GraphNodeV01 } from "@skenion/contracts";
 import {
-  defaultUiButtonParams,
-  defaultUiSliderFloatParams,
-  defaultUiToggleParams,
-  isUiButtonNode,
-  isUiSliderFloatNode,
-  isUiToggleNode,
+  defaultBangParams,
+  defaultSliderFloatParams,
+  defaultToggleControlParams,
+  isBangControlNode,
+  isSliderFloatNode,
+  isToggleControlNode,
   readPanelLabelParam,
-  readUiSliderParams,
-  runtimeControlValueForUiNode
+  readSliderFloatParams,
+  runtimeControlValueForPanelNode
 } from "./panelControls";
 
 describe("panel control graph helpers", () => {
-  it("reads slider and toggle params for runtime controls", () => {
-    const slider = node("ui.slider-float", {
+  it("reads slider and toggle widgets from canonical value nodes", () => {
+    const slider = node("core.float", {
       label: "Speed",
       value: 1.5,
       min: 0,
       max: 2,
-      step: 0.01
+      step: 0.01,
+      widget: "slider"
     });
-    const toggle = node("ui.toggle", { label: "Enabled", value: true });
+    const toggle = node("core.bool", { label: "Enabled", value: true, widget: "toggle" });
 
-    expect(isUiSliderFloatNode(slider)).toBe(true);
-    expect(isUiToggleNode(toggle)).toBe(true);
-    expect(readUiSliderParams(slider)).toEqual({
+    expect(isSliderFloatNode(slider)).toBe(true);
+    expect(isToggleControlNode(toggle)).toBe(true);
+    expect(isToggleControlNode(node("core.bool", { widget: "checkbox" }))).toBe(true);
+    expect(isToggleControlNode(node("core.bool", { widget: "button" }))).toBe(false);
+    expect(readSliderFloatParams(slider)).toEqual({
       label: "Speed",
       value: 1.5,
       min: 0,
       max: 2,
       step: 0.01
     });
-    expect(runtimeControlValueForUiNode(slider)).toEqual({ type: "float", representation: "f32", value: 1.5 });
-    expect(runtimeControlValueForUiNode(toggle)).toEqual({ type: "bool", value: true });
-    expect(runtimeControlValueForUiNode(node("ui.button", {}))).toBeNull();
-    expect(runtimeControlValueForUiNode(node("core.float", {}))).toBeNull();
-    expect(isUiButtonNode(node("ui.button", {}))).toBe(true);
-    expect(isUiButtonNode(null)).toBe(false);
+    expect(runtimeControlValueForPanelNode(slider)).toEqual({ type: "float", representation: "f32", value: 1.5 });
+    expect(runtimeControlValueForPanelNode(toggle)).toEqual({ type: "bool", value: true });
+    expect(runtimeControlValueForPanelNode(node("core.bang", {}))).toBeNull();
+    expect(runtimeControlValueForPanelNode(node("core.float", {}))).toBeNull();
+    expect(isBangControlNode(node("core.bang", {}))).toBe(true);
+    expect(isBangControlNode(null)).toBe(false);
   });
 
   it("provides defaults and fallback panel params", () => {
-    expect(defaultUiButtonParams()).toEqual({ label: "Bang" });
-    expect(defaultUiSliderFloatParams()).toEqual({ label: "Value", value: 0, min: 0, max: 1, step: 0.01 });
-    expect(defaultUiToggleParams()).toEqual({ label: "Enabled", value: false });
-    expect(readPanelLabelParam(node("ui.button", {}))).toBe("node_1");
-    expect(readPanelLabelParam(node("ui.button", { label: "" }))).toBe("node_1");
-    expect(readUiSliderParams(node("ui.slider-float", { value: "bad", min: 2, max: 1, step: 0 }))).toEqual({
+    expect(defaultBangParams()).toEqual({ label: "Bang" });
+    expect(defaultSliderFloatParams()).toEqual({
+      label: "Value",
+      max: 1,
+      min: 0,
+      step: 0.01,
+      value: 0,
+      widget: "slider"
+    });
+    expect(defaultToggleControlParams()).toEqual({ label: "Enabled", value: false, widget: "toggle" });
+    expect(readPanelLabelParam(node("core.bang", {}))).toBe("node_1");
+    expect(readPanelLabelParam(node("core.bang", { label: "" }))).toBe("node_1");
+    expect(readSliderFloatParams(node("core.float", { value: "bad", min: 2, max: 1, step: 0, widget: "slider" }))).toEqual({
       label: "node_1",
       value: 0,
       min: 2,
       max: 3,
       step: 0.01
     });
-    expect(runtimeControlValueForUiNode(node("ui.toggle", { value: "bad" }))).toEqual({
+    expect(runtimeControlValueForPanelNode(node("core.bool", { value: "bad", widget: "toggle" }))).toEqual({
       type: "bool",
       value: false
     });

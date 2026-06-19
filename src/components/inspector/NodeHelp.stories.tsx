@@ -30,8 +30,16 @@ export const Float: Story = {
 
 export const Toggle: Story = {
   args: {
-    help: getRequiredHelp("core.toggle"),
-    helpGraph: getBuiltinNodeHelpGraph("core.toggle")
+    help: getRequiredHelp("core.bool"),
+    helpGraph: getBuiltinNodeHelpGraph("core.bool")
+  },
+  render: (args) => <NodeHelp {...args} />
+};
+
+export const Bang: Story = {
+  args: {
+    help: getRequiredHelp("core.bang"),
+    helpGraph: getBuiltinNodeHelpGraph("core.bang")
   },
   render: (args) => <NodeHelp {...args} />
 };
@@ -48,22 +56,6 @@ export const Panel: Story = {
   args: {
     help: getRequiredHelp("core.panel"),
     helpGraph: getBuiltinNodeHelpGraph("core.panel")
-  },
-  render: (args) => <NodeHelp {...args} />
-};
-
-export const SliderFloat: Story = {
-  args: {
-    help: getRequiredHelp("ui.slider-float"),
-    helpGraph: getBuiltinNodeHelpGraph("ui.slider-float")
-  },
-  render: (args) => <NodeHelp {...args} />
-};
-
-export const UiToggle: Story = {
-  args: {
-    help: getRequiredHelp("ui.toggle"),
-    helpGraph: getBuiltinNodeHelpGraph("ui.toggle")
   },
   render: (args) => <NodeHelp {...args} />
 };

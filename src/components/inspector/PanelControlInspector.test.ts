@@ -9,7 +9,7 @@ describe("PanelControlInspector", () => {
   it("creates slider runtime value events without graph param edits", () => {
     expect(sliderRuntimeRequest("node_1", 1.25)).toEqual({
       nodeId: "node_1",
-      portId: "value",
+      portId: "in",
       message: { selector: "float", atoms: [{ type: "float", representation: "f32", value: 1.25 }] }
     });
   });
@@ -17,7 +17,7 @@ describe("PanelControlInspector", () => {
   it("creates toggle runtime bang events without graph param edits", () => {
     expect(toggleRuntimeRequest("node_1")).toEqual({
       nodeId: "node_1",
-      portId: "value",
+      portId: "bang",
       message: { selector: "bang", atoms: [] }
     });
   });
@@ -25,7 +25,7 @@ describe("PanelControlInspector", () => {
   it("edits object routing names as graph params", () => {
     const patched: unknown[] = [];
     const element = RoutingNodeControls({
-      node: node("ui.slider-float", { sendName: "speed", receiveName: "" }),
+      node: node("core.float", { sendName: "speed", receiveName: "", widget: "slider" }),
       onSetNodeParam: (...args) => patched.push(args)
     });
     const inputs = findElementsByType(element, TextInput);

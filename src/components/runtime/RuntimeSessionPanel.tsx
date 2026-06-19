@@ -1,12 +1,11 @@
 import { Badge, Button, Code, Group, Text } from "@mantine/core";
-import { Database, Play, Route, ShieldCheck, Trash2 } from "lucide-react";
+import { Play, Route, ShieldCheck, Trash2 } from "lucide-react";
 import type { RuntimeSessionResponse } from "../../runtime/types";
 
 export function RuntimeSessionPanel({
   busyAction,
   connected,
   onClearSession,
-  onLoadSession,
   onPlanSession,
   onRunSession,
   onValidateSession,
@@ -17,7 +16,6 @@ export function RuntimeSessionPanel({
   busyAction: string | null;
   connected: boolean;
   onClearSession: () => void;
-  onLoadSession: () => void;
   onPlanSession: () => void;
   onRunSession: () => void;
   onValidateSession: () => void;
@@ -39,19 +37,6 @@ export function RuntimeSessionPanel({
             {sessionSynced ? "synced" : "not synced"}
           </Badge>
         </Group>
-      </Group>
-
-      <Group gap="xs" grow>
-        <Button
-          disabled={!connected}
-          leftSection={<Database size={15} />}
-          loading={busyAction === "loadSession"}
-          onClick={onLoadSession}
-          radius="sm"
-          size="xs"
-        >
-          Load Current Graph
-        </Button>
       </Group>
 
       <Group gap="xs" grow>

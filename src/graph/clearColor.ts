@@ -8,18 +8,10 @@ import { FULLSCREEN_SHADER_NODE_KIND, defaultFullscreenShaderParams } from "./fu
 import { INT_VALUE_NODE_KIND, defaultIntValueParams } from "./intValue";
 import { MESSAGE_NODE_KIND, defaultMessageParams } from "./messageNode";
 import { PANEL_NODE_KIND, defaultPanelParams } from "./panelNode";
-import {
-  UI_BUTTON_NODE_KIND,
-  UI_SLIDER_FLOAT_NODE_KIND,
-  UI_TOGGLE_NODE_KIND,
-  defaultUiButtonParams,
-  defaultUiSliderFloatParams,
-  defaultUiToggleParams
-} from "./panelControls";
 import { STRING_VALUE_NODE_KIND, defaultStringValueParams } from "./stringValue";
-import { TOGGLE_NODE_KIND, defaultToggleParams } from "./toggleValue";
 import { UINT_VALUE_NODE_KIND, defaultUIntValueParams } from "./uintValue";
 import { VIDEO_ASSET_NODE_KIND, defaultVideoAssetParams } from "./videoAsset";
+import { BANG_NODE_KIND, defaultBangParams } from "./panelControls";
 
 export const CLEAR_COLOR_NODE_KIND = "render.clear-color";
 export const DEFAULT_CLEAR_COLOR = [0.05, 0.08, 0.12, 1] as const;
@@ -56,9 +48,6 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   if (kind === STRING_VALUE_NODE_KIND) {
     return defaultStringValueParams();
   }
-  if (kind === TOGGLE_NODE_KIND) {
-    return defaultToggleParams();
-  }
   if (kind === COMMENT_NODE_KIND) {
     return defaultCommentParams();
   }
@@ -71,14 +60,8 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   if (kind === VIDEO_ASSET_NODE_KIND) {
     return defaultVideoAssetParams();
   }
-  if (kind === UI_BUTTON_NODE_KIND) {
-    return defaultUiButtonParams();
-  }
-  if (kind === UI_SLIDER_FLOAT_NODE_KIND) {
-    return defaultUiSliderFloatParams();
-  }
-  if (kind === UI_TOGGLE_NODE_KIND) {
-    return defaultUiToggleParams();
+  if (kind === BANG_NODE_KIND) {
+    return defaultBangParams();
   }
 
   return {};

@@ -3,7 +3,6 @@ import { Divider, Stack } from "@mantine/core";
 import { RuntimePanel } from "../RuntimePanel";
 import { RuntimeConnectionPanel } from "./RuntimeConnectionPanel";
 import { RuntimeHistoryPanel } from "./RuntimeHistoryPanel";
-import { RuntimePatchPanel } from "./RuntimePatchPanel";
 import { RuntimePreviewPanel } from "./RuntimePreviewPanel";
 import { RuntimeSessionPanel } from "./RuntimeSessionPanel";
 import { RuntimeTelemetryPanel } from "./RuntimeTelemetryPanel";
@@ -69,7 +68,6 @@ export const ConnectionAndSession: Story = {
         busyAction={null}
         connected
         onClearSession={noop}
-        onLoadSession={noop}
         onPlanSession={noop}
         onRunSession={noop}
         onValidateSession={noop}
@@ -96,36 +94,6 @@ export const PreviewTelemetry: Story = {
       />
       <RuntimeTelemetryPanel telemetry={runtimeTelemetry} />
     </Stack>
-  )
-};
-
-export const PatchPending: Story = {
-  render: () => (
-    <RuntimePatchPanel
-      busyAction={null}
-      connected
-      onApplyPendingPatch={noop}
-      onClearPendingPatch={noop}
-      patchBaseRevision="7"
-      patchConflict={null}
-      pendingPatchOps={2}
-      sessionLoaded
-    />
-  )
-};
-
-export const PatchConflict: Story = {
-  render: () => (
-    <RuntimePatchPanel
-      busyAction={null}
-      connected
-      onApplyPendingPatch={noop}
-      onClearPendingPatch={noop}
-      patchBaseRevision="6"
-      patchConflict="patch baseRevision 6 does not match session graph revision 7"
-      pendingPatchOps={2}
-      sessionLoaded
-    />
   )
 };
 
@@ -160,33 +128,22 @@ export const FullRuntimePanel: Story = {
     <RuntimePanel
       busyAction={null}
       error={null}
-      frames={12}
       history={runtimeHistory}
       info={runtimeInfo}
-      onApplyPendingPatch={noop}
-      onClearPendingPatch={noop}
       onClearSession={noop}
       onConnect={noop}
-      onFramesChange={noop}
-      onLoadSession={noop}
-      onPlan={noop}
       onPlanSession={noop}
       onRedoPatch={noop}
       onRefreshHistory={noop}
       onRefreshPreview={noop}
       onRefreshSession={noop}
       onRestartPreview={noop}
-      onRun={noop}
       onRunSession={noop}
       onStartPreview={noop}
       onStopPreview={noop}
       onUndoPatch={noop}
       onUrlChange={noop}
-      onValidate={noop}
       onValidateSession={noop}
-      patchBaseRevision="7"
-      patchConflict={null}
-      pendingPatchOps={1}
       previewStatus={runtimePreviewStatus}
       result={null}
       session={runtimeSession}

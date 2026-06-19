@@ -24,6 +24,7 @@ import type {
   RuntimePreviewStatus,
   RuntimeProjectPayload,
   RuntimeSessionPatchRequest,
+  RuntimeSessionProjectResponse,
   RuntimeSessionResponse,
   RuntimeTelemetrySnapshot
 } from "./types";
@@ -51,6 +52,7 @@ export interface RuntimeClient {
   buildPlan: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   runProject: (project: RuntimeProjectPayload, frames: number) => Promise<RuntimeApiResponse>;
   getSession: () => Promise<RuntimeSessionResponse>;
+  getSessionProject: () => Promise<RuntimeSessionProjectResponse>;
   loadSession: (project: RuntimeProjectPayload) => Promise<RuntimeSessionResponse>;
   validateSession: () => Promise<RuntimeSessionResponse>;
   planSession: () => Promise<RuntimeSessionResponse>;
@@ -103,6 +105,14 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       }),
     getSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "GET" }, isRuntimeSessionResponse),
+    getSessionProject: () =>
+      requestJson<RuntimeSessionProjectResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/session/project",
+        { method: "GET" },
+        isRuntimeSessionProjectResponse
+      ),
     loadSession: (project) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/load", project),
     validateSession: () =>
       requestJson<RuntimeSessionResponse>(
@@ -424,6 +434,15 @@ function isRuntimeApiResponse(value: unknown): value is RuntimeApiResponse {
   );
 }
 
+function isRuntimeProjectPayload(value: unknown): value is RuntimeProjectPayload {
+  return (
+    isRecord(value) &&
+    validateGraphDocument(value.graph).ok &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every((node) => isRecord(node) && typeof node.id === "string")
+  );
+}
+
 function isRuntimeSessionResponse(value: unknown): value is RuntimeSessionResponse {
   return (
     isRecord(value) &&
@@ -437,6 +456,18 @@ function isRuntimeSessionResponse(value: unknown): value is RuntimeSessionRespon
     value.diagnostics.every(isRuntimeDiagnostic) &&
     (value.plan === null || isRecord(value.plan)) &&
     (value.report === null || isRecord(value.report))
+  );
+}
+
+function isRuntimeSessionProjectResponse(value: unknown): value is RuntimeSessionProjectResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    typeof value.loaded === "boolean" &&
+    (value.project === null || isRuntimeProjectPayload(value.project)) &&
+    isRuntimeSessionResponse(value.session) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
   );
 }
 

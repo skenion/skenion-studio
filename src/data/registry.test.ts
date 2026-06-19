@@ -74,26 +74,26 @@ describe("node registry", () => {
       "bang",
       "value"
     ]);
-    expect(findStudioDefinition("core.toggle")?.ports.map((port) => port.id)).toEqual([
-      "in",
-      "set",
-      "bang",
-      "value"
-    ]);
     expect(findStudioDefinition("core.message")?.ports.map((port) => port.id)).toEqual([
       "in",
       "set",
       "bang",
       "value"
     ]);
+    expect(findStudioDefinition("core.bang")?.ports.map((port) => port.id)).toEqual(["in", "bang"]);
     expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual([]);
-    expect(findStudioDefinition("ui.slider-float")?.ports.map((port) => port.id)).toEqual([
-      "in",
-      "set",
-      "bang",
-      "value"
-    ]);
-    expect(findStudioDefinition("ui.toggle")?.ports.map((port) => port.id)).toEqual(["in", "set", "value"]);
+    expect(nodeRegistry.map((definition) => definition.id)).not.toEqual(
+      expect.arrayContaining([
+        removedKind("core", "target"),
+        removedKind("core", "bang-button"),
+        removedKind("core", "event-log"),
+        removedKind("core", "toggle"),
+        removedKind("ui", "button"),
+        removedKind("ui", "slider-float"),
+        removedKind("ui", "slider-f32"),
+        removedKind("ui", "toggle")
+      ])
+    );
   });
 
   it("creates fullscreen shader nodes with Studio default wgsl params", () => {
@@ -147,6 +147,10 @@ function findStudioDefinition(id: string) {
 
 function findContractsDefinition(id: string) {
   return builtinNodeDefinitionsV01.find((candidate) => candidate.id === id);
+}
+
+function removedKind(scope: string, name: string) {
+  return `${scope}.${name}`;
 }
 
 function findDataKinds(value: unknown): string[] {

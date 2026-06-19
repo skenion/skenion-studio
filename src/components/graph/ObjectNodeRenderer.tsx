@@ -10,18 +10,17 @@ import { STRING_VALUE_NODE_KIND, readStringValueParam } from "../../graph/string
 import { UINT_VALUE_NODE_KIND, readUIntRepresentationParam, readUIntValueParam } from "../../graph/uintValue";
 import { MESSAGE_NODE_KIND, readMessageValueParam } from "../../graph/messageNode";
 import {
-  UI_BUTTON_NODE_KIND,
-  UI_SLIDER_FLOAT_NODE_KIND,
-  UI_TOGGLE_NODE_KIND,
+  isBangControlNode,
+  isSliderFloatNode,
+  isToggleControlNode,
   readPanelLabelParam,
-  readUiSliderParams,
-  readUiToggleValue
+  readSliderFloatParams,
+  readToggleControlValue
 } from "../../graph/panelControls";
-import { TOGGLE_NODE_KIND, readToggleParam } from "../../graph/toggleValue";
 import { VIDEO_ASSET_NODE_KIND, readVideoAssetParams } from "../../graph/videoAsset";
 import { PANEL_NODE_KIND, readPanelParams } from "../../graph/panelNode";
 import type { NodeCardView, NodePortHandleRenderer, NodePortView } from "../node/nodeTypes";
-import type { RuntimeControlMessage } from "../../runtime/types";
+import type { RuntimeControlMessage, RuntimeControlValue } from "../../runtime/types";
 import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
 import { beginDeferredHorizontalNumberDrag } from "./deferredPointerDrag";
 import styles from "./ObjectNodeRenderer.module.css";
@@ -33,6 +32,8 @@ export interface ObjectNodeRendererProps {
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
+  runtimeControlEnabled?: boolean;
+  runtimeControlValue?: RuntimeControlValue;
   selected?: boolean;
   renderInputHandle?: NodePortHandleRenderer;
   renderOutputHandle?: NodePortHandleRenderer;
@@ -43,7 +44,8 @@ export function ObjectNodeRenderer({
   node,
   onObjectControl,
   onObjectLiveControl,
-  onObjectParamChange,
+  runtimeControlEnabled = false,
+  runtimeControlValue,
   selected,
   renderInputHandle,
   renderOutputHandle
@@ -80,9 +82,13 @@ export function ObjectNodeRenderer({
     return (
       <ObjectBox
         className={styles.messageObject}
+        disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         onActivate={(event) => {
           event.stopPropagation();
+          if (!runtimeControlEnabled) {
+            return;
+          }
           onObjectControl?.(node.id, "bang", bangControlMessage());
         }}
         outputPorts={card.outputs}
@@ -95,13 +101,17 @@ export function ObjectNodeRenderer({
     );
   }
 
-  if (node.kind === UI_BUTTON_NODE_KIND) {
+  if (isBangControlNode(node)) {
     return (
       <ObjectBox
         className={styles.bangObject}
+        disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         onActivate={(event) => {
           event.stopPropagation();
+          if (!runtimeControlEnabled) {
+            return;
+          }
           onObjectControl?.(node.id, "in", bangControlMessage());
         }}
         outputPorts={card.outputs}
@@ -116,15 +126,21 @@ export function ObjectNodeRenderer({
     );
   }
 
-  if (node.kind === UI_TOGGLE_NODE_KIND || node.kind === TOGGLE_NODE_KIND) {
-    const value = node.kind === UI_TOGGLE_NODE_KIND ? readUiToggleValue(node) : readToggleParam(node);
+  const toggleNode = node as GraphNodeV01;
+  if (isToggleControlNode(toggleNode)) {
+    const value = controlBoolValue(runtimeControlValue) ?? readToggleControlValue(toggleNode);
+    const nodeId = toggleNode.id;
     return (
       <ObjectBox
         className={styles.toggleObject}
+        disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         onActivate={(event) => {
           event.stopPropagation();
-          onObjectControl?.(node.id, "bang", bangControlMessage());
+          if (!runtimeControlEnabled) {
+            return;
+          }
+          onObjectControl?.(nodeId, "bang", bangControlMessage());
         }}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
@@ -133,17 +149,20 @@ export function ObjectNodeRenderer({
         selected={selected}
       >
         <span className={[styles.toggleSwitch, value ? styles.toggleOn : ""].filter(Boolean).join(" ")} />
-        <span>{node.kind === UI_TOGGLE_NODE_KIND ? readPanelLabelParam(node) : String(node.params.label ?? node.id)}</span>
+        <span>{readPanelLabelParam(toggleNode)}</span>
       </ObjectBox>
     );
   }
 
-  if (node.kind === UI_SLIDER_FLOAT_NODE_KIND) {
+  const sliderNode = node as GraphNodeV01;
+  if (isSliderFloatNode(sliderNode)) {
     return (
       <SliderControlObject
         card={card}
-        node={node}
+        node={sliderNode}
         onLiveControl={onObjectLiveControl ?? onObjectControl}
+        runtimeControlEnabled={runtimeControlEnabled}
+        runtimeControlValue={runtimeControlValue}
         renderInputHandle={renderInputHandle}
         renderOutputHandle={renderOutputHandle}
         selected={selected}
@@ -151,34 +170,38 @@ export function ObjectNodeRenderer({
     );
   }
 
-  if (isValueObject(node)) {
+  const valueNode = node as GraphNodeV01;
+  if (isValueObject(valueNode)) {
     return (
       <ObjectBox
         className={styles.valueObject}
+        disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
         renderOutputHandle={renderOutputHandle}
         selected={selected}
       >
-        <span className={styles.valueKind}>{valueKindLabel(node)}</span>
-        {node.kind === FLOAT_VALUE_NODE_KIND ? (
+        <span className={styles.valueKind}>{valueKindLabel(valueNode)}</span>
+        {valueNode.kind === FLOAT_VALUE_NODE_KIND ? (
           <FloatValueDragObject
-            node={node}
-            onCommit={onObjectParamChange}
+            node={valueNode}
             onLiveControl={onObjectLiveControl ?? onObjectControl}
+            runtimeControlEnabled={runtimeControlEnabled}
+            runtimeControlValue={runtimeControlValue}
           />
         ) : (
-          <span className={styles.valueText}>{valueLabel(node)}</span>
+          <span className={styles.valueText}>{valueLabel(valueNode, runtimeControlValue)}</span>
         )}
-        <span className={styles.representationBadge}>{representationLabel(node)}</span>
-        <RoutingBadges node={node} />
+        <span className={styles.representationBadge}>{representationLabel(valueNode)}</span>
+        <RoutingBadges node={valueNode} />
       </ObjectBox>
     );
   }
 
-  if (node.kind === VIDEO_ASSET_NODE_KIND) {
-    const asset = readVideoAssetParams(node);
+  const fallbackNode = node as GraphNodeV01;
+  if (fallbackNode.kind === VIDEO_ASSET_NODE_KIND) {
+    const asset = readVideoAssetParams(fallbackNode);
     return (
       <ObjectBox
         className={styles.assetObject}
@@ -206,7 +229,7 @@ export function ObjectNodeRenderer({
       style={{ "--node-accent": card.accentColor ?? "#868e96" } as CSSProperties}
     >
       <span className={styles.genericLabel}>{card.label}</span>
-      <span className={styles.genericKind}>{node.kind}</span>
+      <span className={styles.genericKind}>{fallbackNode.kind}</span>
     </ObjectBox>
   );
 }
@@ -215,6 +238,8 @@ function SliderControlObject({
   card,
   node,
   onLiveControl,
+  runtimeControlEnabled,
+  runtimeControlValue,
   renderInputHandle,
   renderOutputHandle,
   selected
@@ -222,16 +247,19 @@ function SliderControlObject({
   card: NodeCardView;
   node: GraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
+  runtimeControlEnabled: boolean;
+  runtimeControlValue?: RuntimeControlValue;
   renderInputHandle?: NodePortHandleRenderer;
   renderOutputHandle?: NodePortHandleRenderer;
   selected?: boolean;
 }) {
-  const slider = readUiSliderParams(node);
-  const [value, setValue] = useState(slider.value);
+  const slider = readSliderFloatParams(node);
+  const displayValue = controlFloatValue(runtimeControlValue) ?? slider.value;
+  const [value, setValue] = useState(displayValue);
 
   useEffect(() => {
-    setValue(slider.value);
-  }, [slider.value]);
+    setValue(displayValue);
+  }, [displayValue]);
 
   const range = slider.max - slider.min;
   const percent = range === 0 ? 0 : Math.min(100, Math.max(0, ((value - slider.min) / range) * 100));
@@ -239,6 +267,7 @@ function SliderControlObject({
   return (
     <ObjectBox
       className={styles.sliderObject}
+      disabled={!runtimeControlEnabled}
       inputPorts={card.inputs}
       outputPorts={card.outputs}
       renderInputHandle={renderInputHandle}
@@ -249,11 +278,15 @@ function SliderControlObject({
       <input
         aria-label={`${slider.label} runtime value`}
         className={[styles.sliderInput, "nodrag", "nopan"].join(" ")}
+        disabled={!runtimeControlEnabled}
         max={slider.max}
         min={slider.min}
         onChange={(event) => {
           const nextValue = event.currentTarget.valueAsNumber;
           if (!Number.isFinite(nextValue)) {
+            return;
+          }
+          if (!runtimeControlEnabled) {
             return;
           }
           setValue(nextValue);
@@ -277,6 +310,7 @@ function SliderControlObject({
 function ObjectBox({
   children,
   className,
+  disabled = false,
   inputPorts = [],
   onActivate,
   outputPorts = [],
@@ -288,6 +322,7 @@ function ObjectBox({
 }: {
   children: ReactNode;
   className: string;
+  disabled?: boolean;
   inputPorts?: NodePortView[];
   onActivate?: (event: MouseEvent<HTMLDivElement>) => void;
   outputPorts?: NodePortView[];
@@ -299,11 +334,14 @@ function ObjectBox({
 }) {
   return (
     <div
-      className={[styles.objectNode, className, selected ? styles.selected : ""].filter(Boolean).join(" ")}
-      onClick={onActivate}
+      aria-disabled={disabled || undefined}
+      className={[styles.objectNode, className, selected ? styles.selected : "", disabled ? styles.disabled : ""]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={disabled ? undefined : onActivate}
       role={role}
       style={style}
-      tabIndex={role === "button" ? 0 : undefined}
+      tabIndex={role === "button" && !disabled ? 0 : undefined}
     >
       {renderInputHandle && inputPorts.length > 0 ? (
         <div className={[styles.handleList, styles.inputHandles].join(" ")}>
@@ -362,13 +400,23 @@ function valueKindLabel(node: GraphNodeV01): string {
   return "string";
 }
 
-function valueLabel(node: GraphNodeV01): string {
-  if (node.kind === FLOAT_VALUE_NODE_KIND) return formatValue(readFloatValueParam(node));
-  if (node.kind === INT_VALUE_NODE_KIND) return String(readIntValueParam(node));
-  if (node.kind === UINT_VALUE_NODE_KIND) return String(readUIntValueParam(node));
-  if (node.kind === BOOL_VALUE_NODE_KIND) return readBoolValueParam(node) ? "true" : "false";
-  if (node.kind === COLOR_NODE_KIND) return readColorRgbaParam(node).map(formatValue).join(" ");
-  return readStringValueParam(node) || "\"\"";
+function valueLabel(node: GraphNodeV01, runtimeControlValue?: RuntimeControlValue): string {
+  if (node.kind === FLOAT_VALUE_NODE_KIND) {
+    return formatValue(controlFloatValue(runtimeControlValue) ?? readFloatValueParam(node));
+  }
+  if (node.kind === INT_VALUE_NODE_KIND) {
+    return String(controlIntValue(runtimeControlValue) ?? readIntValueParam(node));
+  }
+  if (node.kind === UINT_VALUE_NODE_KIND) {
+    return String(controlUIntValue(runtimeControlValue) ?? readUIntValueParam(node));
+  }
+  if (node.kind === BOOL_VALUE_NODE_KIND) {
+    return (controlBoolValue(runtimeControlValue) ?? readBoolValueParam(node)) ? "true" : "false";
+  }
+  if (node.kind === COLOR_NODE_KIND) {
+    return (controlColorValue(runtimeControlValue) ?? readColorRgbaParam(node)).map(formatValue).join(" ");
+  }
+  return controlStringValue(runtimeControlValue) ?? (readStringValueParam(node) || "\"\"");
 }
 
 function representationLabel(node: GraphNodeV01): string {
@@ -386,27 +434,33 @@ function formatValue(value: number): string {
 function FloatValueDragObject({
   node,
   onLiveControl,
-  onCommit
+  runtimeControlEnabled,
+  runtimeControlValue
 }: {
   node: GraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
-  onCommit?: (nodeId: string, key: string, value: unknown) => void;
+  runtimeControlEnabled: boolean;
+  runtimeControlValue?: RuntimeControlValue;
 }) {
-  const graphValue = readFloatValueParam(node);
-  const [draftValue, setDraftValue] = useState(graphValue);
+  const displayValue = controlFloatValue(runtimeControlValue) ?? readFloatValueParam(node);
+  const [draftValue, setDraftValue] = useState(displayValue);
 
   useEffect(() => {
-    setDraftValue(graphValue);
-  }, [graphValue]);
+    setDraftValue(displayValue);
+  }, [displayValue]);
 
   return (
     <button
       className={[styles.valueDrag, "nodrag", "nopan"].join(" ")}
-      onPointerDown={(event) =>
+      disabled={!runtimeControlEnabled}
+      onPointerDown={(event) => {
+        if (!runtimeControlEnabled) {
+          return;
+        }
         beginDeferredHorizontalNumberDrag({
           event,
-          onCancel: () => setDraftValue(graphValue),
-          onCommit: (value) => onCommit?.(node.id, "value", value),
+          onCancel: () => setDraftValue(displayValue),
+          onCommit: () => undefined,
           onPreview: (value) => {
             setDraftValue(value);
             onLiveControl?.(
@@ -415,13 +469,41 @@ function FloatValueDragObject({
               controlMessageFromValue({ type: "float", representation: "f32", value })
             );
           },
-          startValue: graphValue
-        })
+          startValue: displayValue
+        });
+      }}
+      title={
+        runtimeControlEnabled
+          ? "Drag horizontally to send a runtime value"
+          : "Connect and load a Runtime session to send values"
       }
-      title="Drag horizontally to change value"
       type="button"
     >
       {formatValue(draftValue)}
     </button>
   );
+}
+
+function controlFloatValue(value?: RuntimeControlValue): number | null {
+  return value?.type === "float" ? value.value : null;
+}
+
+function controlIntValue(value?: RuntimeControlValue): number | null {
+  return value?.type === "int" ? value.value : null;
+}
+
+function controlUIntValue(value?: RuntimeControlValue): number | null {
+  return value?.type === "uint" ? value.value : null;
+}
+
+function controlBoolValue(value?: RuntimeControlValue): boolean | null {
+  return value?.type === "bool" ? value.value : null;
+}
+
+function controlColorValue(value?: RuntimeControlValue): [number, number, number, number] | null {
+  return value?.type === "color" ? value.value : null;
+}
+
+function controlStringValue(value?: RuntimeControlValue): string | null {
+  return value?.type === "string" ? value.value : null;
 }

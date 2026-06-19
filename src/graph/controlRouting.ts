@@ -1,18 +1,16 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 
 const ROUTING_CAPABLE_NODE_KINDS = new Set([
+  "core.bang",
   "core.float",
   "core.int",
+  "core.uint",
   "core.bool",
   "core.color",
   "core.string",
   "core.message",
-  "core.toggle",
   "core.comment",
-  "core.panel",
-  "ui.button",
-  "ui.slider-float",
-  "ui.toggle"
+  "core.panel"
 ]);
 
 export function isRoutingCapableObjectNode(node: GraphNodeV01 | null): node is GraphNodeV01 {

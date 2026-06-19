@@ -17,6 +17,7 @@ import type {
   RuntimePatchResponse,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
+  RuntimeSessionProjectResponse,
   RuntimeSessionResponse,
   RuntimeTelemetrySnapshot
 } from "./types";
@@ -116,6 +117,8 @@ describe("runtime client", () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       String(_input).endsWith("/v0/session/history")
         ? jsonResponse(historyResponse())
+        : String(_input).endsWith("/v0/session/project")
+        ? jsonResponse(sessionProjectResponse())
         : String(_input).endsWith("/v0/session/patch") ||
             String(_input).endsWith("/v0/session/undo") ||
             String(_input).endsWith("/v0/session/redo")
@@ -125,6 +128,7 @@ describe("runtime client", () => {
     const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
 
     await client.getSession();
+    await client.getSessionProject();
     await client.loadSession(project);
     await client.validateSession();
     await client.planSession();
@@ -136,20 +140,21 @@ describe("runtime client", () => {
     await client.clearSession();
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(fetchMock).toHaveBeenCalledTimes(11);
     expect(calls[0]).toEqual(["http://runtime.local/v0/session", { method: "GET" }]);
-    expect(calls[1][0]).toBe("http://runtime.local/v0/session/load");
-    expect(JSON.parse(String(calls[1][1].body))).toEqual(project);
-    expect(calls[2]).toEqual(["http://runtime.local/v0/session/validate", { method: "POST" }]);
-    expect(calls[3]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
-    expect(calls[4][0]).toBe("http://runtime.local/v0/session/run");
-    expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
-    expect(calls[5][0]).toBe("http://runtime.local/v0/session/patch");
-    expect(JSON.parse(String(calls[5][1].body))).toEqual(patch);
-    expect(calls[6]).toEqual(["http://runtime.local/v0/session/history", { method: "GET" }]);
-    expect(calls[7]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
-    expect(calls[8]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
-    expect(calls[9]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+    expect(calls[1]).toEqual(["http://runtime.local/v0/session/project", { method: "GET" }]);
+    expect(calls[2][0]).toBe("http://runtime.local/v0/session/load");
+    expect(JSON.parse(String(calls[2][1].body))).toEqual(project);
+    expect(calls[3]).toEqual(["http://runtime.local/v0/session/validate", { method: "POST" }]);
+    expect(calls[4]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
+    expect(calls[5][0]).toBe("http://runtime.local/v0/session/run");
+    expect(JSON.parse(String(calls[5][1].body))).toEqual({ frames: 2 });
+    expect(calls[6][0]).toBe("http://runtime.local/v0/session/patch");
+    expect(JSON.parse(String(calls[6][1].body))).toEqual(patch);
+    expect(calls[7]).toEqual(["http://runtime.local/v0/session/history", { method: "GET" }]);
+    expect(calls[8]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
+    expect(calls[9]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
+    expect(calls[10]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
   });
 
   it("calls runtime control endpoints", async () => {
@@ -735,6 +740,24 @@ describe("runtime client", () => {
     await expect(client.getSession()).rejects.toThrow("unsupported response shape");
   });
 
+  it("rejects unsupported runtime session project response shapes", async () => {
+    const invalidProjectClient = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          sessionProjectResponse({
+            project: {
+              ...project,
+              nodes: [{} as RuntimeProjectPayload["nodes"][number]]
+            }
+          })
+        )
+      ) as typeof fetch
+    });
+
+    await expect(invalidProjectClient.getSessionProject()).rejects.toThrow("unsupported response shape");
+  });
+
   it("rejects unsupported runtime patch response shapes", async () => {
     const invalidGraphClient = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -1152,6 +1175,19 @@ function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): Runti
     diagnostics: [],
     plan: null,
     report: null,
+    ...overrides
+  };
+}
+
+function sessionProjectResponse(
+  overrides: Partial<RuntimeSessionProjectResponse> = {}
+): RuntimeSessionProjectResponse {
+  return {
+    ok: true,
+    loaded: true,
+    project,
+    session: sessionResponse(),
+    diagnostics: [],
     ...overrides
   };
 }

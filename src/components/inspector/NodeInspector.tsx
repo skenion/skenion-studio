@@ -74,9 +74,9 @@ import {
   readToggleParam
 } from "../../graph/toggleValue";
 import {
-  isUiButtonNode,
-  isUiSliderFloatNode,
-  isUiToggleNode
+  isBangControlNode,
+  isSliderFloatNode,
+  isToggleControlNode
 } from "../../graph/panelControls";
 import { isVideoAssetNode } from "../../graph/videoAsset";
 
@@ -116,21 +116,21 @@ export function NodeInspector({
   const [helpOpen, setHelpOpen] = useState(false);
   const clearColor = isClearColorNode(node) ? readClearColorParam(node) : null;
   const commentText = isCommentNode(node) ? readCommentTextParam(node) : null;
+  const isPanelControl = isBangControlNode(node) || isSliderFloatNode(node) || isToggleControlNode(node);
   const colorRgba = isColorRgbaNode(node) ? readColorRgbaParam(node) : null;
   const colorRepresentation = isColorRgbaNode(node) ? readColorRepresentationParam(node) : null;
   const colorSpace = isColorRgbaNode(node) ? readColorSpaceParam(node) : null;
-  const floatValue = isFloatValueNode(node) ? readFloatValueParam(node) : null;
-  const floatRepresentation = isFloatValueNode(node) ? readFloatRepresentationParam(node) : null;
+  const floatValue = isFloatValueNode(node) && !isPanelControl ? readFloatValueParam(node) : null;
+  const floatRepresentation = isFloatValueNode(node) && !isPanelControl ? readFloatRepresentationParam(node) : null;
   const intValue = isIntValueNode(node) ? readIntValueParam(node) : null;
   const intRepresentation = isIntValueNode(node) ? readIntRepresentationParam(node) : null;
   const uintValue = isUIntValueNode(node) ? readUIntValueParam(node) : null;
   const uintRepresentation = isUIntValueNode(node) ? readUIntRepresentationParam(node) : null;
-  const boolValue = isBoolValueNode(node) ? readBoolValueParam(node) : null;
-  const stringValue = isStringValueNode(node) ? readStringValueParam(node) : null;
   const toggleValue = isToggleNode(node) ? readToggleParam(node) : null;
+  const boolValue = isBoolValueNode(node) && toggleValue === null ? readBoolValueParam(node) : null;
+  const stringValue = isStringValueNode(node) ? readStringValueParam(node) : null;
   const messageValue = isMessageNode(node) ? readMessageValueParam(node) : null;
   const isAssetNode = isVideoAssetNode(node);
-  const isPanelControl = isUiButtonNode(node) || isUiSliderFloatNode(node) || isUiToggleNode(node);
   const runtimeControlValue = isPanelControl ? null : runtimeControlValueForNode(node);
   const runtimeControlPorts = runtimeControlPortsForNode(node);
   const shaderSource = isFullscreenShaderNode(node) ? readShaderSourceParam(node) : null;

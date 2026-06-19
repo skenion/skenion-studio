@@ -1,31 +1,35 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
 import type { RuntimeControlValue } from "../runtime/types";
 
-export const UI_BUTTON_NODE_KIND = "ui.button";
-export const UI_SLIDER_FLOAT_NODE_KIND = "ui.slider-float";
-export const UI_TOGGLE_NODE_KIND = "ui.toggle";
+export const BANG_NODE_KIND = "core.bang";
+export const SLIDER_FLOAT_NODE_KIND = "core.float";
+export const TOGGLE_BOOL_NODE_KIND = "core.bool";
+export const SLIDER_WIDGET = "slider";
+export const TOGGLE_WIDGET = "toggle";
+export const CHECKBOX_WIDGET = "checkbox";
 
-export function isUiButtonNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
-  return node?.kind === UI_BUTTON_NODE_KIND;
+export function isBangControlNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+  return node?.kind === BANG_NODE_KIND;
 }
 
-export function isUiSliderFloatNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
-  return node?.kind === UI_SLIDER_FLOAT_NODE_KIND;
+export function isSliderFloatNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+  return node?.kind === SLIDER_FLOAT_NODE_KIND && node.params.widget === SLIDER_WIDGET;
 }
 
-export function isUiToggleNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
-  return node?.kind === UI_TOGGLE_NODE_KIND;
+export function isToggleControlNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+  return node?.kind === TOGGLE_BOOL_NODE_KIND && isToggleWidget(node.params.widget);
 }
 
-export function defaultUiButtonParams(): Record<string, unknown> {
+export function defaultBangParams(): Record<string, unknown> {
   return {
     label: "Bang"
   };
 }
 
-export function defaultUiSliderFloatParams(): Record<string, unknown> {
+export function defaultSliderFloatParams(): Record<string, unknown> {
   return {
     label: "Value",
+    widget: SLIDER_WIDGET,
     value: 0,
     min: 0,
     max: 1,
@@ -33,9 +37,10 @@ export function defaultUiSliderFloatParams(): Record<string, unknown> {
   };
 }
 
-export function defaultUiToggleParams(): Record<string, unknown> {
+export function defaultToggleControlParams(): Record<string, unknown> {
   return {
     label: "Enabled",
+    widget: TOGGLE_WIDGET,
     value: false
   };
 }
@@ -46,7 +51,7 @@ export function readPanelLabelParam(node: GraphNodeV01): string {
     : node.id;
 }
 
-export function readUiSliderParams(node: GraphNodeV01) {
+export function readSliderFloatParams(node: GraphNodeV01) {
   const value = finiteNumber(node.params.value, 0);
   const min = finiteNumber(node.params.min, 0);
   const max = finiteNumber(node.params.max, 1);
@@ -60,25 +65,29 @@ export function readUiSliderParams(node: GraphNodeV01) {
   };
 }
 
-export function readUiToggleValue(node: GraphNodeV01): boolean {
+export function readToggleControlValue(node: GraphNodeV01): boolean {
   return typeof node.params.value === "boolean" ? node.params.value : false;
 }
 
-export function runtimeControlValueForUiNode(node: GraphNodeV01): RuntimeControlValue | null {
-  if (isUiSliderFloatNode(node)) {
+export function runtimeControlValueForPanelNode(node: GraphNodeV01): RuntimeControlValue | null {
+  if (isSliderFloatNode(node)) {
     return {
       type: "float",
       representation: "f32",
-      value: readUiSliderParams(node).value
+      value: readSliderFloatParams(node).value
     };
   }
-  if (isUiToggleNode(node)) {
+  if (isToggleControlNode(node)) {
     return {
       type: "bool",
-      value: readUiToggleValue(node)
+      value: readToggleControlValue(node)
     };
   }
   return null;
+}
+
+function isToggleWidget(widget: unknown): boolean {
+  return widget === TOGGLE_WIDGET || widget === CHECKBOX_WIDGET;
 }
 
 function finiteNumber(value: unknown, fallback: number): number {

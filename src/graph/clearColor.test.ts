@@ -38,9 +38,6 @@ describe("clear color graph helpers", () => {
     expect(defaultParamsForNodeKind("core.string")).toEqual({
       value: ""
     });
-    expect(defaultParamsForNodeKind("core.toggle")).toEqual({
-      value: false
-    });
     expect(defaultParamsForNodeKind("core.message")).toEqual({
       value: ""
     });
@@ -51,18 +48,7 @@ describe("clear color graph helpers", () => {
       color: "transparent",
       label: "Panel"
     });
-    expect(defaultParamsForNodeKind("ui.slider-float")).toEqual({
-      label: "Value",
-      value: 0,
-      min: 0,
-      max: 1,
-      step: 0.01
-    });
-    expect(defaultParamsForNodeKind("ui.toggle")).toEqual({
-      label: "Enabled",
-      value: false
-    });
-    expect(defaultParamsForNodeKind("ui.button")).toEqual({
+    expect(defaultParamsForNodeKind("core.bang")).toEqual({
       label: "Bang"
     });
   });
