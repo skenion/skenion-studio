@@ -43,6 +43,7 @@ type StudioFlowNode = Node<SkenionNodeData>;
 
 interface GraphCanvasProps {
   graph: GraphDocumentV01;
+  graphLocked?: boolean;
   viewState: ViewStateV01;
   selectedEdgeId: string | null;
   selectedNodeId: string | null;
@@ -67,6 +68,7 @@ interface GraphCanvasProps {
 
 export function GraphCanvas({
   graph,
+  graphLocked = true,
   viewState,
   selectedEdgeId,
   selectedNodeId,
@@ -140,6 +142,7 @@ export function GraphCanvas({
           onObjectControl: handleObjectControl,
           onObjectLiveControl: handleObjectLiveControl,
           onObjectParamChange: handleObjectParamChange,
+          layoutEditable: !graphLocked,
           runtimeControlEnabled,
           runtimeControlPulseKey: runtimeControlPulses[node.id] ?? 0,
         }
@@ -148,6 +151,7 @@ export function GraphCanvas({
       handleObjectControl,
       handleObjectLiveControl,
       handleObjectParamChange,
+      graphLocked,
       runtimeControlEnabled,
       runtimeControlPulses,
       viewModel.nodes
@@ -177,6 +181,13 @@ export function GraphCanvas({
     (connection: Connection) => {
       activeConnectionRef.current = null;
       setActiveConnectionMessage(null);
+      if (graphLocked) {
+        onConnectionCheck({
+          ok: false,
+          message: "Unlock the graph before creating cables."
+        });
+        return;
+      }
       const patch = toSkenionPatch(connection);
       const check = checkConnection(graph, patch);
       onConnectionCheck(check);
@@ -186,22 +197,30 @@ export function GraphCanvas({
 
       onGraphChange(applyPatch(graph, patch), [patch]);
     },
-    [graph, onConnectionCheck, onGraphChange]
+    [graph, graphLocked, onConnectionCheck, onGraphChange]
   );
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) =>
+      !graphLocked &&
       isValidSkenionConnection(graph, {
         source: connection.source,
         sourceHandle: connection.sourceHandle ?? null,
         target: connection.target,
         targetHandle: connection.targetHandle ?? null
       }),
-    [graph]
+    [graph, graphLocked]
   );
 
   const onConnectStart = useCallback<OnConnectStart>(
     (_event, params) => {
+      if (graphLocked) {
+        onConnectionCheck({
+          ok: false,
+          message: "Unlock the graph before creating cables."
+        });
+        return;
+      }
       const message = connectionStartMessage(graph, params.nodeId, params.handleId);
       activeConnectionRef.current = message;
       setActiveConnectionMessage(message);
@@ -212,11 +231,16 @@ export function GraphCanvas({
         });
       }
     },
-    [graph, onConnectionCheck]
+    [graph, graphLocked, onConnectionCheck]
   );
 
   const onConnectEnd = useCallback<OnConnectEnd>(
     (_event, connectionState) => {
+      if (graphLocked) {
+        activeConnectionRef.current = null;
+        setActiveConnectionMessage(null);
+        return;
+      }
       window.setTimeout(() => {
         if (!activeConnectionRef.current) {
           return;
@@ -236,14 +260,17 @@ export function GraphCanvas({
         setActiveConnectionMessage(null);
       }, 0);
     },
-    [graph, onConnectionCheck]
+    [graph, graphLocked, onConnectionCheck]
   );
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
+      if (graphLocked) {
+        return;
+      }
       onViewStateChange(updateViewStateNodePosition(graph, viewState, node.id, node.position));
     },
-    [graph, onViewStateChange, viewState]
+    [graph, graphLocked, onViewStateChange, viewState]
   );
 
   const onMoveEnd = useCallback(
@@ -255,6 +282,9 @@ export function GraphCanvas({
 
   const onEdgesDelete = useCallback(
     (deletedEdges: Edge[]) => {
+      if (graphLocked) {
+        return;
+      }
       let nextGraph = graph;
       const patches: GraphPatch[] = [];
       for (const edge of deletedEdges) {
@@ -274,11 +304,14 @@ export function GraphCanvas({
       }
       onConnectionCheck(null);
     },
-    [graph, onConnectionCheck, onGraphChange, onSelectedEdgeChange, selectedEdgeId]
+    [graph, graphLocked, onConnectionCheck, onGraphChange, onSelectedEdgeChange, selectedEdgeId]
   );
 
   const onNodesDelete = useCallback(
     (deletedNodes: Node[]) => {
+      if (graphLocked) {
+        return;
+      }
       let nextGraph = graph;
       const patches: GraphPatch[] = [];
       deletingNodeIdsRef.current = new Set(deletedNodes.map((node) => node.id));
@@ -294,7 +327,7 @@ export function GraphCanvas({
       onSelectedEdgeChange(null);
       onSelectedNodeChange(null);
     },
-    [graph, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange]
+    [graph, graphLocked, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange]
   );
 
   const addNodeAtMenuPosition = useCallback(
@@ -302,25 +335,49 @@ export function GraphCanvas({
       if (!contextMenu || contextMenu.type !== "pane") {
         return;
       }
+      if (graphLocked) {
+        setContextMenu(null);
+        onConnectionCheck({
+          ok: false,
+          message: "Unlock the graph before adding objects."
+        });
+        return;
+      }
       onAddNodeAtPosition?.(definitionId, contextMenu.flowPosition, paramsOverride);
       setContextMenu(null);
     },
-    [contextMenu, onAddNodeAtPosition]
+    [contextMenu, graphLocked, onAddNodeAtPosition, onConnectionCheck]
   );
 
   const deleteNodeById = useCallback(
     (nodeId: string) => {
+      if (graphLocked) {
+        setContextMenu(null);
+        onConnectionCheck({
+          ok: false,
+          message: "Unlock the graph before deleting objects."
+        });
+        return;
+      }
       const patch = { type: "removeNode", nodeId } satisfies GraphPatch;
       onGraphChange(applyPatch(graph, patch), [patch]);
       onSelectedNodeChange(null);
       onSelectedEdgeChange(null);
       setContextMenu(null);
     },
-    [graph, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange]
+    [graph, graphLocked, onConnectionCheck, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange]
   );
 
   const deleteEdgeById = useCallback(
     (edgeId: string) => {
+      if (graphLocked) {
+        setContextMenu(null);
+        onConnectionCheck({
+          ok: false,
+          message: "Unlock the graph before deleting cables."
+        });
+        return;
+      }
       const edge = edges.find((candidate) => candidate.id === edgeId);
       const skenionEdge = edge ? edgeFromReactFlow(edge) : null;
       if (!skenionEdge) {
@@ -331,11 +388,19 @@ export function GraphCanvas({
       onSelectedEdgeChange(null);
       setContextMenu(null);
     },
-    [edges, graph, onGraphChange, onSelectedEdgeChange]
+    [edges, graph, graphLocked, onConnectionCheck, onGraphChange, onSelectedEdgeChange]
   );
 
   const duplicateNodeById = useCallback(
     (nodeId: string) => {
+      if (graphLocked) {
+        setContextMenu(null);
+        onConnectionCheck({
+          ok: false,
+          message: "Unlock the graph before duplicating objects."
+        });
+        return;
+      }
       const source = graph.nodes.find((node) => node.id === nodeId);
       const viewNode = viewState.canvas.nodes[nodeId];
       if (!source) {
@@ -356,7 +421,7 @@ export function GraphCanvas({
       onSelectedEdgeChange(null);
       setContextMenu(null);
     },
-    [graph, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange, onViewStateChange, viewState]
+    [graph, graphLocked, onConnectionCheck, onGraphChange, onSelectedEdgeChange, onSelectedNodeChange, onViewStateChange, viewState]
   );
 
   const selectedNodes = useMemo(
@@ -373,11 +438,13 @@ export function GraphCanvas({
       className="skenion-flow"
       defaultEdgeOptions={defaultEdgeOptions}
       defaultViewport={viewport}
-      deleteKeyCode={["Backspace", "Delete"]}
+      deleteKeyCode={graphLocked ? null : ["Backspace", "Delete"]}
       edges={selectedEdges}
       key={graph.id}
       nodeTypes={nodeTypes}
       nodes={selectedNodes}
+      nodesConnectable={!graphLocked}
+      nodesDraggable={!graphLocked}
       isValidConnection={isValidConnection}
       onConnect={onConnect}
       onConnectEnd={onConnectEnd}
@@ -427,6 +494,15 @@ export function GraphCanvas({
       }}
       onPaneContextMenu={(event) => {
         event.preventDefault();
+        if (graphLocked) {
+          setContextMenu({
+            type: "pane",
+            flowPosition: { x: 0, y: 0 },
+            screenX: event.clientX,
+            screenY: event.clientY
+          });
+          return;
+        }
         const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
         setContextMenu({
           type: "pane",
@@ -457,6 +533,7 @@ export function GraphCanvas({
         onDeleteEdge={deleteEdgeById}
         onDeleteNode={deleteNodeById}
         onDuplicateNode={duplicateNodeById}
+        layoutEditable={!graphLocked}
         onInspectEdge={(edgeId) => {
           onSelectedEdgeChange(edgeId);
           onSelectedNodeChange(null);
@@ -499,6 +576,7 @@ type CanvasContextMenuState =
     };
 
 function ReactFlowContextMenu({
+  layoutEditable,
   menu,
   onAddNode,
   onClose,
@@ -510,6 +588,7 @@ function ReactFlowContextMenu({
   onInspectNode,
   onShowHelp
 }: {
+  layoutEditable: boolean;
   menu: CanvasContextMenuState | null;
   onAddNode: (definitionId: string, paramsOverride?: Record<string, unknown>) => void;
   onClose: () => void;
@@ -536,34 +615,38 @@ function ReactFlowContextMenu({
         <>
           <button onClick={() => onInspectNode(menu.nodeId)} type="button">Inspect</button>
           <button onClick={() => onShowHelp(menu.nodeKind)} type="button">Help</button>
-          <button onClick={() => onDuplicateNode(menu.nodeId)} type="button">Duplicate</button>
+          {layoutEditable ? <button onClick={() => onDuplicateNode(menu.nodeId)} type="button">Duplicate</button> : null}
           <button onClick={() => onCopy(menu.nodeId)} type="button">Copy Node ID</button>
           <button onClick={() => onCopy(`node:${menu.nodeId}`)} type="button">Copy Node Address</button>
-          <button className="is-danger" onClick={() => onDeleteNode(menu.nodeId)} type="button">Delete</button>
+          {layoutEditable ? <button className="is-danger" onClick={() => onDeleteNode(menu.nodeId)} type="button">Delete</button> : null}
         </>
       ) : null}
       {menu.type === "edge" ? (
         <>
           <button onClick={() => onInspectEdge(menu.edgeId)} type="button">Inspect Cable</button>
           <button onClick={() => onCopy(menu.edgeId)} type="button">Copy Edge ID</button>
-          <button className="is-danger" onClick={() => onDeleteEdge(menu.edgeId)} type="button">Delete Cable</button>
+          {layoutEditable ? <button className="is-danger" onClick={() => onDeleteEdge(menu.edgeId)} type="button">Delete Cable</button> : null}
         </>
       ) : null}
       {menu.type === "pane" ? (
         <>
-          <button onClick={() => onAddNode("core.comment")} type="button">Add Comment</button>
-          <button onClick={() => onAddNode("core.panel")} type="button">Add Panel</button>
-          <button onClick={() => onAddNode("core.message")} type="button">Add Message</button>
-          <button onClick={() => onAddNode("core.bang")} type="button">Add Bang</button>
-          <button onClick={() => onAddNode("core.bool", { label: "Enabled", widget: "toggle" })} type="button">Add Toggle</button>
-          <button
-            onClick={() => onAddNode("core.float", { label: "Value", max: 1, min: 0, step: 0.01, widget: "slider" })}
-            type="button"
-          >
-            Add Slider
-          </button>
-          <button onClick={() => onAddNode("core.float")} type="button">Add Float</button>
-          <button onClick={() => onAddNode("core.video-asset")} type="button">Add Video Asset</button>
+          {layoutEditable ? (
+            <>
+              <button onClick={() => onAddNode("core.comment")} type="button">Add Comment</button>
+              <button onClick={() => onAddNode("core.panel")} type="button">Add Panel</button>
+              <button onClick={() => onAddNode("core.message")} type="button">Add Message</button>
+              <button onClick={() => onAddNode("core.bang")} type="button">Add Bang</button>
+              <button onClick={() => onAddNode("core.bool", { label: "Enabled", widget: "toggle" })} type="button">Add Toggle</button>
+              <button
+                onClick={() => onAddNode("core.float", { label: "Value", max: 1, min: 0, step: 0.01, widget: "slider" })}
+                type="button"
+              >
+                Add Slider
+              </button>
+              <button onClick={() => onAddNode("core.float")} type="button">Add Float</button>
+              <button onClick={() => onAddNode("core.video-asset")} type="button">Add Video Asset</button>
+            </>
+          ) : null}
           <button onClick={() => { fitView({ padding: 0.2 }); onClose(); }} type="button">Fit View</button>
         </>
       ) : null}
@@ -673,9 +756,11 @@ function applyEdgeSelection(edges: Edge[], selectedEdgeId: string | null): Edge[
 function sameFlowNode(currentNode: StudioFlowNode, nextNode: StudioFlowNode): boolean {
   return (
     currentNode.type === nextNode.type &&
+    currentNode.dragHandle === nextNode.dragHandle &&
     currentNode.position.x === nextNode.position.x &&
     currentNode.position.y === nextNode.position.y &&
     currentNode.data.node === nextNode.data.node &&
+    currentNode.data.layoutEditable === nextNode.data.layoutEditable &&
     currentNode.data.runtimeControlEnabled === nextNode.data.runtimeControlEnabled &&
     currentNode.data.runtimeControlPulseKey === nextNode.data.runtimeControlPulseKey &&
     sameRuntimeControlValue(

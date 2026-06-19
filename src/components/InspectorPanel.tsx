@@ -19,6 +19,7 @@ import type { RuntimeControlEventRequest, RuntimeGeneratedShaderResponse } from 
 interface InspectorPanelProps {
   connectionCheck: ConnectionCheck | null;
   edge: EdgeInspectorModel | null;
+  graphLocked: boolean;
   graph: GraphDocumentV01;
   node: GraphNodeV01 | null;
   helpNodeId: string | null;
@@ -44,6 +45,7 @@ export function InspectorPanel({
   connectionCheck,
   edge,
   graph,
+  graphLocked,
   generatedShader,
   generatedShaderBusy,
   helpNodeId,
@@ -93,6 +95,7 @@ export function InspectorPanel({
             generatedShader={generatedShader}
             generatedShaderBusy={generatedShaderBusy}
             node={node}
+            graphLocked={graphLocked}
             onLoadGeneratedShader={onLoadGeneratedShader}
             onImportAsset={onImportAsset}
             onOpenHelpGraph={onOpenHelpGraph}
