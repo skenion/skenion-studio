@@ -162,7 +162,7 @@ body {
 
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: #1864ab !important;
-  stroke-width: 2.75px !important;
+  stroke-width: var(--skenion-selected-edge-stroke-width, 2.75px) !important;
 }
 
 .react-flow__edge.selected .react-flow__edge-interaction {

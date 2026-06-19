@@ -142,8 +142,10 @@ export default function App() {
   }, [runtimeTelemetry, selectedNode?.id, selectedNode?.kind]);
   const liveControlQueueRef = useRef<{
     inFlight: boolean;
-    request: RuntimeControlEventRequest | null;
-  }>({ inFlight: false, request: null });
+    latestSequence: number;
+    nextSequence: number;
+    request: { request: RuntimeControlEventRequest; sequence: number } | null;
+  }>({ inFlight: false, latestSequence: 0, nextSequence: 0, request: null });
   const runtimeLiveStateRef = useRef({
     info: runtimeInfo,
     sessionLoaded: Boolean(runtimeSession?.loaded),
@@ -1007,8 +1009,12 @@ export default function App() {
   }
 
   function sendRuntimeLiveControlEvent(request: RuntimeControlEventRequest) {
+    const queue = liveControlQueueRef.current;
+    const sequence = queue.nextSequence + 1;
+    queue.nextSequence = sequence;
+    queue.latestSequence = sequence;
     applyOptimisticRuntimeControlEvent(request);
-    liveControlQueueRef.current.request = request;
+    queue.request = { request, sequence };
     void flushRuntimeLiveControlQueue();
   }
 
@@ -1081,35 +1087,41 @@ export default function App() {
       return;
     }
 
-    const request = queue.request;
+    const pendingRequest = queue.request;
     const { info, sessionLoaded, sessionSynced, status, url } = runtimeLiveStateRef.current;
-    if (!request || status !== "connected" || !sessionLoaded || !sessionSynced || !runtimeSupportsControl(info)) {
+    if (!pendingRequest || status !== "connected" || !sessionLoaded || !sessionSynced || !runtimeSupportsControl(info)) {
       return;
     }
 
     queue.request = null;
     queue.inFlight = true;
+    const { request, sequence } = pendingRequest;
     try {
       const client = createRuntimeClient({ baseUrl: url });
       const response = await client.sendControlEvent(request);
-      recordRuntimeControlPulses(response);
-      setRuntimeStatus("connected");
-      setRuntimeError(null);
+      const isCurrentLiveResponse = sequence === queue.latestSequence;
+      if (isCurrentLiveResponse) {
+        recordRuntimeControlPulses(response);
+        setRuntimeStatus("connected");
+        setRuntimeError(null);
+      }
       if (response.controlRevision !== null) {
-        applyRuntimeControlEventResponse(response);
+        applyRuntimeControlEventResponse(response, { applyValues: isCurrentLiveResponse });
         setRuntimeSession((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
         );
         setRuntimePreviewStatus((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
         );
-      } else {
+      } else if (isCurrentLiveResponse) {
         await restoreRuntimeControlStateAfterControlFailure(client, info);
       }
     } catch (error) {
-      setRuntimeStatus("error");
-      setRuntimeError(error instanceof Error ? error.message : "Runtime control event failed.");
-      await restoreRuntimeControlStateAfterControlFailure(createRuntimeClient({ baseUrl: url }), info);
+      if (sequence === queue.latestSequence) {
+        setRuntimeStatus("error");
+        setRuntimeError(error instanceof Error ? error.message : "Runtime control event failed.");
+        await restoreRuntimeControlStateAfterControlFailure(createRuntimeClient({ baseUrl: url }), info);
+      }
     } finally {
       queue.inFlight = false;
       if (queue.request) {
@@ -1140,20 +1152,26 @@ export default function App() {
     });
   }
 
-  function applyRuntimeControlEventResponse(response: RuntimeControlEventResponse) {
+  function applyRuntimeControlEventResponse(
+    response: RuntimeControlEventResponse,
+    options: { applyValues?: boolean } = {}
+  ) {
     if (response.controlRevision === null) {
       return;
     }
+    const applyValues = options.applyValues ?? true;
     setRuntimeControlState((current) => {
       if (!current) {
         return current;
       }
-      const values = { ...current.values };
+      const values = applyValues ? { ...current.values } : current.values;
       let changed = false;
-      for (const emission of response.emitted) {
-        const atom = emission.message.atoms[0];
-        if (atom && emission.portId === "value") {
-          changed = setRuntimeControlValueIfChanged(values, emission.nodeId, atom) || changed;
+      if (applyValues) {
+        for (const emission of response.emitted) {
+          const atom = emission.message.atoms[0];
+          if (atom && emission.portId === "value") {
+            changed = setRuntimeControlValueIfChanged(values, emission.nodeId, atom) || changed;
+          }
         }
       }
       const revisionChanged = response.controlRevision !== current.controlRevision;

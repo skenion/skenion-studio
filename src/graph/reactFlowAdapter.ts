@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type {
   DataFlow,
   EdgeV01,
@@ -124,6 +125,7 @@ function toReactFlowEdge(edge: EdgeV01, graph: GraphDocumentV01): Edge {
   const color = sourcePort && sourceNode ? semanticTypeColor(portSemanticsForPort(sourceNode, sourcePort).type) : "#868e96";
   const label = inspector.resolvedType === "unknown" ? "" : inspector.resolvedType;
   const feedback = Boolean(inspector.feedback);
+  const strokeWidth = label === "gpu.texture2d" || label === "render.frame" ? 3 : 2;
 
   return {
     id: inspector.id,
@@ -148,8 +150,9 @@ function toReactFlowEdge(edge: EdgeV01, graph: GraphDocumentV01): Edge {
     style: {
       stroke: color,
       strokeDasharray: feedback ? "7 4" : undefined,
-      strokeWidth: label === "gpu.texture2d" || label === "render.frame" ? 3 : 2
-    },
+      strokeWidth,
+      "--skenion-selected-edge-stroke-width": `${strokeWidth + 0.75}px`
+    } as CSSProperties,
     labelStyle: {
       fill: "#343a40",
       fontWeight: 600
