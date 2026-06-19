@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.25.1...skenion-studio-v0.26.0) (2026-06-19)
+
+
+### Features
+
+* **studio:** align object controls with pd-style inlets ([#66](https://github.com/echovisionlab/skenion-studio/issues/66)) ([3e71fc8](https://github.com/echovisionlab/skenion-studio/commit/3e71fc8830b333bd56688e600fbb26f61211bbc3))
+
 ## [0.25.1](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.25.0...skenion-studio-v0.25.1) (2026-06-19)
 
 
