@@ -17,7 +17,7 @@ describe("PanelControlInspector", () => {
   it("creates toggle runtime bang events without graph param edits", () => {
     expect(toggleRuntimeRequest("node_1")).toEqual({
       nodeId: "node_1",
-      portId: "bang",
+      portId: "in",
       message: { selector: "bang", atoms: [] }
     });
   });

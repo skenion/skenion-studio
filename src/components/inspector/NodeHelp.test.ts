@@ -19,9 +19,10 @@ describe("NodeHelp", () => {
     expect(html).toContain("Stores and emits");
     expect(html).toContain("control");
     expect(html).toContain("Runtime:");
-    expect(html).toContain("in: Updates the stored value and emits it.");
-    expect(html).toContain("set: Updates the stored value without emitting.");
-    expect(html).toContain("bang: Emits the current stored value without changing it.");
+    expect(html).toContain("in: Hot inlet:");
+    expect(html).toContain("bang emits the stored value");
+    expect(html).toContain("set ... updates silently");
+    expect(html).toContain("cold: Cold inlet:");
     expect(html).toContain("value: Saved default numeric value.");
     expect(html).toContain("widget: Optional display widget.");
   });

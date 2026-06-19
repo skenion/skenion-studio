@@ -228,7 +228,7 @@ describe("port and edge semantics", () => {
       edges: [
         sampleGraph.edges[0],
         {
-          from: { node: "bang_1", port: "bang" },
+          from: { node: "bang_1", port: "out" },
           to: { node: "target_1", port: "in" }
         }
       ]
@@ -237,7 +237,6 @@ describe("port and edge semantics", () => {
     const diagnostics = analyzeGraphPortSemantics(duplicateTarget);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      "incompatible-edge-type",
       "fan-in-forbidden"
     ]);
     expect(
@@ -245,7 +244,7 @@ describe("port and edge semantics", () => {
         type: "addEdge",
         edge: duplicateTarget.edges[1]
       })
-    ).toMatchObject({ code: "incompatible-edge-type" });
+    ).toMatchObject({ code: "fan-in-forbidden" });
     expect(connectionSemanticCheck(sampleGraph, null)).toBeNull();
 
     const mergeForbiddenTarget: GraphDocumentV01 = {

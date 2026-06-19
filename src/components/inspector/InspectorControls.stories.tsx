@@ -121,7 +121,7 @@ export const RuntimeControlValueControl: Story = {
 export const RuntimeControlMessageOnly: Story = {
   render: () => (
     <RuntimeControlValueControls
-      availablePorts={{ bang: true, in: false, set: false }}
+      availableActions={{ bang: true, in: false, set: false }}
       busy={false}
       enabled
       nodeId="message_1"

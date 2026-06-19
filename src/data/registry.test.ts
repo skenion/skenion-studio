@@ -46,41 +46,34 @@ describe("node registry", () => {
   it("exposes typed value node control ports", () => {
     expect(findStudioDefinition("core.float")?.ports.map((port) => port.id)).toEqual([
       "in",
-      "set",
-      "bang",
+      "cold",
       "value"
     ]);
     expect(findStudioDefinition("core.int")?.ports.map((port) => port.id)).toEqual([
       "in",
-      "set",
-      "bang",
+      "cold",
       "value"
     ]);
     expect(findStudioDefinition("core.bool")?.ports.map((port) => port.id)).toEqual([
       "in",
-      "set",
-      "bang",
+      "cold",
       "value"
     ]);
     expect(findStudioDefinition(COLOR_NODE_KIND)?.ports.map((port) => port.id)).toEqual([
       "in",
-      "set",
-      "bang",
+      "cold",
       "value"
     ]);
     expect(findStudioDefinition("core.string")?.ports.map((port) => port.id)).toEqual([
       "in",
-      "set",
-      "bang",
+      "cold",
       "value"
     ]);
     expect(findStudioDefinition("core.message")?.ports.map((port) => port.id)).toEqual([
       "in",
-      "set",
-      "bang",
-      "value"
+      "out"
     ]);
-    expect(findStudioDefinition("core.bang")?.ports.map((port) => port.id)).toEqual(["in", "bang"]);
+    expect(findStudioDefinition("core.bang")?.ports.map((port) => port.id)).toEqual(["in", "out"]);
     expect(findStudioDefinition("core.comment")?.ports.map((port) => port.id)).toEqual([]);
     expect(nodeRegistry.map((definition) => definition.id)).not.toEqual(
       expect.arrayContaining([

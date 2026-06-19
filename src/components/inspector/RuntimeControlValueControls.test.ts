@@ -21,9 +21,9 @@ describe("RuntimeControlValueControls", () => {
     buttons[2]?.props.onClick?.();
 
     expect(requests).toEqual([
-      { nodeId: "value_1", portId: "set", message: { selector: "set", atoms: [{ type: "float", representation: "f32", value: 1.25 }] } },
+      { nodeId: "value_1", portId: "in", message: { selector: "set", atoms: [{ type: "float", representation: "f32", value: 1.25 }] } },
       { nodeId: "value_1", portId: "in", message: { selector: "float", atoms: [{ type: "float", representation: "f32", value: 1.25 }] } },
-      { nodeId: "value_1", portId: "bang", message: { selector: "bang", atoms: [] } }
+      { nodeId: "value_1", portId: "in", message: { selector: "bang", atoms: [] } }
     ]);
   });
 
@@ -41,10 +41,10 @@ describe("RuntimeControlValueControls", () => {
     expect(buttons.every((button) => button.props.disabled === true)).toBe(true);
   });
 
-  it("renders only available runtime input ports", () => {
+  it("renders only available runtime control actions", () => {
     const requests: unknown[] = [];
     const element = RuntimeControlValueControls({
-      availablePorts: { bang: true, in: false, set: false },
+      availableActions: { bang: true, in: false, set: false },
       busy: false,
       enabled: true,
       nodeId: "message_1",
@@ -55,13 +55,13 @@ describe("RuntimeControlValueControls", () => {
 
     expect(buttons).toHaveLength(1);
     buttons[0]?.props.onClick?.();
-    expect(requests).toEqual([{ nodeId: "message_1", portId: "bang", message: { selector: "bang", atoms: [] } }]);
+    expect(requests).toEqual([{ nodeId: "message_1", portId: "in", message: { selector: "bang", atoms: [] } }]);
   });
 
-  it("returns null when no runtime input ports are available", () => {
+  it("returns null when no runtime control actions are available", () => {
     expect(
       RuntimeControlValueControls({
-        availablePorts: { bang: false, in: false, set: false },
+        availableActions: { bang: false, in: false, set: false },
         busy: false,
         enabled: true,
         nodeId: "comment_1",

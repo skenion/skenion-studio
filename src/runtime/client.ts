@@ -544,7 +544,7 @@ function isRuntimeControlEmission(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.nodeId === "string" &&
-    (value.portId === "value" || value.portId === "in" || value.portId === "bang") &&
+    (value.portId === "value" || value.portId === "in" || value.portId === "out") &&
     isRuntimeControlMessage(value.message)
   );
 }

@@ -55,10 +55,10 @@ export const valueInPort: NodePortView = {
   }
 };
 
-export const valueSetPort: NodePortView = {
+export const valueColdPort: NodePortView = {
   ...valueInputPort,
-  id: "set",
-  label: "set",
+  id: "cold",
+  label: "cold",
   metadata: {
     ...valueInputPort.metadata,
     required: false,
@@ -136,8 +136,8 @@ export const gpuTextureOutputPort: NodePortView = {
 };
 
 export const eventInputPort: NodePortView = {
-  id: "bang",
-  label: "bang",
+  id: "in",
+  label: "in",
   direction: "input",
   typeLabel: "event.bang",
   color: "#f08c00",
@@ -146,15 +146,6 @@ export const eventInputPort: NodePortView = {
     maxConnections: null,
     mergePolicy: "ordered-events",
     triggerMode: "trigger"
-  }
-};
-
-export const valueBangPort: NodePortView = {
-  ...eventInputPort,
-  metadata: {
-    ...eventInputPort.metadata,
-    maxConnections: 1,
-    mergePolicy: "forbid"
   }
 };
 
@@ -213,7 +204,7 @@ export const valueControlCard: NodeCardView = {
   kindVersion: "0.1.0",
   typeBadgeLabel: "value.number.float",
   accentColor: "#495057",
-  inputs: [valueInPort, valueSetPort, valueBangPort],
+  inputs: [valueInPort, valueColdPort],
   outputs: [valueOutputPort]
 };
 

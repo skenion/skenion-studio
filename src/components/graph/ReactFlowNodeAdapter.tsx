@@ -16,6 +16,7 @@ export function ReactFlowNodeAdapter({ data, selected }: ReactFlowNodeAdapterPro
     onObjectLiveControl: data.onObjectLiveControl,
     onObjectParamChange: data.onObjectParamChange,
     runtimeControlEnabled: data.runtimeControlEnabled,
+    runtimeControlPulseKey: data.runtimeControlPulseKey,
     runtimeControlValue: data.runtimeControlValue,
     selected,
     renderInputHandle: (port, side) => <ReactFlowPortHandle port={port} side={side} />,

@@ -211,13 +211,13 @@ export interface RuntimeControlMessage {
 
 export interface RuntimeControlEventRequest {
   nodeId: string;
-  portId: "in" | "set" | "bang" | "value";
+  portId: "in" | "cold" | "value" | "out";
   message: RuntimeControlMessage;
 }
 
 export interface RuntimeControlEmission {
   nodeId: string;
-  portId: "in" | "bang" | "value";
+  portId: "in" | "out" | "value";
   message: RuntimeControlMessage;
 }
 

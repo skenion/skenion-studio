@@ -134,7 +134,7 @@ export function NodeInspector({
   const messageValue = isMessageNode(node) ? readMessageValueParam(node) : null;
   const isAssetNode = isVideoAssetNode(node);
   const runtimeControlValue = isPanelControl ? null : runtimeControlValueForNode(node);
-  const runtimeControlPorts = runtimeControlPortsForNode(node);
+  const runtimeControlActions = runtimeControlActionsForNode(node);
   const shaderSource = isFullscreenShaderNode(node) ? readShaderSourceParam(node) : null;
   const shaderLanguage = isFullscreenShaderNode(node) ? readShaderLanguageParam(node) : null;
   const shaderAnalysis = shaderSource !== null
@@ -335,9 +335,9 @@ export function NodeInspector({
         <>
           <Divider />
           <RuntimeControlValueControls
+            availableActions={runtimeControlActions}
             busy={runtimeControlBusy}
             enabled={runtimeControlEnabled}
-            availablePorts={runtimeControlPorts}
             nodeId={node.id}
             onSend={onSendRuntimeControl}
             value={runtimeControlValue}
@@ -368,11 +368,12 @@ export function NodeInspector({
   );
 }
 
-function runtimeControlPortsForNode(node: GraphNodeV01) {
+function runtimeControlActionsForNode(node: GraphNodeV01) {
+  const hasHotInlet = hasInputPort(node, "in");
   return {
-    in: hasInputPort(node, "in"),
-    set: hasInputPort(node, "set"),
-    bang: hasInputPort(node, "bang")
+    in: hasHotInlet,
+    set: hasHotInlet,
+    bang: hasHotInlet
   };
 }
 

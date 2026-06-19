@@ -77,11 +77,11 @@ export const sampleGraph: GraphDocumentV01 = {
     {
       from: {
         node: "bang_1",
-        port: "bang"
+        port: "out"
       },
       to: {
         node: "event_log_1",
-        port: "bang"
+        port: "in"
       }
     },
     {
@@ -372,11 +372,11 @@ export const objectVisualSampleGraph: GraphDocumentV01 = {
     {
       from: {
         node: "button_1",
-        port: "bang"
+        port: "out"
       },
       to: {
         node: "message_1",
-        port: "bang"
+        port: "in"
       }
     },
     {
@@ -434,11 +434,11 @@ export const portDemoSampleGraph: GraphDocumentV01 = {
     {
       from: {
         node: "bang_1",
-        port: "bang"
+        port: "out"
       },
       to: {
         node: "event_log_1",
-        port: "bang"
+        port: "in"
       }
     },
     {

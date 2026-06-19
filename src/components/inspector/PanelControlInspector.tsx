@@ -197,7 +197,7 @@ export function sliderRuntimeRequest(nodeId: string, value: number): RuntimeCont
 export function toggleRuntimeRequest(nodeId: string): RuntimeControlEventRequest {
   return {
     nodeId,
-    portId: "bang",
+    portId: "in",
     message: bangControlMessage()
   };
 }

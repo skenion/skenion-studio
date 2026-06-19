@@ -175,11 +175,11 @@ describe("skenion graph helpers", () => {
       checkConnection(sampleGraph, {
         type: "addEdge",
         edge: {
-          from: { node: "value_1", port: "value" },
-          to: { node: "event_log_1", port: "bang" }
+          from: { node: "bang_1", port: "out" },
+          to: { node: "target_1", port: "cold" }
         }
       }).message
-    ).toMatch(/incompatible-edge-type: .*value\.number\.float.*event\.bang/);
+    ).toMatch(/incompatible-edge-type: .*event\.bang.*value\.number\.float/);
     expect(
       checkConnection(sampleGraph, {
         type: "addEdge",
@@ -199,8 +199,33 @@ describe("skenion graph helpers", () => {
       )
     ).toEqual({
       ok: true,
-      message: "value<number.float> connected to value<number.float>."
+      message: "value<number.float> connected to event<message.any>."
     });
+    const secondBang = createGraphNodeFromDefinition(
+      nodeRegistry.find((candidate) => candidate.id === "core.bang")!,
+      sampleGraph.nodes
+    );
+    const messageToBangGraph = {
+      ...sampleGraph,
+      nodes: [...sampleGraph.nodes, { ...secondBang, id: "bang_2" }],
+      edges: []
+    };
+    expect(
+      isValidSkenionConnection(messageToBangGraph, {
+        source: "event_log_1",
+        sourceHandle: "out",
+        target: "bang_2",
+        targetHandle: "in"
+      })
+    ).toBe(true);
+    expect(
+      isValidSkenionConnection(messageToBangGraph, {
+        source: "video_asset_1",
+        sourceHandle: "asset",
+        target: "event_log_1",
+        targetHandle: "in"
+      })
+    ).toBe(false);
     expect(
       checkConnection(
         {
@@ -264,7 +289,7 @@ describe("skenion graph helpers", () => {
         {
           type: "addEdge",
           edge: {
-            from: { node: "bang_1", port: "bang" },
+            from: { node: "bang_1", port: "out" },
             to: { node: "shader_1", port: "speed" }
           }
         }

@@ -215,7 +215,7 @@ describe("runtime client", () => {
     await expect(
       client.sendControlEvent({
         nodeId: "value_1",
-        portId: "bang",
+        portId: "in",
         message: { selector: "bang", atoms: [] }
       })
     ).resolves.toMatchObject({

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { Alert, AppShell, Badge, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
 import {
@@ -99,6 +98,7 @@ export default function App() {
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
   const [runtimeControlState, setRuntimeControlState] = useState<RuntimeControlStateResponse | null>(null);
   const [runtimeControlPulses, setRuntimeControlPulses] = useState<Record<string, number>>({});
+  const runtimeControlPulseCounterRef = useRef(0);
   const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] = useState<RuntimePreviewStatus | null>(null);
   const [runtimeTelemetry, setRuntimeTelemetry] = useState<RuntimeTelemetrySnapshot | null>(null);
@@ -789,6 +789,17 @@ export default function App() {
     return controlState;
   }
 
+  async function restoreRuntimeControlStateAfterControlFailure(
+    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    info: RuntimeInfo | null = runtimeInfo
+  ) {
+    try {
+      await refreshRuntimeControlState(client, info);
+    } catch {
+      setRuntimeControlState(null);
+    }
+  }
+
   async function refreshRuntimeTelemetry(
     client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
     info: RuntimeInfo | null = runtimeInfo
@@ -964,10 +975,10 @@ export default function App() {
       return;
     }
 
-    setRuntimeBusyAction("controlEvent");
     setRuntimeError(null);
+    applyOptimisticRuntimeControlEvent(request);
+    const client = createRuntimeClient({ baseUrl: runtimeUrl });
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
       const response = await client.sendControlEvent(request);
       recordRuntimeControlPulses(response);
       setRuntimeResult({
@@ -976,39 +987,36 @@ export default function App() {
         receivedAt: new Date().toISOString()
       });
       setRuntimeStatus("connected");
-      const session = await client.getSession();
-      setRuntimeSession(session);
-      if (session.loaded && runtimeSupportsControlState(runtimeInfo)) {
-        await refreshRuntimeControlState(client);
+      applyRuntimeControlEventResponse(response);
+      if (response.controlRevision !== null) {
+        setRuntimeSession((current) =>
+          current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
+        );
+        setRuntimePreviewStatus((current) =>
+          current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
+        );
       } else {
-        setRuntimeControlState(null);
+        await restoreRuntimeControlStateAfterControlFailure(client);
       }
-      if (runtimeSupportsHistory(runtimeInfo)) {
-        await refreshRuntimeHistory(client);
-      }
-      await refreshRuntimePreview(client);
-      await refreshRuntimeTelemetry(client);
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
-    } finally {
-      setRuntimeBusyAction(null);
+      await restoreRuntimeControlStateAfterControlFailure(client);
     }
   }
 
   function sendRuntimeLiveControlEvent(request: RuntimeControlEventRequest) {
-    flushSync(() => {
-      applyOptimisticRuntimeControlEvent(request);
-    });
+    applyOptimisticRuntimeControlEvent(request);
     liveControlQueueRef.current.request = request;
     void flushRuntimeLiveControlQueue();
   }
 
   function applyOptimisticRuntimeControlEvent(request: RuntimeControlEventRequest) {
     const atom = request.message.atoms[0];
-    if (!atom || (request.portId !== "in" && request.portId !== "set")) {
+    if (!atom || (request.portId !== "in" && request.portId !== "cold")) {
       return;
     }
+    const shouldPropagate = request.portId === "in" && request.message.selector !== "set";
 
     setRuntimeControlState((current) => {
       if (!current) {
@@ -1016,7 +1024,7 @@ export default function App() {
       }
       const values = { ...current.values };
       values[request.nodeId] = atom;
-      if (request.portId === "in") {
+      if (shouldPropagate) {
         propagateOptimisticValue(request.nodeId, atom, values);
       }
       return {
@@ -1092,10 +1100,13 @@ export default function App() {
         setRuntimePreviewStatus((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
         );
+      } else {
+        await restoreRuntimeControlStateAfterControlFailure(client, info);
       }
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime control event failed.");
+      await restoreRuntimeControlStateAfterControlFailure(createRuntimeClient({ baseUrl: url }), info);
     } finally {
       queue.inFlight = false;
       if (queue.request) {
@@ -1110,12 +1121,13 @@ export default function App() {
 
   function recordRuntimeControlPulses(response: RuntimeControlEventResponse) {
     const pulseNodeIds = response.emitted
-      .filter((emission) => emission.portId === "bang" || emission.message.selector === "bang")
+      .filter((emission) => emission.message.selector === "bang")
       .map((emission) => emission.nodeId);
     if (pulseNodeIds.length === 0) {
       return;
     }
-    const pulseKey = Date.now();
+    const pulseKey = runtimeControlPulseCounterRef.current + 1;
+    runtimeControlPulseCounterRef.current = pulseKey;
     setRuntimeControlPulses((current) => {
       const next = { ...current };
       for (const nodeId of pulseNodeIds) {

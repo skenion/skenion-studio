@@ -22,6 +22,7 @@ import { PANEL_NODE_KIND, readPanelParams } from "../../graph/panelNode";
 import type { NodeCardView, NodePortHandleRenderer, NodePortView } from "../node/nodeTypes";
 import type { RuntimeControlMessage, RuntimeControlValue } from "../../runtime/types";
 import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
+import { objectViewSpecForNode, type ObjectChromePolicy } from "../../graph/objectViewSpec";
 import { beginDeferredHorizontalMouseNumberDrag, beginDeferredHorizontalNumberDrag } from "./deferredPointerDrag";
 import styles from "./ObjectNodeRenderer.module.css";
 import socketStyles from "../node/PortSocket.module.css";
@@ -54,10 +55,12 @@ export function ObjectNodeRenderer({
   renderInputHandle,
   renderOutputHandle
 }: ObjectNodeRendererProps) {
+  const viewSpec = objectViewSpecForNode(node);
   if (node.kind === "core.comment") {
     return (
       <ObjectBox
         className={styles.commentObject}
+        chromePolicy={viewSpec.chromePolicy}
         inputPorts={card.inputs}
         layoutEditable={layoutEditable}
         renderInputHandle={renderInputHandle}
@@ -73,6 +76,7 @@ export function ObjectNodeRenderer({
     return (
       <ObjectBox
         className={styles.panelObject}
+        chromePolicy={viewSpec.chromePolicy}
         inputPorts={card.inputs}
         layoutEditable={layoutEditable}
         renderInputHandle={renderInputHandle}
@@ -88,6 +92,7 @@ export function ObjectNodeRenderer({
     return (
       <ObjectBox
         className={styles.messageObject}
+        chromePolicy={viewSpec.chromePolicy}
         disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         layoutEditable={layoutEditable}
@@ -95,7 +100,7 @@ export function ObjectNodeRenderer({
           if (!runtimeControlEnabled) {
             return;
           }
-          onObjectControl?.(node.id, "bang", bangControlMessage());
+          onObjectControl?.(node.id, "in", bangControlMessage());
         }}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
@@ -111,6 +116,7 @@ export function ObjectNodeRenderer({
     return (
       <BangControlObject
         card={card}
+        chromePolicy={viewSpec.chromePolicy}
         layoutEditable={layoutEditable}
         node={node}
         onObjectControl={onObjectControl}
@@ -130,6 +136,7 @@ export function ObjectNodeRenderer({
     return (
       <ObjectBox
         className={styles.toggleObject}
+        chromePolicy={viewSpec.chromePolicy}
         disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         layoutEditable={layoutEditable}
@@ -137,7 +144,7 @@ export function ObjectNodeRenderer({
           if (!runtimeControlEnabled) {
             return;
           }
-          onObjectControl?.(nodeId, "bang", bangControlMessage());
+          onObjectControl?.(nodeId, "in", bangControlMessage());
         }}
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
@@ -158,6 +165,7 @@ export function ObjectNodeRenderer({
     return (
       <SliderControlObject
         card={card}
+        chromePolicy={viewSpec.chromePolicy}
         layoutEditable={layoutEditable}
         node={sliderNode}
         onLiveControl={onObjectLiveControl ?? onObjectControl}
@@ -175,6 +183,7 @@ export function ObjectNodeRenderer({
     return (
       <ObjectBox
         className={styles.valueObject}
+        chromePolicy={viewSpec.chromePolicy}
         disabled={!runtimeControlEnabled}
         inputPorts={card.inputs}
         layoutEditable={layoutEditable}
@@ -200,6 +209,7 @@ export function ObjectNodeRenderer({
     return (
       <ObjectBox
         className={styles.assetObject}
+        chromePolicy={viewSpec.chromePolicy}
         inputPorts={card.inputs}
         layoutEditable={layoutEditable}
         outputPorts={card.outputs}
@@ -217,6 +227,7 @@ export function ObjectNodeRenderer({
   return (
     <ObjectBox
       className={styles.genericObject}
+      chromePolicy={viewSpec.chromePolicy}
       inputPorts={card.inputs}
       layoutEditable={layoutEditable}
       outputPorts={card.outputs}
@@ -233,6 +244,7 @@ export function ObjectNodeRenderer({
 
 function SliderControlObject({
   card,
+  chromePolicy,
   layoutEditable,
   node,
   onLiveControl,
@@ -243,6 +255,7 @@ function SliderControlObject({
   selected
 }: {
   card: NodeCardView;
+  chromePolicy: ObjectChromePolicy;
   layoutEditable: boolean;
   node: GraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
@@ -266,6 +279,7 @@ function SliderControlObject({
   return (
     <ObjectBox
       className={styles.sliderObject}
+      chromePolicy={chromePolicy}
       disabled={!runtimeControlEnabled}
       inputPorts={card.inputs}
       layoutEditable={layoutEditable}
@@ -309,6 +323,7 @@ function SliderControlObject({
 
 function BangControlObject({
   card,
+  chromePolicy,
   layoutEditable,
   node,
   onObjectControl,
@@ -319,6 +334,7 @@ function BangControlObject({
   selected
 }: {
   card: NodeCardView;
+  chromePolicy: ObjectChromePolicy;
   layoutEditable: boolean;
   node: GraphNodeV01;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
@@ -329,10 +345,26 @@ function BangControlObject({
   selected?: boolean;
 }) {
   const [active, setActive] = useState(false);
+  const resetTimerRef = useRef<number | null>(null);
   const pulse = () => {
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current);
+    }
     setActive(true);
-    window.setTimeout(() => setActive(false), 140);
+    resetTimerRef.current = window.setTimeout(() => {
+      setActive(false);
+      resetTimerRef.current = null;
+    }, 140);
   };
+
+  useEffect(
+    () => () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (pulseKey > 0) {
@@ -351,6 +383,7 @@ function BangControlObject({
   return (
     <ObjectBox
       className={styles.bangObject}
+      chromePolicy={chromePolicy}
       disabled={!runtimeControlEnabled}
       inputPorts={card.inputs}
       layoutEditable={layoutEditable}
@@ -378,6 +411,7 @@ function BangControlObject({
 
 function ObjectBox({
   children,
+  chromePolicy,
   className,
   disabled = false,
   inputPorts = [],
@@ -391,6 +425,7 @@ function ObjectBox({
   style
 }: {
   children: ReactNode;
+  chromePolicy: ObjectChromePolicy;
   className: string;
   disabled?: boolean;
   inputPorts?: NodePortView[];
@@ -431,6 +466,7 @@ function ObjectBox({
       aria-disabled={disabled || undefined}
       className={[
         styles.objectNode,
+        chromePolicyClassName(chromePolicy),
         className,
         layoutEditable ? styles.layoutEditable : "",
         !layoutEditable ? "nopan" : "",
@@ -466,6 +502,19 @@ function ObjectBox({
       ) : null}
     </div>
   );
+}
+
+function chromePolicyClassName(policy: ObjectChromePolicy): string {
+  switch (policy) {
+    case "none":
+      return styles.chromeNone;
+    case "widget":
+      return styles.chromeWidget;
+    case "container":
+      return styles.chromeContainer;
+    case "box":
+      return styles.chromeBox;
+  }
 }
 
 function minimumWidthForPorts(inputCount: number, outputCount: number): number {

@@ -17,6 +17,32 @@
   overflow: visible;
 }
 
+.chromeNone {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chromeWidget {
+  border-color: transparent;
+  background: transparent;
+}
+
+.chromeWidget.layoutEditable,
+.chromeWidget.selected,
+.chromeWidget:focus-within {
+  border-color: #8a949f;
+  background: var(--object-chrome-background, #f8f9fa);
+}
+
+.chromeBox {
+  /* The box is part of the object body, so locked mode keeps it visible. */
+}
+
+.chromeContainer {
+  /* Containers are visual surfaces, not editor-only chrome. */
+}
+
 .selected {
   box-shadow:
     0 0 0 2px rgb(28 126 214 / 34%),
@@ -132,18 +158,17 @@
 }
 
 .bangObject {
+  --object-chrome-background: #f8fafc;
   min-width: 26px;
   min-height: 26px;
   justify-content: center;
-  border-color: #4b5563;
-  background: #f8fafc;
   color: #111827;
   cursor: pointer;
 }
 
 .bangObject .content {
   justify-items: center;
-  padding: 3px;
+  padding: 2px;
 }
 
 .bangTrigger {
@@ -177,10 +202,9 @@
 }
 
 .toggleObject {
+  --object-chrome-background: #f8f9fa;
   min-width: 26px;
   min-height: 26px;
-  border-color: #374151;
-  background: #f8f9fa;
   color: #111827;
   cursor: pointer;
 }
@@ -189,14 +213,14 @@
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 5px;
-  padding: 3px;
+  padding: 2px;
 }
 
 .toggleSwitch {
   display: block;
   width: 18px;
   height: 18px;
-  border: 2px solid #4b5563;
+  border: 1px solid #374151;
   border-radius: 1px;
   background: #f8f9fa;
 }
@@ -213,7 +237,7 @@
 }
 
 .toggleOn {
-  background: #e9ecef;
+  background: #f8f9fa;
 }
 
 .toggleOn::after {

@@ -7,7 +7,7 @@ import type {
 import { bangControlMessage, controlMessageFromValue, setControlMessage } from "../../runtime/controlMessage";
 
 export interface RuntimeControlValueControlsProps {
-  availablePorts?: {
+  availableActions?: {
     in?: boolean;
     set?: boolean;
     bang?: boolean;
@@ -20,16 +20,16 @@ export interface RuntimeControlValueControlsProps {
 }
 
 export function RuntimeControlValueControls({
-  availablePorts,
+  availableActions,
   busy,
   enabled,
   nodeId,
   onSend,
   value
 }: RuntimeControlValueControlsProps) {
-  const showSet = availablePorts?.set ?? true;
-  const showIn = availablePorts?.in ?? true;
-  const showBang = availablePorts?.bang ?? true;
+  const showSet = availableActions?.set ?? true;
+  const showIn = availableActions?.in ?? true;
+  const showBang = availableActions?.bang ?? true;
 
   if (!showSet && !showIn && !showBang) {
     return null;
@@ -46,7 +46,7 @@ export function RuntimeControlValueControls({
             disabled={!enabled}
             leftSection={<SlidersHorizontal size={14} />}
             loading={busy}
-            onClick={() => onSend({ nodeId, portId: "set", message: setControlMessage(value) })}
+            onClick={() => onSend({ nodeId, portId: "in", message: setControlMessage(value) })}
             radius="sm"
             size="xs"
             variant="light"
@@ -72,7 +72,7 @@ export function RuntimeControlValueControls({
             disabled={!enabled}
             leftSection={<Zap size={14} />}
             loading={busy}
-            onClick={() => onSend({ nodeId, portId: "bang", message: bangControlMessage() })}
+            onClick={() => onSend({ nodeId, portId: "in", message: bangControlMessage() })}
             radius="sm"
             size="xs"
             variant="light"
