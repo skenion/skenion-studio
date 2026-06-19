@@ -12,9 +12,9 @@ describe("toggle graph helpers", () => {
     const node = toggleNode(true);
 
     expect(isToggleNode(node)).toBe(true);
-    expect(isToggleNode({ ...node, kind: "core.bool" })).toBe(false);
+    expect(isToggleNode({ ...node, params: { value: true } })).toBe(false);
     expect(isToggleNode(null)).toBe(false);
-    expect(defaultToggleParams()).toEqual({ value: false });
+    expect(defaultToggleParams()).toEqual({ value: false, widget: "toggle" });
     expect(readToggleParam(node)).toBe(true);
     expect(readToggleParam(toggleNode("yes"))).toBe(false);
   });
@@ -25,7 +25,7 @@ function toggleNode(value: unknown): GraphNodeV01 {
     id: "toggle_1",
     kind: TOGGLE_NODE_KIND,
     kindVersion: "0.1.0",
-    params: { value },
+    params: { value, widget: "toggle" },
     ports: []
   };
 }

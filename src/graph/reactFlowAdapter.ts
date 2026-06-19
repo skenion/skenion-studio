@@ -16,7 +16,7 @@ import {
 } from "./portSemantics";
 import { toNodeCardView } from "./nodeCardView";
 import type { NodeCardView } from "../components/node/nodeTypes";
-import type { RuntimeControlMessage } from "../runtime/types";
+import type { RuntimeControlMessage, RuntimeControlValue } from "../runtime/types";
 
 export interface SkenionNodeData extends Record<string, unknown> {
   card: NodeCardView;
@@ -28,6 +28,8 @@ export interface SkenionNodeData extends Record<string, unknown> {
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   primaryFlow: DataFlow;
+  runtimeControlEnabled?: boolean;
+  runtimeControlValue?: RuntimeControlValue;
 }
 
 export interface SkenionEdgeData extends Record<string, unknown> {
@@ -42,11 +44,14 @@ export interface ReactFlowViewModel {
 
 export function toReactFlowViewModel(
   graph: GraphDocumentV01,
-  viewState: ViewStateV01
+  viewState: ViewStateV01,
+  runtimeControlValues: Record<string, RuntimeControlValue> = {}
 ): ReactFlowViewModel {
   const positions = viewPositionsFromViewState(viewState);
   return {
-    nodes: graph.nodes.map((node, index) => toReactFlowNode(node, index, positions[node.id])),
+    nodes: graph.nodes.map((node, index) =>
+      toReactFlowNode(node, index, positions[node.id], runtimeControlValues[node.id])
+    ),
     edges: graph.edges.map((edge) => toReactFlowEdge(edge, graph))
   };
 }
@@ -90,7 +95,8 @@ export function flowName(flow: DataFlow, dataKind?: string): string {
 function toReactFlowNode(
   node: GraphNodeV01,
   index: number,
-  position?: { x: number; y: number }
+  position?: { x: number; y: number },
+  runtimeControlValue?: RuntimeControlValue
 ): Node<SkenionNodeData> {
   const outputPort = node.ports.find((port) => port.direction === "output");
   const inputPort = node.ports.find((port) => port.direction === "input");
@@ -106,7 +112,8 @@ function toReactFlowNode(
       label: String(node.params.label ?? node.id),
       kind: node.kind,
       kindVersion: node.kindVersion,
-      primaryFlow: primaryPort?.type.flow ?? "value"
+      primaryFlow: primaryPort?.type.flow ?? "value",
+      runtimeControlValue
     }
   };
 }

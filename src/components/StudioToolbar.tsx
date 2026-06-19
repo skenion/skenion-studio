@@ -17,6 +17,7 @@ import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
 
 interface StudioToolbarProps {
   graph: GraphDocumentV01;
+  runtimeGraphAvailable: boolean;
   summary: string;
   validation: ValidationResult<GraphDocumentV01>;
   onExport: () => void;
@@ -35,6 +36,7 @@ interface StudioToolbarProps {
 
 export function StudioToolbar({
   graph,
+  runtimeGraphAvailable,
   summary,
   validation,
   onExport,
@@ -50,6 +52,8 @@ export function StudioToolbar({
   onToggleInspector,
   inspectorOpen
 }: StudioToolbarProps) {
+  const graphActionDisabled = !runtimeGraphAvailable;
+
   return (
     <Group className="studio-toolbar" justify="space-between" wrap="nowrap">
       <Group gap="sm" wrap="nowrap">
@@ -64,7 +68,7 @@ export function StudioToolbar({
             </Badge>
           </Group>
           <Text c="dimmed" size="xs">
-            {graph.id} · {summary}
+            {runtimeGraphAvailable ? `${graph.id} · ${summary}` : "No Runtime session"}
           </Text>
         </div>
       </Group>
@@ -73,39 +77,40 @@ export function StudioToolbar({
         <Tooltip label="Open project (.skenion.json)">
           <FileButton accept=".skenion.json,application/json,.json" onChange={onOpenProject}>
             {(props) => (
-              <ActionIcon aria-label="Open project" radius="sm" size="lg" variant="subtle" {...props}>
+              <ActionIcon aria-label="Open project" disabled={graphActionDisabled} radius="sm" size="lg" variant="subtle" {...props}>
                 <FolderOpen size={18} />
               </ActionIcon>
             )}
           </FileButton>
         </Tooltip>
         <Tooltip label="Save project (.skenion.json)">
-          <ActionIcon aria-label="Save project" onClick={onSaveProject} radius="sm" size="lg" variant="subtle">
+          <ActionIcon aria-label="Save project" disabled={graphActionDisabled} onClick={onSaveProject} radius="sm" size="lg" variant="subtle">
             <Save size={18} />
           </ActionIcon>
         </Tooltip>
         <Tooltip label="Import graph JSON">
           <FileButton accept="application/json,.json" onChange={onImport}>
             {(props) => (
-              <ActionIcon aria-label="Import graph JSON" radius="sm" size="lg" variant="subtle" {...props}>
+              <ActionIcon aria-label="Import graph JSON" disabled={graphActionDisabled} radius="sm" size="lg" variant="subtle" {...props}>
                 <Upload size={18} />
               </ActionIcon>
             )}
           </FileButton>
         </Tooltip>
         <Tooltip label="Export graph JSON">
-          <ActionIcon aria-label="Export graph JSON" onClick={onExport} radius="sm" size="lg" variant="subtle">
+          <ActionIcon aria-label="Export graph JSON" disabled={graphActionDisabled} onClick={onExport} radius="sm" size="lg" variant="subtle">
             <Download size={18} />
           </ActionIcon>
         </Tooltip>
         <Tooltip label="Restore sample graph">
-          <ActionIcon aria-label="Restore sample graph" onClick={onReset} radius="sm" size="lg" variant="subtle">
+          <ActionIcon aria-label="Restore sample graph" disabled={graphActionDisabled} onClick={onReset} radius="sm" size="lg" variant="subtle">
             <RefreshCcw size={18} />
           </ActionIcon>
         </Tooltip>
         <Tooltip label="Load render sample">
           <ActionIcon
             aria-label="Load render sample"
+            disabled={graphActionDisabled}
             onClick={onLoadRenderSample}
             radius="sm"
             size="lg"
@@ -117,6 +122,7 @@ export function StudioToolbar({
         <Tooltip label="Load shader uniform sample">
           <ActionIcon
             aria-label="Load shader uniform sample"
+            disabled={graphActionDisabled}
             onClick={onLoadShaderUniformSample}
             radius="sm"
             size="lg"
@@ -128,6 +134,7 @@ export function StudioToolbar({
         <Tooltip label="Load multi-uniform shader sample">
           <ActionIcon
             aria-label="Load multi-uniform shader sample"
+            disabled={graphActionDisabled}
             onClick={onLoadShaderMultiUniformSample}
             radius="sm"
             size="lg"
@@ -139,6 +146,7 @@ export function StudioToolbar({
         <Tooltip label="Load object routing panel sample">
           <ActionIcon
             aria-label="Load object routing panel sample"
+            disabled={graphActionDisabled}
             onClick={onLoadObjectRoutingPanelSample}
             radius="sm"
             size="lg"
@@ -150,6 +158,7 @@ export function StudioToolbar({
         <Tooltip label="Load port demo sample">
           <ActionIcon
             aria-label="Load port demo sample"
+            disabled={graphActionDisabled}
             onClick={onLoadPortDemoSample}
             radius="sm"
             size="lg"

@@ -5,12 +5,12 @@ import type { GraphNodeV01 } from "@skenion/contracts";
 import type { RuntimeControlEventRequest } from "../../runtime/types";
 import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
 import {
-  isUiButtonNode,
-  isUiSliderFloatNode,
-  isUiToggleNode,
+  isBangControlNode,
+  isSliderFloatNode,
+  isToggleControlNode,
   readPanelLabelParam,
-  readUiSliderParams,
-  readUiToggleValue
+  readSliderFloatParams,
+  readToggleControlValue
 } from "../../graph/panelControls";
 
 export interface PanelControlInspectorProps {
@@ -28,7 +28,7 @@ export function PanelControlInspector({
   onSend,
   onSetNodeParam
 }: PanelControlInspectorProps) {
-  if (!isUiButtonNode(node) && !isUiSliderFloatNode(node) && !isUiToggleNode(node)) {
+  if (!isBangControlNode(node) && !isSliderFloatNode(node) && !isToggleControlNode(node)) {
     return null;
   }
 
@@ -44,10 +44,10 @@ export function PanelControlInspector({
           size="xs"
           value={readPanelLabelParam(node)}
         />
-        {isUiSliderFloatNode(node) ? <SliderGraphParams node={node} onSetNodeParam={onSetNodeParam} /> : null}
-        {isUiToggleNode(node) ? (
+        {isSliderFloatNode(node) ? <SliderGraphParams node={node} onSetNodeParam={onSetNodeParam} /> : null}
+        {isToggleControlNode(node) ? (
           <Switch
-            checked={readUiToggleValue(node)}
+            checked={readToggleControlValue(node)}
             label="Initial value"
             onChange={(event) => onSetNodeParam(node.id, "value", event.currentTarget.checked)}
             size="sm"
@@ -55,12 +55,12 @@ export function PanelControlInspector({
         ) : null}
       </Stack>
       <Divider />
-      {isUiButtonNode(node) ? (
+      {isBangControlNode(node) ? (
         <Button
           disabled={!enabled}
           leftSection={<MousePointerClick size={14} />}
           loading={busy}
-          onClick={() => onSend({ nodeId: node.id, portId: "bang", message: bangControlMessage() })}
+          onClick={() => onSend({ nodeId: node.id, portId: "in", message: bangControlMessage() })}
           radius="sm"
           size="xs"
           variant="light"
@@ -68,10 +68,10 @@ export function PanelControlInspector({
           Bang
         </Button>
       ) : null}
-      {isUiSliderFloatNode(node) ? (
+      {isSliderFloatNode(node) ? (
         <RuntimeSlider node={node} busy={busy} enabled={enabled} onSend={onSend} />
       ) : null}
-      {isUiToggleNode(node) ? (
+      {isToggleControlNode(node) ? (
         <RuntimeToggle node={node} busy={busy} enabled={enabled} onSend={onSend} />
       ) : null}
     </Stack>
@@ -85,7 +85,7 @@ function SliderGraphParams({
   node: GraphNodeV01;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }) {
-  const params = readUiSliderParams(node);
+  const params = readSliderFloatParams(node);
   return (
     <Group gap="xs" grow>
       {(["value", "min", "max", "step"] as const).map((key) => (
@@ -119,7 +119,7 @@ function RuntimeSlider({
   node: GraphNodeV01;
   onSend: (request: RuntimeControlEventRequest) => void;
 }) {
-  const params = readUiSliderParams(node);
+  const params = readSliderFloatParams(node);
   const [value, setValue] = useState(params.value);
   const sendValue = (nextValue: number) => onSend(sliderRuntimeRequest(node.id, nextValue));
 
@@ -133,8 +133,10 @@ function RuntimeSlider({
         label={(nextValue) => nextValue.toFixed(2)}
         max={params.max}
         min={params.min}
-        onChange={setValue}
-        onChangeEnd={sendValue}
+        onChange={(nextValue) => {
+          setValue(nextValue);
+          sendValue(nextValue);
+        }}
         step={params.step}
         value={value}
       />
@@ -164,7 +166,7 @@ function RuntimeToggle({
   node: GraphNodeV01;
   onSend: (request: RuntimeControlEventRequest) => void;
 }) {
-  const [checked, setChecked] = useState(readUiToggleValue(node));
+  const [checked, setChecked] = useState(readToggleControlValue(node));
   return (
     <Switch
       checked={checked}
@@ -183,7 +185,7 @@ function RuntimeToggle({
 export function sliderRuntimeRequest(nodeId: string, value: number): RuntimeControlEventRequest {
   return {
     nodeId,
-    portId: "value",
+    portId: "in",
     message: controlMessageFromValue({
       type: "float",
       representation: "f32",
@@ -195,7 +197,7 @@ export function sliderRuntimeRequest(nodeId: string, value: number): RuntimeCont
 export function toggleRuntimeRequest(nodeId: string): RuntimeControlEventRequest {
   return {
     nodeId,
-    portId: "value",
+    portId: "bang",
     message: bangControlMessage()
   };
 }

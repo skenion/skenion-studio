@@ -229,7 +229,7 @@ describe("port and edge semantics", () => {
         sampleGraph.edges[0],
         {
           from: { node: "bang_1", port: "bang" },
-          to: { node: "target_1", port: "value" }
+          to: { node: "target_1", port: "in" }
         }
       ]
     };

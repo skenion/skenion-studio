@@ -80,14 +80,14 @@ describe("skenion graph helpers", () => {
       source: "value_1",
       sourceHandle: "value",
       target: "target_1",
-      targetHandle: "value"
+      targetHandle: "in"
     } satisfies Connection;
     const edge = {
       id: "edge",
       source: "value_1",
       sourceHandle: "value",
       target: "target_1",
-      targetHandle: "value"
+      targetHandle: "in"
     } satisfies Edge;
 
     expect(toSkenionPatch(connection)).toEqual({
@@ -100,7 +100,7 @@ describe("skenion graph helpers", () => {
   });
 
   it("applies graph patches and bumps revisions", () => {
-    const definition = nodeRegistry.find((candidate) => candidate.id === "core.event-log");
+    const definition = nodeRegistry.find((candidate) => candidate.id === "core.message");
     const renderDefinition = nodeRegistry.find((candidate) => candidate.id === "render.clear-color");
     const node = createGraphNodeFromDefinition(definition!, sampleGraph.nodes);
     const renderNode = createGraphNodeFromDefinition(renderDefinition!, sampleGraph.nodes);

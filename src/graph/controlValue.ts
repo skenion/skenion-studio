@@ -5,17 +5,10 @@ import { isColorRgbaNode, readColorRepresentationParam, readColorRgbaParam, read
 import { isFloatValueNode, readFloatRepresentationParam, readFloatValueParam } from "./floatValue";
 import { isIntValueNode, readIntRepresentationParam, readIntValueParam } from "./intValue";
 import { isMessageNode, readMessageValueParam } from "./messageNode";
-import { runtimeControlValueForUiNode } from "./panelControls";
 import { isStringValueNode, readStringValueParam } from "./stringValue";
-import { isToggleNode, readToggleParam } from "./toggleValue";
 import { isUIntValueNode, readUIntRepresentationParam, readUIntValueParam } from "./uintValue";
 
 export function runtimeControlValueForNode(node: GraphNodeV01): RuntimeControlValue | null {
-  const uiValue = runtimeControlValueForUiNode(node);
-  if (uiValue) {
-    return uiValue;
-  }
-
   if (isFloatValueNode(node)) {
     return {
       type: "float",
@@ -41,12 +34,6 @@ export function runtimeControlValueForNode(node: GraphNodeV01): RuntimeControlVa
     return {
       type: "bool",
       value: readBoolValueParam(node)
-    };
-  }
-  if (isToggleNode(node)) {
-    return {
-      type: "bool",
-      value: readToggleParam(node)
     };
   }
   if (isColorRgbaNode(node)) {

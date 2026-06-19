@@ -9,7 +9,8 @@ import {
 describe("control routing graph helpers", () => {
   it("identifies object-owned routing capable nodes", () => {
     expect(isRoutingCapableObjectNode(node("core.float", {}))).toBe(true);
-    expect(isRoutingCapableObjectNode(node("ui.slider-float", {}))).toBe(true);
+    expect(isRoutingCapableObjectNode(node("core.bang", {}))).toBe(true);
+    expect(isRoutingCapableObjectNode(node("core.uint", {}))).toBe(true);
     expect(isRoutingCapableObjectNode(node("core.message", {}))).toBe(true);
     expect(isRoutingCapableObjectNode(node("core.panel", {}))).toBe(true);
     expect(isRoutingCapableObjectNode(node("render.fullscreen-shader", {}))).toBe(false);

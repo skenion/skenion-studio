@@ -33,16 +33,11 @@ describe("runtime control value helpers", () => {
       type: "string",
       value: "ready"
     });
-    expect(runtimeControlValueForNode(valueNode("core.toggle", true))).toEqual({
+    expect(runtimeControlValueForNode({ ...valueNode("core.bool", true), params: { value: true, widget: "toggle" } })).toEqual({
       type: "bool",
       value: true
     });
-    expect(runtimeControlValueForNode(valueNode("ui.slider-float", 0.75))).toEqual({
-      type: "float",
-      representation: "f32",
-      value: 0.75
-    });
-    expect(runtimeControlValueForNode(valueNode("ui.button", undefined))).toBeNull();
+    expect(runtimeControlValueForNode(valueNode("core.bang", undefined))).toBeNull();
     expect(runtimeControlValueForNode(valueNode("core.message", "perform"))).toEqual({
       type: "string",
       value: "perform"

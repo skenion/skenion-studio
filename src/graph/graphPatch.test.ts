@@ -19,7 +19,7 @@ import {
 
 describe("graph patch model", () => {
   it("creates addNode and removeNode patch operations", () => {
-    const definition = nodeRegistry.find((candidate) => candidate.id === "core.event-log");
+    const definition = nodeRegistry.find((candidate) => candidate.id === "core.message");
     const node = createGraphNodeFromDefinition(definition!, sampleGraph.nodes);
 
     expect(graphPatchFromStudioAction({ type: "addNode", node })).toEqual({

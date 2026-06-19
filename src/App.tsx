@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppShell, Group, ScrollArea, Stack, Text } from "@mantine/core";
+import { Alert, AppShell, Badge, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import { CircleAlert } from "lucide-react";
 import {
   getBuiltinNodeHelpGraph,
@@ -58,15 +58,15 @@ import {
 } from "./runtime/client";
 import { createRuntimeProjectPayload } from "./runtime/payload";
 import {
-  nextLoadedGraphFingerprint,
   runtimeGraphFingerprint,
+  runtimeSessionFingerprint,
   runtimeSessionIsSynced
 } from "./runtime/sessionSync";
 import type {
   RuntimeActionResult,
-  RuntimeApiResponse,
   RuntimeConnectionStatus,
   RuntimeControlEventRequest,
+  RuntimeControlStateResponse,
   RuntimeGeneratedShaderResponse,
   RuntimeInfo,
   RuntimeResultKind,
@@ -89,31 +89,37 @@ export default function App() {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeConnectionStatus>("disconnected");
   const [runtimeBusyAction, setRuntimeBusyAction] = useState<string | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [runtimeFrames, setRuntimeFrames] = useState(2);
+  const [runtimeFrames] = useState(2);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
   const [runtimeResult, setRuntimeResult] = useState<RuntimeActionResult | null>(null);
   const [runtimeSession, setRuntimeSession] = useState<RuntimeSessionResponse | null>(null);
+  const [runtimeControlState, setRuntimeControlState] = useState<RuntimeControlStateResponse | null>(null);
   const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] = useState<RuntimePreviewStatus | null>(null);
   const [runtimeTelemetry, setRuntimeTelemetry] = useState<RuntimeTelemetrySnapshot | null>(null);
   const [generatedShader, setGeneratedShader] = useState<RuntimeGeneratedShaderResponse | null>(null);
   const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
   const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
-  const [pendingPatchBaseRevision, setPendingPatchBaseRevision] = useState<string | null>(null);
-  const [patchConflict, setPatchConflict] = useState<string | null>(null);
+  const [, setPendingPatchBaseRevision] = useState<string | null>(null);
+  const [, setPatchConflict] = useState<string | null>(null);
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const semanticDiagnostics = useMemo(() => analyzeGraphPortSemantics(graph), [graph]);
-  const runtimeProject = useMemo(() => createRuntimeProjectPayload(graph, nodeRegistry), [graph]);
-  const currentGraphFingerprint = useMemo(
-    () => runtimeGraphFingerprint(graph.id, graph.revision),
-    [graph.id, graph.revision]
-  );
   const runtimeSessionSynced = runtimeSessionIsSynced(
     runtimeStatus,
     runtimeSession,
-    currentGraphFingerprint,
+    runtimeGraphFingerprint(graph.id, graph.revision),
     lastLoadedGraphFingerprint
   );
+  const runtimeControlInteractionEnabled =
+    runtimeStatus === "connected" &&
+    runtimeSessionSynced &&
+    Boolean(runtimeSession?.loaded) &&
+    runtimeSupportsControl(runtimeInfo) &&
+    runtimeSupportsControlState(runtimeInfo);
+  const runtimeGraphAvailable =
+    runtimeStatus === "connected" &&
+    runtimeSessionSynced &&
+    Boolean(runtimeSession?.loaded);
   const selectedNode = useMemo(
     () => graph.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [graph.nodes, selectedNodeId]
@@ -135,6 +141,7 @@ export default function App() {
   const runtimeLiveStateRef = useRef({
     info: runtimeInfo,
     sessionLoaded: Boolean(runtimeSession?.loaded),
+    sessionSynced: runtimeSessionSynced,
     status: runtimeStatus,
     url: runtimeUrl
   });
@@ -143,18 +150,19 @@ export default function App() {
     runtimeLiveStateRef.current = {
       info: runtimeInfo,
       sessionLoaded: Boolean(runtimeSession?.loaded),
+      sessionSynced: runtimeSessionSynced,
       status: runtimeStatus,
       url: runtimeUrl
     };
-  }, [runtimeInfo, runtimeSession?.loaded, runtimeStatus, runtimeUrl]);
+  }, [runtimeInfo, runtimeSession?.loaded, runtimeSessionSynced, runtimeStatus, runtimeUrl]);
 
-  function addNode(definitionId: string) {
+  function addNode(definitionId: string, paramsOverride: Record<string, unknown> = {}) {
     const definition = nodeRegistry.find((candidate) => candidate.id === definitionId);
     if (!definition) {
       return;
     }
 
-    const node = createGraphNodeFromDefinition(definition, graph.nodes);
+    const node = createGraphNodeFromDefinition(definition, graph.nodes, paramsOverride);
     const patch = { type: "addNode", node } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
     setGraph(nextGraph);
@@ -181,13 +189,17 @@ export default function App() {
     setRuntimeResult(null);
   }
 
-  function addNodeAtPosition(definitionId: string, position: { x: number; y: number }) {
+  function addNodeAtPosition(
+    definitionId: string,
+    position: { x: number; y: number },
+    paramsOverride: Record<string, unknown> = {}
+  ) {
     const definition = nodeRegistry.find((candidate) => candidate.id === definitionId);
     if (!definition) {
       return;
     }
 
-    const node = createGraphNodeFromDefinition(definition, graph.nodes);
+    const node = createGraphNodeFromDefinition(definition, graph.nodes, paramsOverride);
     const patch = { type: "addNode", node } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
     setGraph(nextGraph);
@@ -225,16 +237,14 @@ export default function App() {
     }
 
     const runtimeGraphRevision = runtimeSession?.graphRevision ?? null;
-    const baseRevision = pendingPatchBaseRevision ?? runtimeGraphRevision;
-    const canQueuePatch = pendingPatchBaseRevision !== null || runtimeSessionSynced;
-    if (!canQueuePatch || !baseRevision) {
+    if (runtimeStatus !== "connected" || !runtimeSessionSynced || !runtimeGraphRevision) {
+      setRuntimeError("Runtime session is required before graph edits can be applied.");
       return;
     }
 
     const operations = patches.map(graphPatchFromStudioAction);
-    setPendingPatchOps((current) => [...current, ...operations]);
-    setPendingPatchBaseRevision((current) => current ?? baseRevision);
     setPatchConflict(null);
+    void applyRuntimePatchOperations(operations, runtimeGraphRevision);
   }
 
   function clearPendingPatch() {
@@ -243,14 +253,64 @@ export default function App() {
     setPatchConflict(null);
   }
 
-  function clearRuntimeLocalSessionState() {
-    setRuntimeResult(null);
-    setRuntimeSession(null);
-    setRuntimeHistory(null);
-    setRuntimePreviewStatus(null);
-    setRuntimeTelemetry(null);
-    setGeneratedShader(null);
-    setLastLoadedGraphFingerprint(null);
+  async function applyRuntimePatchOperations(
+    operations: GraphPatchOperationV01[],
+    baseRevision: string
+  ) {
+    if (operations.length === 0) {
+      return;
+    }
+
+    setRuntimeBusyAction("applyPatch");
+    setRuntimeError(null);
+    setPatchConflict(null);
+    setPendingPatchOps(operations);
+    setPendingPatchBaseRevision(baseRevision);
+    try {
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const patch = createGraphPatch(baseRevision, operations, {
+        id: `patch_${Date.now()}`,
+        clientId: "studio-local"
+      });
+      const response = await client.applySessionPatch(patch);
+      setRuntimeSession(response.session);
+      setRuntimeHistory(response.history);
+      setRuntimeResult({
+        kind: "applyPatch",
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+
+      if (response.ok && response.applied && response.graph) {
+        acceptRuntimeGraph(response.graph);
+        clearPendingPatch();
+        if (response.session.loaded && runtimeSupportsControlState(runtimeInfo)) {
+          await refreshRuntimeControlState(client);
+        } else {
+          setRuntimeControlState(null);
+        }
+        await refreshRuntimePreview(client);
+        await refreshRuntimeTelemetry(client);
+        return;
+      }
+
+      const message =
+        response.diagnostics[0]?.message ?? "Runtime rejected graph patch; Studio was restored from Runtime session.";
+      setPatchConflict(message);
+      setRuntimeError(message);
+      await refreshRuntimeProjectFromRuntime(client);
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime patch failed.");
+      try {
+        await refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+      } catch {
+        // Keep the original runtime error visible.
+      }
+    } finally {
+      setRuntimeBusyAction(null);
+    }
   }
 
   function acceptRuntimeGraph(nextGraph: GraphDocumentV01) {
@@ -262,6 +322,79 @@ export default function App() {
     setSelectedEdgeId(null);
     setConnectionCheck(null);
     setLastLoadedGraphFingerprint(runtimeGraphFingerprint(nextGraph.id, nextGraph.revision));
+  }
+
+  async function loadProjectIntoRuntime(
+    project: ReturnType<typeof createRuntimeProjectPayload>,
+    nextViewState = createViewStateFromPositions(project.graph, {}),
+    kind: RuntimeResultKind = "loadSession"
+  ) {
+    if (runtimeStatus !== "connected") {
+      setRuntimeError("Connect Runtime before opening or changing a graph.");
+      return;
+    }
+
+    setRuntimeBusyAction(kind);
+    setRuntimeError(null);
+    try {
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const response = await client.loadSession(project);
+      if (!response.ok || !response.loaded) {
+        throw new RuntimeClientError(response.diagnostics[0]?.message ?? "Runtime rejected project load.");
+      }
+
+      setRuntimeSession(response);
+      setRuntimeResult({
+        kind,
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+      acceptRuntimeGraph(project.graph);
+      setViewState(reconcileViewStateWithGraph(project.graph, nextViewState));
+      clearPendingPatch();
+      setRuntimeControlState(runtimeSupportsControlState(runtimeInfo) ? await client.getControlState() : null);
+      if (runtimeSupportsHistory(runtimeInfo)) {
+        await refreshRuntimeHistory(client);
+      }
+      await refreshRuntimePreview(client);
+      await refreshRuntimeTelemetry(client);
+      setGeneratedShader(null);
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime project load failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
+  async function fetchRuntimeOwnedProject(
+    client: RuntimeClient,
+    info: RuntimeInfo,
+    session: RuntimeSessionResponse
+  ): Promise<RuntimeSessionResponse> {
+    if (!session.loaded) {
+      const seedProject = createRuntimeProjectPayload(sampleGraph, nodeRegistry);
+      const loaded = await client.loadSession(seedProject);
+      if (!loaded.ok || !loaded.loaded) {
+        throw new RuntimeClientError(loaded.diagnostics[0]?.message ?? "Runtime rejected initial project load.");
+      }
+      acceptRuntimeGraph(seedProject.graph);
+      setViewState(createViewStateFromPositions(seedProject.graph, {}));
+      return loaded;
+    }
+
+    if (!runtimeSupportsSessionProject(info)) {
+      throw new RuntimeClientError("Runtime does not expose the canonical session project.");
+    }
+
+    const projectResponse = await client.getSessionProject();
+    if (!projectResponse.ok || !projectResponse.loaded || !projectResponse.project) {
+      throw new RuntimeClientError(projectResponse.diagnostics[0]?.message ?? "Runtime session project is unavailable.");
+    }
+
+    acceptRuntimeGraph(projectResponse.project.graph);
+    return projectResponse.session;
   }
 
   async function importGraph(file: File | null) {
@@ -278,13 +411,13 @@ export default function App() {
       }
 
       const normalizedGraph = normalizeLegacyGraphTypes(result.value);
-      setGraph(normalizedGraph);
-      setViewState(createViewStateFromPositions(normalizedGraph, {}));
+      await loadProjectIntoRuntime(
+        createRuntimeProjectPayload(normalizedGraph, nodeRegistry),
+        createViewStateFromPositions(normalizedGraph, {})
+      );
       setSelectedNodeId(normalizedGraph.nodes[0]?.id ?? null);
       setActiveHelpNodeId(null);
       setSelectedEdgeId(null);
-      clearPendingPatch();
-      clearRuntimeLocalSessionState();
       setImportError(null);
       setConnectionCheck(null);
     } catch (error) {
@@ -299,13 +432,13 @@ export default function App() {
 
     try {
       const project = parseProjectDocument(JSON.parse(await file.text()) as unknown);
-      setGraph(project.graph);
-      setViewState(project.viewState);
+      await loadProjectIntoRuntime(
+        createRuntimeProjectPayload(project.graph, nodeRegistry),
+        project.viewState
+      );
       setSelectedNodeId(project.graph.nodes[0]?.id ?? null);
       setActiveHelpNodeId(null);
       setSelectedEdgeId(null);
-      clearPendingPatch();
-      clearRuntimeLocalSessionState();
       setImportError(null);
       setConnectionCheck(null);
     } catch (error) {
@@ -322,72 +455,78 @@ export default function App() {
   }
 
   function resetSample() {
-    setGraph(sampleGraph);
-    setViewState(createViewStateFromPositions(sampleGraph, {}));
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(sampleGraph, nodeRegistry),
+      createViewStateFromPositions(sampleGraph, {})
+    );
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
-    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
   function loadRenderSample() {
-    setGraph(renderSampleGraph);
-    setViewState(createViewStateFromPositions(renderSampleGraph, {}));
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(renderSampleGraph, nodeRegistry),
+      createViewStateFromPositions(renderSampleGraph, {})
+    );
     setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
-    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
   function loadShaderUniformSample() {
-    setGraph(shaderUniformSampleGraph);
-    setViewState(shaderUniformSampleViewState);
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(shaderUniformSampleGraph, nodeRegistry),
+      shaderUniformSampleViewState
+    );
     setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
-    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
   function loadShaderMultiUniformSample() {
-    setGraph(shaderMultiUniformSampleGraph);
-    setViewState(shaderMultiUniformSampleViewState);
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(shaderMultiUniformSampleGraph, nodeRegistry),
+      shaderMultiUniformSampleViewState
+    );
     setSelectedNodeId(shaderMultiUniformSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
-    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
   function loadPortDemoSample() {
-    setGraph(portDemoSampleGraph);
-    setViewState(portDemoSampleViewState);
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(portDemoSampleGraph, nodeRegistry),
+      portDemoSampleViewState
+    );
     setSelectedNodeId(portDemoSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
-    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
   function loadObjectRoutingPanelSample() {
-    setGraph(objectRoutingPanelSampleGraph);
-    setViewState(objectRoutingPanelSampleViewState);
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(objectRoutingPanelSampleGraph, nodeRegistry),
+      objectRoutingPanelSampleViewState
+    );
     setSelectedNodeId(objectRoutingPanelSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
     setSelectedEdgeId(null);
-    clearPendingPatch();
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
@@ -466,13 +605,13 @@ export default function App() {
       id: `${nextGraph.id}-copy`,
       revision: "1"
     };
-    setGraph(editableGraph);
-    setViewState(createViewStateFromPositions(editableGraph, {}));
+    void loadProjectIntoRuntime(
+      createRuntimeProjectPayload(editableGraph, nodeRegistry),
+      createViewStateFromPositions(editableGraph, {})
+    );
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
     setActiveHelpNodeId(null);
-    clearPendingPatch();
-    setLastLoadedGraphFingerprint(null);
     setImportError(null);
     setConnectionCheck(null);
     setRuntimeResult(null);
@@ -490,20 +629,27 @@ export default function App() {
         throw new RuntimeClientError("Runtime health check returned not-ok.");
       }
       const info = await client.getRuntimeInfo();
-      const session = await client.getSession();
+      const initialSession = await client.getSession();
+      const session = await fetchRuntimeOwnedProject(client, info, initialSession);
       const history = runtimeSupportsHistory(info) ? await client.getSessionHistory() : null;
       const previewStatus = runtimeSupportsPreview(info) ? await client.getPreviewStatus() : null;
       const telemetry = runtimeSupportsTelemetry(info) ? await client.getTelemetry() : null;
+      const controlState =
+        session.loaded && runtimeSupportsControlState(info) ? await client.getControlState() : null;
       setRuntimeInfo(info);
       setRuntimeSession(session);
+      setRuntimeControlState(controlState);
       setRuntimeHistory(history);
       setRuntimePreviewStatus(previewStatus);
       setRuntimeTelemetry(telemetry);
       setGeneratedShader(null);
+      setLastLoadedGraphFingerprint(runtimeSessionFingerprint(session));
+      clearPendingPatch();
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeInfo(null);
       setRuntimeSession(null);
+      setRuntimeControlState(null);
       setRuntimeHistory(null);
       setRuntimePreviewStatus(null);
       setRuntimeTelemetry(null);
@@ -512,28 +658,6 @@ export default function App() {
       clearPendingPatch();
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime connection failed.");
-    } finally {
-      setRuntimeBusyAction(null);
-    }
-  }
-
-  async function runRuntimeAction(
-    kind: RuntimeResultKind,
-    action: () => Promise<RuntimeApiResponse>
-  ) {
-    setRuntimeBusyAction(kind);
-    setRuntimeError(null);
-    try {
-      const response = await action();
-      setRuntimeResult({
-        kind,
-        response,
-        receivedAt: new Date().toISOString()
-      });
-      setRuntimeStatus("connected");
-    } catch (error) {
-      setRuntimeStatus("error");
-      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
     } finally {
       setRuntimeBusyAction(null);
     }
@@ -555,26 +679,24 @@ export default function App() {
         receivedAt: new Date().toISOString()
       });
       setRuntimeStatus("connected");
-      if (kind === "loadSession") {
-        setLastLoadedGraphFingerprint((current) =>
-          nextLoadedGraphFingerprint(current, response, currentGraphFingerprint)
-        );
-        if (response.ok && response.loaded) {
-          clearPendingPatch();
-        }
-      }
       if (kind === "clearSession" && response.ok) {
         setLastLoadedGraphFingerprint(null);
         clearPendingPatch();
+        setRuntimeControlState(null);
       }
-      if (kind === "loadSession" || kind === "clearSession") {
+      if (kind === "clearSession") {
         setGeneratedShader(null);
       }
-      if ((kind === "session" || kind === "loadSession" || kind === "clearSession") && runtimeSupportsHistory(runtimeInfo)) {
+      if ((kind === "session" || kind === "clearSession") && runtimeSupportsHistory(runtimeInfo)) {
         await refreshRuntimeHistory(client);
       }
-      if (kind === "session" || kind === "loadSession" || kind === "clearSession") {
+      if (kind === "session" || kind === "clearSession") {
         await refreshRuntimePreview(client);
+      }
+      if (response.loaded && runtimeSupportsControlState(runtimeInfo)) {
+        await refreshRuntimeControlState(client);
+      } else if (!response.loaded) {
+        setRuntimeControlState(null);
       }
       await refreshRuntimeTelemetry(client);
     } catch (error) {
@@ -585,45 +707,42 @@ export default function App() {
     }
   }
 
-  async function applyPendingPatch() {
-    if (!pendingPatchBaseRevision || pendingPatchOps.length === 0) {
-      return;
+  async function refreshRuntimeProjectFromRuntime(
+    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    info: RuntimeInfo | null = runtimeInfo
+  ) {
+    const session = await client.getSession();
+    if (!info || !session.loaded) {
+      setRuntimeSession(session);
+      setRuntimeControlState(null);
+      setRuntimeHistory(null);
+      setRuntimePreviewStatus(null);
+      setRuntimeTelemetry(null);
+      setGeneratedShader(null);
+      setLastLoadedGraphFingerprint(null);
+      clearPendingPatch();
+      return session;
     }
 
-    setRuntimeBusyAction("applyPatch");
-    setRuntimeError(null);
-    setPatchConflict(null);
-    try {
-      const patch = createGraphPatch(pendingPatchBaseRevision, pendingPatchOps, {
-        id: `patch_${Date.now()}`,
-        clientId: "studio-local"
-      });
-      const response: RuntimePatchResponse = await createRuntimeClient({
-        baseUrl: runtimeUrl
-      }).applySessionPatch(patch);
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
-      setRuntimeSession(response.session);
-      setRuntimeHistory(response.history);
-      await refreshRuntimePreview(client);
-      await refreshRuntimeTelemetry(client);
-      setRuntimeResult({
-        kind: "applyPatch",
-        response,
-        receivedAt: new Date().toISOString()
-      });
-      setRuntimeStatus("connected");
-      if (response.ok && response.applied && response.graph) {
-        acceptRuntimeGraph(response.graph);
-        clearPendingPatch();
-      } else if (response.conflict) {
-        setPatchConflict(response.diagnostics[0]?.message ?? "Runtime rejected patch because the session graph revision changed.");
-      }
-    } catch (error) {
-      setRuntimeStatus("error");
-      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
-    } finally {
-      setRuntimeBusyAction(null);
+    if (!runtimeSupportsSessionProject(info)) {
+      throw new RuntimeClientError("Runtime does not expose the canonical session project.");
     }
+
+    const project = await client.getSessionProject();
+    if (!project.ok || !project.loaded || !project.project) {
+      throw new RuntimeClientError(project.diagnostics[0]?.message ?? "Runtime session project is unavailable.");
+    }
+
+    acceptRuntimeGraph(project.project.graph);
+    setRuntimeSession(project.session);
+    setRuntimeControlState(project.session.loaded && runtimeSupportsControlState(info) ? await client.getControlState() : null);
+    if (runtimeSupportsHistory(info)) {
+      await refreshRuntimeHistory(client);
+    }
+    await refreshRuntimePreview(client);
+    await refreshRuntimeTelemetry(client);
+    clearPendingPatch();
+    return project.session;
   }
 
   async function refreshRuntimeHistory(client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl })) {
@@ -641,6 +760,20 @@ export default function App() {
     const previewStatus = await client.getPreviewStatus();
     setRuntimePreviewStatus(previewStatus);
     return previewStatus;
+  }
+
+  async function refreshRuntimeControlState(
+    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    info: RuntimeInfo | null = runtimeInfo
+  ) {
+    if (!runtimeSupportsControlState(info)) {
+      setRuntimeControlState(null);
+      return null;
+    }
+
+    const controlState = await client.getControlState();
+    setRuntimeControlState(controlState);
+    return controlState;
   }
 
   async function refreshRuntimeTelemetry(
@@ -732,6 +865,26 @@ export default function App() {
     }
   }
 
+  async function refreshRuntimeSessionFromPanel() {
+    setRuntimeBusyAction("session");
+    setRuntimeError(null);
+    try {
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const response = await refreshRuntimeProjectFromRuntime(client);
+      setRuntimeResult({
+        kind: "session",
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime session refresh failed.");
+    } finally {
+      setRuntimeBusyAction(null);
+    }
+  }
+
   async function runRuntimePreviewAction(
     kind: "startPreview" | "stopPreview" | "restartPreview",
     action: () => Promise<RuntimePreviewStatus>
@@ -768,6 +921,11 @@ export default function App() {
       const client = createRuntimeClient({ baseUrl: runtimeUrl });
       setRuntimeSession(response.session);
       setRuntimeHistory(response.history);
+      if (response.session.loaded && runtimeSupportsControlState(runtimeInfo)) {
+        await refreshRuntimeControlState(client);
+      } else {
+        setRuntimeControlState(null);
+      }
       await refreshRuntimePreview(client);
       await refreshRuntimeTelemetry(client);
       setRuntimeResult({
@@ -789,7 +947,7 @@ export default function App() {
   }
 
   async function sendRuntimeControlEvent(request: RuntimeControlEventRequest) {
-    if (runtimeStatus !== "connected" || !runtimeSession?.loaded || !runtimeSupportsControl(runtimeInfo)) {
+    if (!runtimeControlInteractionEnabled) {
       return;
     }
 
@@ -806,6 +964,11 @@ export default function App() {
       setRuntimeStatus("connected");
       const session = await client.getSession();
       setRuntimeSession(session);
+      if (session.loaded && runtimeSupportsControlState(runtimeInfo)) {
+        await refreshRuntimeControlState(client);
+      } else {
+        setRuntimeControlState(null);
+      }
       if (runtimeSupportsHistory(runtimeInfo)) {
         await refreshRuntimeHistory(client);
       }
@@ -831,18 +994,22 @@ export default function App() {
     }
 
     const request = queue.request;
-    const { info, sessionLoaded, status, url } = runtimeLiveStateRef.current;
-    if (!request || status !== "connected" || !sessionLoaded || !runtimeSupportsControl(info)) {
+    const { info, sessionLoaded, sessionSynced, status, url } = runtimeLiveStateRef.current;
+    if (!request || status !== "connected" || !sessionLoaded || !sessionSynced || !runtimeSupportsControl(info)) {
       return;
     }
 
     queue.request = null;
     queue.inFlight = true;
     try {
-      const response = await createRuntimeClient({ baseUrl: url }).sendControlEvent(request);
+      const client = createRuntimeClient({ baseUrl: url });
+      const response = await client.sendControlEvent(request);
       setRuntimeStatus("connected");
       setRuntimeError(null);
       if (response.controlRevision !== null) {
+        if (runtimeSupportsControlState(info)) {
+          await refreshRuntimeControlState(client, info);
+        }
         setRuntimeSession((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
         );
@@ -865,6 +1032,10 @@ export default function App() {
     return info?.capabilities.includes("session.history") ?? false;
   }
 
+  function runtimeSupportsSessionProject(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.project") ?? false;
+  }
+
   function runtimeSupportsPreview(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.preview.status") ?? false;
   }
@@ -875,6 +1046,10 @@ export default function App() {
 
   function runtimeSupportsControl(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.control.event") ?? false;
+  }
+
+  function runtimeSupportsControlState(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.control.state") ?? false;
   }
 
   function runtimeSupportsGeneratedShader(info: RuntimeInfo | null): boolean {
@@ -901,6 +1076,13 @@ export default function App() {
       } catch (error) {
         if (!cancelled) {
           setRuntimeTelemetry(null);
+          setRuntimeSession(null);
+          setRuntimeControlState(null);
+          setRuntimeHistory(null);
+          setRuntimePreviewStatus(null);
+          setGeneratedShader(null);
+          setLastLoadedGraphFingerprint(null);
+          clearPendingPatch();
           setRuntimeStatus("error");
           setRuntimeError(error instanceof Error ? error.message : "Runtime telemetry request failed.");
         }
@@ -926,6 +1108,7 @@ export default function App() {
       <AppShell.Header>
         <StudioToolbar
           graph={graph}
+          runtimeGraphAvailable={runtimeGraphAvailable}
           summary={graphSummary(graph)}
           validation={validation}
           onExport={exportGraph}
@@ -944,7 +1127,11 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        <PalettePanel registry={nodeRegistry} onAddNode={addNode} onShowHelp={showNodeHelp} />
+        {runtimeGraphAvailable ? (
+          <PalettePanel registry={nodeRegistry} onAddNode={addNode} onShowHelp={showNodeHelp} />
+        ) : (
+          <RuntimeRequiredPanel status={runtimeStatus} />
+        )}
       </AppShell.Navbar>
 
       <AppShell.Main>
@@ -963,44 +1150,50 @@ export default function App() {
               </Group>
             </Alert>
           ) : null}
-          <GraphCanvas
-            graph={graph}
-            viewState={viewState}
-            onAddNodeAtPosition={addNodeAtPosition}
-            onConnectionCheck={setConnectionCheck}
-            onGraphChange={updateGraph}
-            onObjectControl={(nodeId, portId, message) => {
-              void sendRuntimeControlEvent({
-                nodeId,
-                portId: portId as RuntimeControlEventRequest["portId"],
-                message
-              });
-            }}
-            onObjectLiveControl={(nodeId, portId, message) => {
-              sendRuntimeLiveControlEvent({
-                nodeId,
-                portId: portId as RuntimeControlEventRequest["portId"],
-                message
-              });
-            }}
-            onObjectParamChange={setNodeParam}
-            onViewStateChange={setViewState}
-            onSelectedEdgeChange={(edgeId) => {
-              setSelectedEdgeId(edgeId);
-              if (edgeId) {
-                setActiveHelpNodeId(null);
-              }
-            }}
-            onSelectedNodeChange={(nodeId) => {
-              setSelectedNodeId(nodeId);
-              if (nodeId) {
-                setActiveHelpNodeId(null);
-              }
-            }}
-            onShowNodeHelp={showNodeHelp}
-            selectedEdgeId={selectedEdgeId}
-            selectedNodeId={selectedNodeId}
-          />
+          {runtimeGraphAvailable ? (
+            <GraphCanvas
+              graph={graph}
+              viewState={viewState}
+              onAddNodeAtPosition={addNodeAtPosition}
+              onConnectionCheck={setConnectionCheck}
+              onGraphChange={updateGraph}
+              onObjectControl={(nodeId, portId, message) => {
+                void sendRuntimeControlEvent({
+                  nodeId,
+                  portId: portId as RuntimeControlEventRequest["portId"],
+                  message
+                });
+              }}
+              onObjectLiveControl={(nodeId, portId, message) => {
+                sendRuntimeLiveControlEvent({
+                  nodeId,
+                  portId: portId as RuntimeControlEventRequest["portId"],
+                  message
+                });
+              }}
+              onObjectParamChange={setNodeParam}
+              runtimeControlEnabled={runtimeControlInteractionEnabled}
+              runtimeControlValues={runtimeSessionSynced ? runtimeControlState?.values ?? {} : {}}
+              onViewStateChange={setViewState}
+              onSelectedEdgeChange={(edgeId) => {
+                setSelectedEdgeId(edgeId);
+                if (edgeId) {
+                  setActiveHelpNodeId(null);
+                }
+              }}
+              onSelectedNodeChange={(nodeId) => {
+                setSelectedNodeId(nodeId);
+                if (nodeId) {
+                  setActiveHelpNodeId(null);
+                }
+              }}
+              onShowNodeHelp={showNodeHelp}
+              selectedEdgeId={selectedEdgeId}
+              selectedNodeId={selectedNodeId}
+            />
+          ) : (
+            <RuntimeRequiredCanvas status={runtimeStatus} />
+          )}
         </div>
       </AppShell.Main>
 
@@ -1011,7 +1204,6 @@ export default function App() {
             <RuntimePanel
               busyAction={runtimeBusyAction}
               error={runtimeError}
-              frames={runtimeFrames}
               info={runtimeInfo}
               result={runtimeResult}
               history={runtimeHistory}
@@ -1027,32 +1219,12 @@ export default function App() {
                 )
               }
               onConnect={connectRuntime}
-              onFramesChange={setRuntimeFrames}
-              onLoadSession={() =>
-                runRuntimeSessionAction("loadSession", () =>
-                  createRuntimeClient({ baseUrl: runtimeUrl }).loadSession(runtimeProject)
-                )
-              }
-              onPlan={() =>
-                runRuntimeAction("plan", () =>
-                  createRuntimeClient({ baseUrl: runtimeUrl }).buildPlan(runtimeProject)
-                )
-              }
               onPlanSession={() =>
                 runRuntimeSessionAction("planSession", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).planSession()
                 )
               }
-              onRefreshSession={() =>
-                runRuntimeSessionAction("session", () =>
-                  createRuntimeClient({ baseUrl: runtimeUrl }).getSession()
-                )
-              }
-              onRun={() =>
-                runRuntimeAction("run", () =>
-                  createRuntimeClient({ baseUrl: runtimeUrl }).runProject(runtimeProject, runtimeFrames)
-                )
-              }
+              onRefreshSession={refreshRuntimeSessionFromPanel}
               onRunSession={() =>
                 runRuntimeSessionAction("runSession", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).runSession(runtimeFrames)
@@ -1084,11 +1256,6 @@ export default function App() {
                   createRuntimeClient({ baseUrl: runtimeUrl }).restartPreview()
                 )
               }
-              patchBaseRevision={pendingPatchBaseRevision}
-              patchConflict={patchConflict}
-              pendingPatchOps={pendingPatchOps.length}
-              onApplyPendingPatch={applyPendingPatch}
-              onClearPendingPatch={clearPendingPatch}
               onStartPreview={() =>
                 runRuntimePreviewAction("startPreview", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).startPreview()
@@ -1104,46 +1271,43 @@ export default function App() {
                   createRuntimeClient({ baseUrl: runtimeUrl }).undoSessionPatch()
                 )
               }
-              onValidate={() =>
-                runRuntimeAction("validate", () =>
-                  createRuntimeClient({ baseUrl: runtimeUrl }).validateProject(runtimeProject)
-                )
-              }
               onValidateSession={() =>
                 runRuntimeSessionAction("validateSession", () =>
                   createRuntimeClient({ baseUrl: runtimeUrl }).validateSession()
                 )
               }
             />
-            <InspectorPanel
-              connectionCheck={connectionCheck}
-              generatedShader={generatedShader}
-              generatedShaderBusy={runtimeBusyAction === "generatedShader"}
-              graph={graph}
-              edge={selectedEdge}
-              helpNodeId={activeHelpNodeId}
-              node={selectedNode}
-              onImportAsset={importRuntimeAsset}
-              onLoadGeneratedShader={runtimeSupportsGeneratedShader(runtimeInfo) ? loadGeneratedShader : undefined}
-              onOpenHelpGraph={openHelpGraphAsNewGraph}
-              onRemoveNode={removeNode}
-              onSendRuntimeControl={(request) => {
-                void sendRuntimeControlEvent(request);
-              }}
-              onSetNodeParam={setNodeParam}
-              onSyncShaderInputs={syncShaderInputs}
-              runtimeControlBusy={runtimeBusyAction === "controlEvent"}
-              runtimeControlEnabled={
-                runtimeStatus === "connected" &&
-                Boolean(runtimeSession?.loaded) &&
-                runtimeSupportsControl(runtimeInfo)
-              }
-              runtimeAssetImportBusy={runtimeBusyAction === "assetImport"}
-              runtimeAssetImportEnabled={runtimeStatus === "connected" && runtimeSupportsAssetImport(runtimeInfo)}
-              runtimeShaderDiagnostics={selectedRuntimeShaderDiagnostics}
-              semanticDiagnostics={semanticDiagnostics}
-              validation={validation}
-            />
+            {runtimeGraphAvailable ? (
+              <InspectorPanel
+                connectionCheck={connectionCheck}
+                generatedShader={generatedShader}
+                generatedShaderBusy={runtimeBusyAction === "generatedShader"}
+                graph={graph}
+                edge={selectedEdge}
+                helpNodeId={activeHelpNodeId}
+                node={selectedNode}
+                onImportAsset={importRuntimeAsset}
+                onLoadGeneratedShader={runtimeSupportsGeneratedShader(runtimeInfo) ? loadGeneratedShader : undefined}
+                onOpenHelpGraph={openHelpGraphAsNewGraph}
+                onRemoveNode={removeNode}
+                onSendRuntimeControl={(request) => {
+                  void sendRuntimeControlEvent(request);
+                }}
+                onSetNodeParam={setNodeParam}
+                onSyncShaderInputs={syncShaderInputs}
+                runtimeControlBusy={runtimeBusyAction === "controlEvent"}
+                runtimeControlEnabled={
+                  runtimeStatus === "connected" &&
+                  Boolean(runtimeSession?.loaded) &&
+                  runtimeSupportsControl(runtimeInfo)
+                }
+                runtimeAssetImportBusy={runtimeBusyAction === "assetImport"}
+                runtimeAssetImportEnabled={runtimeStatus === "connected" && runtimeSupportsAssetImport(runtimeInfo)}
+                runtimeShaderDiagnostics={selectedRuntimeShaderDiagnostics}
+                semanticDiagnostics={semanticDiagnostics}
+                validation={validation}
+              />
+            ) : null}
           </Stack>
         </ScrollArea>
       </AppShell.Aside>
@@ -1154,6 +1318,35 @@ export default function App() {
 
 function cloneGraph(graph: GraphDocumentV01): GraphDocumentV01 {
   return JSON.parse(JSON.stringify(graph)) as GraphDocumentV01;
+}
+
+function RuntimeRequiredPanel({ status }: { status: RuntimeConnectionStatus }) {
+  return (
+    <Stack className="panel-shell" gap="sm">
+      <Text fw={800} size="sm">
+        Runtime Required
+      </Text>
+      <Text c="dimmed" size="xs">
+        Connect to Runtime before adding or editing graph objects.
+      </Text>
+      <Badge color={status === "error" ? "red" : "gray"} radius="sm" variant="light">
+        {status}
+      </Badge>
+    </Stack>
+  );
+}
+
+function RuntimeRequiredCanvas({ status }: { status: RuntimeConnectionStatus }) {
+  return (
+    <div style={{ display: "grid", height: "100%", padding: 24, placeItems: "center" }}>
+      <Alert color={status === "error" ? "red" : "gray"} radius="sm" variant="light">
+        <Text fw={800}>Runtime session required</Text>
+        <Text c="dimmed" size="sm">
+          Studio displays the graph owned by Runtime. Connect to Runtime to initialize or restore the current session graph.
+        </Text>
+      </Alert>
+    </div>
+  );
 }
 
 function downloadJson(jsonDocument: unknown, filename: string) {

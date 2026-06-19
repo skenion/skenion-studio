@@ -144,6 +144,14 @@ export interface RuntimeSessionResponse {
   report: RuntimeDummyExecutionReport | null;
 }
 
+export interface RuntimeSessionProjectResponse {
+  ok: boolean;
+  loaded: boolean;
+  project: RuntimeProjectPayload | null;
+  session: RuntimeSessionResponse;
+  diagnostics: RuntimeDiagnostic[];
+}
+
 export interface RuntimePatchResponse {
   ok: boolean;
   applied: boolean;

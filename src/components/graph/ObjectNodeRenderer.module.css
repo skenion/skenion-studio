@@ -22,6 +22,16 @@
     0 4px 10px rgb(31 41 51 / 14%);
 }
 
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.disabled .valueDrag,
+.disabled .sliderInput {
+  cursor: not-allowed;
+}
+
 .content {
   display: grid;
   align-items: center;

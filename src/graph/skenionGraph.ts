@@ -46,7 +46,8 @@ export function portKey(nodeId: string, portId: string): string {
 
 export function createGraphNodeFromDefinition(
   definition: NodeDefinitionManifestV01,
-  existingNodes: GraphNodeV01[]
+  existingNodes: GraphNodeV01[],
+  paramsOverride: Record<string, unknown> = {}
 ): GraphNodeV01 {
   const baseId = definition.id.split(".").pop() || "node";
   let index = existingNodes.length + 1;
@@ -62,7 +63,10 @@ export function createGraphNodeFromDefinition(
     id,
     kind: definition.id,
     kindVersion: definition.version,
-    params: defaultParamsForNodeKind(definition.id),
+    params: {
+      ...defaultParamsForNodeKind(definition.id),
+      ...paramsOverride
+    },
     ports: definition.ports.map((port) => ({ ...port, type: { ...port.type } }))
   };
 }
