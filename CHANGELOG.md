@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.1](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.0...skenion-studio-v0.26.1) (2026-06-19)
+
+
+### Bug Fixes
+
+* **studio:** stabilize control interactions ([#69](https://github.com/echovisionlab/skenion-studio/issues/69)) ([1256be3](https://github.com/echovisionlab/skenion-studio/commit/1256be3e41ce2846fca2d25e8c98773347b63e74))
+
 ## [0.26.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.25.1...skenion-studio-v0.26.0) (2026-06-19)
 
 
