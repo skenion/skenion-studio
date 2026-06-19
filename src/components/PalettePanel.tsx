@@ -1,17 +1,49 @@
-import { ActionIcon, Badge, Button, Divider, Group, ScrollArea, Stack, Text, Tooltip } from "@mantine/core";
+import { useMemo, useState, type FormEvent } from "react";
+import { ActionIcon, Badge, Button, Divider, Group, ScrollArea, Stack, Text, TextInput, Tooltip } from "@mantine/core";
 import { HelpCircle, Plus } from "lucide-react";
-import type { NodeDefinitionManifestV01 } from "@skenion/contracts";
+import { parseObjectTextV01, type NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { flowColor, flowName } from "../graph/reactFlowAdapter";
+import { objectTextRegistryDiagnostic } from "../graph/objectTextNode";
 
 interface PalettePanelProps {
   addDisabled?: boolean;
   registry: NodeDefinitionManifestV01[];
   onAddNode: (definitionId: string) => void;
+  onAddObjectText: (objectText: string) => void;
   onShowHelp: (definitionId: string) => void;
 }
 
-export function PalettePanel({ addDisabled = false, registry, onAddNode, onShowHelp }: PalettePanelProps) {
+export function PalettePanel({
+  addDisabled = false,
+  registry,
+  onAddNode,
+  onAddObjectText,
+  onShowHelp
+}: PalettePanelProps) {
+  const [objectText, setObjectText] = useState("");
   const categories = Array.from(new Set(registry.map((definition) => definition.category)));
+  const objectTextInput = objectText.trim();
+  const objectTextAnalysis = useMemo(
+    () => (objectTextInput ? parseObjectTextV01(objectTextInput) : null),
+    [objectTextInput]
+  );
+  const objectTextRegistryError = objectTextAnalysis
+    ? objectTextRegistryDiagnostic(objectTextAnalysis, registry)
+    : null;
+  const objectTextDiagnostic = objectTextAnalysis?.diagnostics.find((diagnostic) => diagnostic.severity === "error") ??
+    objectTextRegistryError ??
+    objectTextAnalysis?.diagnostics[0] ??
+    null;
+  const objectTextCanCreate = Boolean(objectTextAnalysis?.ok) && !objectTextRegistryError && !addDisabled;
+
+  function submitObjectText(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!objectTextCanCreate) {
+      return;
+    }
+    onAddObjectText(objectTextInput);
+    setObjectText("");
+  }
 
   return (
     <Stack className="panel-shell" gap="md">
@@ -23,6 +55,40 @@ export function PalettePanel({ addDisabled = false, registry, onAddNode, onShowH
           {registry.length} definitions
         </Text>
       </div>
+
+      <form onSubmit={submitObjectText}>
+        <Stack gap={6}>
+          <Group justify="space-between">
+            <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+              Object Box
+            </Text>
+            {objectTextAnalysis?.ok ? (
+              <Badge radius="sm" size="xs" variant="light">
+                {objectTextAnalysis.resolvedKind}
+              </Badge>
+            ) : null}
+          </Group>
+          <TextInput
+            aria-label="Object box text"
+            disabled={addDisabled}
+            error={objectTextDiagnostic?.severity === "error" ? objectTextDiagnostic.message : undefined}
+            onChange={(event) => setObjectText(event.currentTarget.value)}
+            placeholder="+ 1, +~, osc~ 440"
+            size="xs"
+            value={objectText}
+          />
+          {objectTextDiagnostic && objectTextDiagnostic.severity !== "error" ? (
+            <Text c="dimmed" size="xs">
+              {objectTextDiagnostic.message}
+            </Text>
+          ) : null}
+          <Button disabled={!objectTextCanCreate} fullWidth radius="sm" size="compact-sm" type="submit" variant="light">
+            Create Object
+          </Button>
+        </Stack>
+      </form>
+
+      <Divider />
 
       <ScrollArea className="palette-scroll" offsetScrollbars>
         <Stack gap="md">

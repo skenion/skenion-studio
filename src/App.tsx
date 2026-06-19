@@ -35,6 +35,7 @@ import {
   type ConnectionCheck,
   type GraphPatch
 } from "./graph/skenionGraph";
+import { createGraphNodeFromObjectText } from "./graph/objectTextNode";
 import {
   createProjectDocument,
   createViewStateFromPositions,
@@ -228,6 +229,49 @@ export default function App() {
           nodes: {
             ...currentViewState.canvas.nodes,
             [node.id]: position
+          }
+        }
+      })
+    );
+    setSelectedNodeId(node.id);
+    setActiveHelpNodeId(null);
+    setSelectedEdgeId(null);
+    setConnectionCheck(null);
+    setRuntimeResult(null);
+  }
+
+  function addObjectTextNode(objectText: string) {
+    if (graphLocked) {
+      setRuntimeError("Unlock the graph before adding or moving objects.");
+      return;
+    }
+
+    const result = createGraphNodeFromObjectText(objectText, graph.nodes, nodeRegistry);
+    if (!result.ok || !result.node) {
+      setRuntimeError(result.diagnostics[0]?.message ?? "Object text could not be resolved.");
+      return;
+    }
+    const node = result.node;
+    if (!nodeRegistry.some((definition) => definition.id === node.kind)) {
+      setRuntimeError(`${node.kind} is not available in the local node registry.`);
+      return;
+    }
+
+    const patch = { type: "addNode", node } satisfies GraphPatch;
+    const nextGraph = applyPatch(graph, patch);
+    setGraph(nextGraph);
+    recordGraphPatches([patch]);
+    setViewState((currentViewState) =>
+      reconcileViewStateWithGraph(nextGraph, {
+        ...currentViewState,
+        canvas: {
+          ...currentViewState.canvas,
+          nodes: {
+            ...currentViewState.canvas.nodes,
+            [node.id]: {
+              x: 88 + (graph.nodes.length % 2) * 300,
+              y: 88 + Math.floor(graph.nodes.length / 2) * 180
+            }
           }
         }
       })
@@ -1293,7 +1337,13 @@ export default function App() {
 
       <AppShell.Navbar p="md">
         {runtimeGraphAvailable ? (
-          <PalettePanel addDisabled={graphLocked} registry={nodeRegistry} onAddNode={addNode} onShowHelp={showNodeHelp} />
+          <PalettePanel
+            addDisabled={graphLocked}
+            registry={nodeRegistry}
+            onAddNode={addNode}
+            onAddObjectText={addObjectTextNode}
+            onShowHelp={showNodeHelp}
+          />
         ) : (
           <RuntimeRequiredPanel status={runtimeStatus} />
         )}
