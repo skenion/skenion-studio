@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.2](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.1...skenion-studio-v0.26.2) (2026-06-19)
+
+
+### Bug Fixes
+
+* **studio:** expect comment control inlet ([#71](https://github.com/echovisionlab/skenion-studio/issues/71)) ([5535f76](https://github.com/echovisionlab/skenion-studio/commit/5535f760900835e1197ab9f481514f7eea3eda7d))
+
 ## [0.26.1](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.0...skenion-studio-v0.26.1) (2026-06-19)
 
 
