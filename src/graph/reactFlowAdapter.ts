@@ -29,6 +29,7 @@ export interface SkenionNodeData extends Record<string, unknown> {
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   primaryFlow: DataFlow;
   runtimeControlEnabled?: boolean;
+  runtimeControlPulseKey?: number;
   runtimeControlValue?: RuntimeControlValue;
 }
 

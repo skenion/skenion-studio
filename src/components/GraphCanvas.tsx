@@ -30,13 +30,16 @@ import {
 } from "../graph/skenionGraph";
 import { updateViewStateNodePosition, updateViewStateViewport } from "../graph/projectDocument";
 import {
-  toReactFlowViewModel
+  toReactFlowViewModel,
+  type SkenionNodeData
 } from "../graph/reactFlowAdapter";
 import { portSemanticsForPort } from "../graph/portSemantics";
 
 const nodeTypes: NodeTypes = {
   skenion: ReactFlowNodeAdapter
 };
+
+type StudioFlowNode = Node<SkenionNodeData>;
 
 interface GraphCanvasProps {
   graph: GraphDocumentV01;
@@ -53,6 +56,7 @@ interface GraphCanvasProps {
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   runtimeControlEnabled?: boolean;
+  runtimeControlPulses?: Record<string, number>;
   runtimeControlValues?: Record<string, RuntimeControlValue>;
   onShowNodeHelp?: (definitionId: string) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
@@ -72,6 +76,7 @@ export function GraphCanvas({
   onObjectLiveControl,
   onObjectParamChange,
   runtimeControlEnabled = false,
+  runtimeControlPulses = {},
   runtimeControlValues = {},
   onShowNodeHelp,
   onSelectedEdgeChange,
@@ -126,7 +131,7 @@ export function GraphCanvas({
     },
     []
   );
-  const flowNodes = useMemo(
+  const flowNodes = useMemo<StudioFlowNode[]>(
     () =>
       viewModel.nodes.map((node) => ({
         ...node,
@@ -135,10 +140,18 @@ export function GraphCanvas({
           onObjectControl: handleObjectControl,
           onObjectLiveControl: handleObjectLiveControl,
           onObjectParamChange: handleObjectParamChange,
-          runtimeControlEnabled
+          runtimeControlEnabled,
+          runtimeControlPulseKey: runtimeControlPulses[node.id] ?? 0,
         }
       })),
-    [handleObjectControl, handleObjectLiveControl, handleObjectParamChange, runtimeControlEnabled, viewModel.nodes]
+    [
+      handleObjectControl,
+      handleObjectLiveControl,
+      handleObjectParamChange,
+      runtimeControlEnabled,
+      runtimeControlPulses,
+      viewModel.nodes
+    ]
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(viewModel.edges);
@@ -156,8 +169,8 @@ export function GraphCanvas({
   );
 
   useEffect(() => {
-    setNodes(flowNodes);
-    setEdges(viewModel.edges);
+    setNodes((currentNodes) => reconcileFlowNodes(currentNodes, flowNodes));
+    setEdges((currentEdges) => reconcileFlowEdges(currentEdges, viewModel.edges));
   }, [flowNodes, setEdges, setNodes, viewModel.edges]);
 
   const onConnect = useCallback(
@@ -347,11 +360,11 @@ export function GraphCanvas({
   );
 
   const selectedNodes = useMemo(
-    () => nodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
+    () => applyNodeSelection(nodes, selectedNodeId),
     [nodes, selectedNodeId]
   );
   const selectedEdges = useMemo(
-    () => edges.map((edge) => ({ ...edge, selected: edge.id === selectedEdgeId })),
+    () => applyEdgeSelection(edges, selectedEdgeId),
     [edges, selectedEdgeId]
   );
 
@@ -587,6 +600,121 @@ function reconcileViewStateAfterDuplicate(
       }
     }
   };
+}
+
+function reconcileFlowNodes(
+  currentNodes: StudioFlowNode[],
+  nextNodes: StudioFlowNode[]
+): StudioFlowNode[] {
+  const currentById = new Map(currentNodes.map((node) => [node.id, node]));
+  let changed = currentNodes.length !== nextNodes.length;
+  const reconciled = nextNodes.map((nextNode) => {
+    const currentNode = currentById.get(nextNode.id);
+    if (currentNode && sameFlowNode(currentNode, nextNode)) {
+      return currentNode;
+    }
+    changed = true;
+    return currentNode ? mergeFlowNode(currentNode, nextNode) : nextNode;
+  });
+  return changed ? reconciled : currentNodes;
+}
+
+function reconcileFlowEdges(currentEdges: Edge[], nextEdges: Edge[]): Edge[] {
+  const currentById = new Map(currentEdges.map((edge) => [edge.id, edge]));
+  let changed = currentEdges.length !== nextEdges.length;
+  const reconciled = nextEdges.map((nextEdge) => {
+    const currentEdge = currentById.get(nextEdge.id);
+    if (currentEdge && sameFlowEdge(currentEdge, nextEdge)) {
+      return currentEdge;
+    }
+    changed = true;
+    return nextEdge;
+  });
+  return changed ? reconciled : currentEdges;
+}
+
+function applyNodeSelection(nodes: StudioFlowNode[], selectedNodeId: string | null): StudioFlowNode[] {
+  let changed = false;
+  const selectedNodes = nodes.map((node) => {
+    const selected = node.id === selectedNodeId;
+    if (Boolean(node.selected) === selected) {
+      return node;
+    }
+    changed = true;
+    return { ...node, selected };
+  });
+  return changed ? selectedNodes : nodes;
+}
+
+function mergeFlowNode(currentNode: StudioFlowNode, nextNode: StudioFlowNode): StudioFlowNode {
+  return {
+    ...currentNode,
+    ...nextNode,
+    data: {
+      ...currentNode.data,
+      ...nextNode.data
+    }
+  };
+}
+
+function applyEdgeSelection(edges: Edge[], selectedEdgeId: string | null): Edge[] {
+  let changed = false;
+  const selectedEdges = edges.map((edge) => {
+    const selected = edge.id === selectedEdgeId;
+    if (Boolean(edge.selected) === selected) {
+      return edge;
+    }
+    changed = true;
+    return { ...edge, selected };
+  });
+  return changed ? selectedEdges : edges;
+}
+
+function sameFlowNode(currentNode: StudioFlowNode, nextNode: StudioFlowNode): boolean {
+  return (
+    currentNode.type === nextNode.type &&
+    currentNode.position.x === nextNode.position.x &&
+    currentNode.position.y === nextNode.position.y &&
+    currentNode.data.node === nextNode.data.node &&
+    currentNode.data.runtimeControlEnabled === nextNode.data.runtimeControlEnabled &&
+    currentNode.data.runtimeControlPulseKey === nextNode.data.runtimeControlPulseKey &&
+    sameRuntimeControlValue(
+      currentNode.data.runtimeControlValue,
+      nextNode.data.runtimeControlValue
+    )
+  );
+}
+
+function sameFlowEdge(currentEdge: Edge, nextEdge: Edge): boolean {
+  return (
+    currentEdge.source === nextEdge.source &&
+    currentEdge.sourceHandle === nextEdge.sourceHandle &&
+    currentEdge.target === nextEdge.target &&
+    currentEdge.targetHandle === nextEdge.targetHandle &&
+    currentEdge.type === nextEdge.type &&
+    currentEdge.label === nextEdge.label &&
+    JSON.stringify(currentEdge.style ?? {}) === JSON.stringify(nextEdge.style ?? {}) &&
+    JSON.stringify(currentEdge.markerStart ?? null) === JSON.stringify(nextEdge.markerStart ?? null) &&
+    JSON.stringify(currentEdge.markerEnd ?? null) === JSON.stringify(nextEdge.markerEnd ?? null)
+  );
+}
+
+function sameRuntimeControlValue(a?: RuntimeControlValue, b?: RuntimeControlValue): boolean {
+  if (!a || !b) {
+    return a === b;
+  }
+  if (a.type !== b.type) {
+    return false;
+  }
+  if (a.type === "color" && b.type === "color") {
+    return (
+      a.representation === b.representation &&
+      a.colorSpace === b.colorSpace &&
+      a.value.length === b.value.length &&
+      a.value.every((value, index) => Object.is(value, b.value[index]))
+    );
+  }
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function connectionFromFinalState(connectionState: FinalConnectionState): Connection | null {

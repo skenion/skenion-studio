@@ -30,11 +30,10 @@
 
 .portHandle::after {
   position: absolute;
-  inset: -9px -8px;
+  inset: -3px;
   content: "";
 }
 
 .portHandle:hover {
   transform: translate(-50%, -50%) scale(1.12);
 }
-
