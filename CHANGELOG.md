@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.3](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.2...skenion-studio-v0.26.3) (2026-06-19)
+
+
+### Bug Fixes
+
+* **studio:** ignore dependency symlinks in vite watch ([#73](https://github.com/echovisionlab/skenion-studio/issues/73)) ([3a5d084](https://github.com/echovisionlab/skenion-studio/commit/3a5d08497c461dbc3494f95ab4260aa7d24686ee))
+
 ## [0.26.2](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.1...skenion-studio-v0.26.2) (2026-06-19)
 
 
