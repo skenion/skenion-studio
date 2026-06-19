@@ -219,6 +219,20 @@ describe("skenion graph helpers", () => {
       })
     ).toBe(true);
     expect(
+      isValidSkenionConnection(
+        {
+          ...sampleGraph,
+          edges: sampleGraph.edges.filter((edge) => edge.to.node !== "bang_1")
+        },
+        {
+          source: "value_1",
+          sourceHandle: "value",
+          target: "bang_1",
+          targetHandle: "in"
+        }
+      )
+    ).toBe(true);
+    expect(
       isValidSkenionConnection(messageToBangGraph, {
         source: "video_asset_1",
         sourceHandle: "asset",
