@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.30.0...skenion-studio-v0.31.0) (2026-06-21)
+
+
+### Features
+
+* switch studio active graph to v0.2 ([#94](https://github.com/echovisionlab/skenion-studio/issues/94)) ([a348cb4](https://github.com/echovisionlab/skenion-studio/commit/a348cb4890fbba1d757d159ac6120f7e9ae18210))
+
 ## [0.30.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.29.0...skenion-studio-v0.30.0) (2026-06-21)
 
 
