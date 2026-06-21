@@ -4,12 +4,22 @@ import type {
   DataTypeV01,
   GraphNodeV01,
   NodeDefinitionManifestV01,
+  ObjectTextAtomV01,
   ObjectTextDiagnosticV01,
   ObjectTextParseResultV01,
   ObjectTextPortV01,
   PortActivation,
   PortV01
 } from "@skenion/contracts";
+import {
+  createSubpatchNodeFromDefinition,
+  findPatchDefinition,
+  patchDefinitionBoundaryPorts,
+  portSpecV02ToGraphPort,
+  SUBPATCH_NODE_KIND,
+  type PatchDefinitionV02,
+  type PatchLibraryV02
+} from "./patchLibrary";
 
 export const UNRESOLVED_OBJECT_NODE_KIND = "core.unresolved-object";
 
@@ -30,6 +40,7 @@ export interface ObjectTextNodeBuildResult {
 
 export interface ObjectTextNodeBuildOptions {
   nodeId?: string;
+  patchLibrary?: PatchLibraryV02;
 }
 
 export function createGraphNodeFromObjectText(
@@ -46,6 +57,50 @@ export function createGraphNodeFromObjectText(
       node: null,
       parseResult,
       diagnostics: parseResult.diagnostics
+    };
+  }
+
+  const subpatchObject = subpatchObjectText(displayText);
+  if (subpatchObject) {
+    const diagnostics = diagnosticsForSubpatchObjectText(subpatchObject, options.patchLibrary);
+    if (diagnostics.length > 0 || !subpatchObject.patchId) {
+      const subpatchParseResult = parseResultForSubpatch(
+        input,
+        displayText,
+        subpatchObject.patchId ?? "",
+        null,
+        false,
+        diagnostics
+      );
+      return unresolvedObjectResult(
+        input,
+        displayText,
+        SUBPATCH_NODE_KIND,
+        subpatchParseResult,
+        diagnostics,
+        existingNodes,
+        options.nodeId
+      );
+    }
+
+    const patchDefinition = findPatchDefinition(options.patchLibrary, subpatchObject.patchId)!;
+    const subpatchParseResult = parseResultForSubpatch(
+      input,
+      displayText,
+      subpatchObject.patchId,
+      patchDefinition,
+      true,
+      []
+    );
+
+    return {
+      ok: true,
+      node: createSubpatchNodeFromDefinition(patchDefinition, existingNodes, {
+        nodeId: options.nodeId,
+        objectText: displayText
+      }),
+      parseResult: subpatchParseResult,
+      diagnostics: []
     };
   }
 
@@ -150,7 +205,7 @@ export function objectTextRegistryDiagnostic(
 }
 
 export function objectTextPortToGraphPort(port: ObjectTextPortV01): PortV01 {
-  const graphPort: PortV01 = {
+  const graphPort: PortV01 & { description?: string } = {
     id: port.id,
     direction: port.direction,
     label: labelForObjectTextPort(port.id),
@@ -158,6 +213,9 @@ export function objectTextPortToGraphPort(port: ObjectTextPortV01): PortV01 {
     required: false
   };
 
+  if (port.description) {
+    graphPort.description = port.description;
+  }
   const activation = graphActivation(port.activation);
   if (port.direction === "input" && activation) {
     graphPort.activation = activation;
@@ -212,6 +270,75 @@ function nativeObjectKindForText(displayText: string): string | null {
     return null;
   }
   return NATIVE_OBJECT_ALIASES.get(classSymbol) ?? null;
+}
+
+interface SubpatchObjectText {
+  patchId: string | null;
+  diagnostics: ObjectTextDiagnosticV01[];
+}
+
+function subpatchObjectText(displayText: string): SubpatchObjectText | null {
+  const tokens = displayText.split(/\s+/u).filter(Boolean);
+  if (tokens[0] !== "p") {
+    return null;
+  }
+  if (tokens.length === 2) {
+    return {
+      patchId: tokens[1]!,
+      diagnostics: []
+    };
+  }
+  if (tokens.length === 1) {
+    return {
+      patchId: null,
+      diagnostics: [
+        {
+          severity: "error",
+          code: "missing-subpatch-id",
+          message: "Subpatch object text must include a patch id, such as p oscillator."
+        }
+      ]
+    };
+  }
+  return {
+    patchId: tokens[1],
+    diagnostics: [
+      {
+        severity: "error",
+        code: "invalid-subpatch-object-text",
+        message: "Subpatch object text accepts exactly one patch id."
+      }
+    ]
+  };
+}
+
+function diagnosticsForSubpatchObjectText(
+  subpatchObject: SubpatchObjectText,
+  patchLibrary: PatchLibraryV02 | undefined
+): ObjectTextDiagnosticV01[] {
+  if (subpatchObject.diagnostics.length > 0) {
+    return subpatchObject.diagnostics;
+  }
+  const patchId = subpatchObject.patchId as string;
+  if (!patchLibrary) {
+    return [
+      {
+        severity: "error",
+        code: "patch-library-unavailable",
+        message: `Patch library is not available, so p ${patchId} cannot be resolved.`
+      }
+    ];
+  }
+  if (!findPatchDefinition(patchLibrary, patchId)) {
+    return [
+      {
+        severity: "error",
+        code: "patch-definition-unavailable",
+        message: `Patch ${patchId} is not available in the patch library.`
+      }
+    ];
+  }
+  return [];
 }
 
 function graphNodeFromDefinition(
@@ -340,6 +467,52 @@ function parseResultForNativeAlias(
     displayText,
     diagnostics: []
   };
+}
+
+function parseResultForSubpatch(
+  input: string,
+  displayText: string,
+  patchId: string,
+  definition: PatchDefinitionV02 | null,
+  ok: boolean,
+  diagnostics: ObjectTextDiagnosticV01[]
+): ObjectTextParseResultV01 {
+  return {
+    schema: OBJECT_TEXT_SCHEMA,
+    schemaVersion: OBJECT_TEXT_SCHEMA_VERSION,
+    input,
+    ok,
+    classSymbol: "p",
+    creationArgs: patchId ? [{ type: "symbol", value: patchId } satisfies ObjectTextAtomV01] : [],
+    resolvedKind: ok ? SUBPATCH_NODE_KIND : null,
+    resolvedKindVersion: ok ? "0.2.0" : null,
+    params: patchId ? { patchId } : {},
+    instancePorts: definition ? patchDefinitionBoundaryPorts(definition).map(patchPortSpecToObjectTextPort) : [],
+    displayText,
+    diagnostics
+  };
+}
+
+function patchPortSpecToObjectTextPort(port: Parameters<typeof portSpecV02ToGraphPort>[0]): ObjectTextPortV01 {
+  const graphPort = portSpecV02ToGraphPort(port) as PortV01 & { rate?: ObjectTextPortV01["rate"]; description?: string };
+  const objectPort: ObjectTextPortV01 = {
+    id: port.id,
+    direction: port.direction,
+    type: graphPort.type.dataKind
+  };
+  if (graphPort.rate) {
+    objectPort.rate = graphPort.rate;
+  }
+  if (graphPort.activation) {
+    objectPort.activation = graphPort.activation;
+  }
+  if (Object.hasOwn(graphPort, "default")) {
+    objectPort.defaultValue = graphPort.default;
+  }
+  if (graphPort.description) {
+    objectPort.description = graphPort.description;
+  }
+  return objectPort;
 }
 
 function graphActivation(activation: ObjectTextPortV01["activation"]): PortActivation | undefined {

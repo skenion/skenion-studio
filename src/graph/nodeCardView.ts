@@ -30,6 +30,7 @@ export function toPortView(node: GraphNodeV01, port: PortV01): NodePortView {
   return {
     id: port.id,
     label: semantics.label,
+    description: semantics.description ?? undefined,
     direction: semantics.direction,
     typeLabel: semantics.type,
     storedTypeLabel: semantics.storedType,

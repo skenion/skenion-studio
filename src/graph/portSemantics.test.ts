@@ -56,6 +56,30 @@ describe("port and edge semantics", () => {
     expect(semanticTypeColor("value.number.float")).toBe("#495057");
   });
 
+  it("preserves direct render frame and signal data kind labels", () => {
+    const node: GraphNodeV01 = {
+      id: "adapter",
+      kind: "core.subpatch",
+      kindVersion: "0.2.0",
+      params: {},
+      ports: [
+        {
+          id: "frame",
+          direction: "output",
+          type: { flow: "resource", dataKind: "render.frame" }
+        },
+        {
+          id: "audio",
+          direction: "output",
+          type: { flow: "signal", dataKind: "signal.audio" }
+        }
+      ]
+    };
+
+    expect(portSemanticsForPort(node, node.ports[0]!).type).toBe("render.frame");
+    expect(portSemanticsForPort(node, node.ports[1]!).type).toBe("signal.audio");
+  });
+
   it("builds edge inspector metadata with v0.2 defaults and explicit overrides", () => {
     const edge = {
       ...renderSampleGraph.edges[0],

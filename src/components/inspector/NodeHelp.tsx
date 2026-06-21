@@ -1,18 +1,32 @@
 import { Badge, Group, Stack, Text } from "@mantine/core";
 import { ExternalLink } from "lucide-react";
-import type { BuiltinNodeHelpV01, GraphDocumentV01 } from "@skenion/contracts";
-import { HelpGraphViewer } from "../help/HelpGraphViewer";
+import type { BuiltinNodeHelpV01 } from "@skenion/contracts";
+import {
+  isPatchDefinitionV02,
+  patchDescription,
+  patchDefinitionBoundaryPorts,
+  patchDisplayName,
+  patchTags,
+  type PatchDefinitionV02
+} from "../../graph/patchLibrary";
+import { HelpGraphViewer, type HelpGraphViewerDocument } from "../help/HelpGraphViewer";
 import { Button } from "../core/Button/Button";
+
+export type NodeHelpDocument = BuiltinNodeHelpV01 | PatchDefinitionV02;
 
 export function NodeHelp({
   help,
   helpGraph,
   onOpenAsNewGraph
 }: {
-  help: BuiltinNodeHelpV01;
-  helpGraph?: GraphDocumentV01;
+  help: NodeHelpDocument;
+  helpGraph?: HelpGraphViewerDocument;
   onOpenAsNewGraph?: () => void;
 }) {
+  const view = nodeHelpView(help);
+  const graph = helpGraph ?? (isPatchDefinitionV02(help) ? help : undefined);
+  const graphTitle = isPatchDefinitionV02(graph) ? "Patch Graph" : "Help Graph";
+
   return (
     <Stack
       gap={6}
@@ -22,64 +36,66 @@ export function NodeHelp({
       }}
     >
       <Text fw={800} size="sm">
-        {help.summary}
+        {view.summary}
       </Text>
-      <Text c="dimmed" size="xs">
-        {help.description}
-      </Text>
-      {help.tags.length > 0 ? (
+      {view.description ? (
+        <Text c="dimmed" size="xs">
+          {view.description}
+        </Text>
+      ) : null}
+      {view.tags.length > 0 ? (
         <Group gap={4}>
-          {help.tags.map((tag) => (
+          {view.tags.map((tag) => (
             <Badge key={tag} size="xs" variant="light">
               {tag}
             </Badge>
           ))}
         </Group>
       ) : null}
-      {help.runtimeBehavior ? (
+      {view.runtimeBehavior ? (
         <Text c="dimmed" size="xs">
-          Runtime: {help.runtimeBehavior}
+          Runtime: {view.runtimeBehavior}
         </Text>
       ) : null}
-      {help.ports?.length ? (
+      {view.ports.length ? (
         <Stack gap={3}>
           <Text fw={700} size="xs">
             Ports
           </Text>
-          {help.ports.map((port) => (
+          {view.ports.map((port) => (
             <Text c="dimmed" key={port.id} size="xs">
               {port.id}: {port.description}
             </Text>
           ))}
         </Stack>
       ) : null}
-      {help.params?.length ? (
+      {view.params.length ? (
         <Stack gap={3}>
           <Text fw={700} size="xs">
             Params
           </Text>
-          {help.params.map((param) => (
+          {view.params.map((param) => (
             <Text c="dimmed" key={param.id} size="xs">
               {param.id}: {param.description}
             </Text>
           ))}
         </Stack>
       ) : null}
-      {help.relatedNodes?.length ? (
+      {view.relatedNodes.length ? (
         <Stack gap={3}>
           <Text fw={700} size="xs">
             Related
           </Text>
           <Text c="dimmed" size="xs">
-            {help.relatedNodes.join(", ")}
+            {view.relatedNodes.join(", ")}
           </Text>
         </Stack>
       ) : null}
-      {helpGraph ? (
+      {graph ? (
         <Stack gap={6}>
           <Group justify="space-between">
             <Text fw={700} size="xs">
-              Help Graph
+              {graphTitle}
             </Text>
             {onOpenAsNewGraph ? (
               <Button
@@ -92,9 +108,45 @@ export function NodeHelp({
               </Button>
             ) : null}
           </Group>
-          <HelpGraphViewer graph={helpGraph} />
+          <HelpGraphViewer graph={graph} />
         </Stack>
       ) : null}
     </Stack>
   );
+}
+
+interface NodeHelpView {
+  summary: string;
+  description: string;
+  tags: string[];
+  runtimeBehavior?: string;
+  ports: Array<{ id: string; description: string }>;
+  params: Array<{ id: string; description: string }>;
+  relatedNodes: string[];
+}
+
+function nodeHelpView(help: NodeHelpDocument): NodeHelpView {
+  if (!isPatchDefinitionV02(help)) {
+    return {
+      summary: help.summary,
+      description: help.description,
+      tags: help.tags,
+      runtimeBehavior: help.runtimeBehavior,
+      ports: help.ports ?? [],
+      params: help.params ?? [],
+      relatedNodes: help.relatedNodes ?? []
+    };
+  }
+
+  return {
+    summary: patchDisplayName(help),
+    description: patchDescription(help),
+    tags: patchTags(help),
+    ports: patchDefinitionBoundaryPorts(help).map((port) => ({
+      id: port.id,
+      description: port.description ?? port.label ?? port.type
+    })),
+    params: [],
+    relatedNodes: []
+  };
 }

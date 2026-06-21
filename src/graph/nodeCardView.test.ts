@@ -91,4 +91,27 @@ describe("nodeCardView", () => {
     expect(portView.storedTypeLabel).toBe("resource<gpu.texture2d>");
     expect(portView.color).toBe("#d6336c");
   });
+
+  it("carries port descriptions into card tooltips", () => {
+    const node: GraphNodeV01 = {
+      id: "patch_1",
+      kind: "core.subpatch",
+      kindVersion: "0.2.0",
+      params: {},
+      ports: [
+        {
+          id: "pitch",
+          direction: "input",
+          label: "Pitch",
+          type: { flow: "value", dataKind: "number.float", format: "f32" },
+          description: "Pitch in MIDI note numbers."
+        } as GraphNodeV01["ports"][number]
+      ]
+    };
+
+    expect(toNodeCardView(node).inputs[0]).toMatchObject({
+      id: "pitch",
+      description: "Pitch in MIDI note numbers."
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GraphNodeV01, NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { nodeRegistry } from "../data/registry";
+import { createPatchLibraryV02, type PatchDefinitionV02 } from "./patchLibrary";
 import {
   createGraphNodeFromObjectText,
   UNRESOLVED_OBJECT_NODE_KIND,
@@ -71,6 +72,20 @@ describe("object text graph node adapter", () => {
       ["right", { flow: "value", dataKind: "number.float", format: "f32" }, 0.5],
       ["out", { flow: "signal", dataKind: "signal.audio" }, null]
     ]);
+  });
+
+  it("preserves object text port descriptions in graph ports", () => {
+    expect(
+      objectTextPortToGraphPort({
+        id: "pitch",
+        direction: "input",
+        type: "number.float",
+        description: "Pitch in MIDI note numbers."
+      })
+    ).toMatchObject({
+      id: "pitch",
+      description: "Pitch in MIDI note numbers."
+    });
   });
 
   it("allows object text instance ports to specialize a registry object class", () => {
@@ -208,6 +223,183 @@ describe("object text graph node adapter", () => {
     });
     expect(unknown.diagnostics[0]).toMatchObject({
       code: "extension-namespace-required"
+    });
+  });
+
+  it("resolves p object text through the internal patch library", () => {
+    const patch: PatchDefinitionV02 = {
+      id: "voice",
+      revision: "1",
+      metadata: {
+        title: "Voice",
+        description: "Reusable synth voice."
+      },
+      graph: {
+        schema: "skenion.graph",
+        schemaVersion: "0.2.0",
+        id: "voice-help",
+        revision: "1",
+        nodes: [
+          {
+            id: "pitch_in",
+            kind: "core.inlet",
+            kindVersion: "0.2.0",
+            params: { portId: "pitch", label: "Pitch" },
+            ports: [
+              {
+                id: "out",
+                direction: "output",
+                type: "number.float",
+                rate: "control",
+                triggerMode: "latched",
+                defaultValue: 69,
+                description: "Pitch in MIDI note numbers."
+              }
+            ]
+          },
+          {
+            id: "audio_out",
+            kind: "core.outlet",
+            kindVersion: "0.2.0",
+            params: { portId: "out", label: "Out" },
+            ports: [
+              {
+                id: "in",
+                direction: "input",
+                type: "signal.audio",
+                rate: "audio",
+                description: "Generated audio signal."
+              }
+            ]
+          }
+        ],
+        edges: []
+      }
+    };
+    const result = createGraphNodeFromObjectText("p voice", [], nodeRegistry, {
+      patchLibrary: createPatchLibraryV02([patch])
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.node).toMatchObject({
+      id: "voice_1",
+      kind: "core.subpatch",
+      kindVersion: "0.2.0",
+      params: {
+        label: "p voice",
+        objectText: "p voice",
+        patchId: "voice",
+        patchRevision: "1",
+        description: "Reusable synth voice."
+      },
+      ports: [
+        {
+          id: "pitch",
+          direction: "input",
+          type: { flow: "value", dataKind: "number.float", format: "f32" },
+          activation: "latched",
+          description: "Pitch in MIDI note numbers."
+        },
+        {
+          id: "out",
+          direction: "output",
+          type: { flow: "signal", dataKind: "signal.audio" },
+          description: "Generated audio signal."
+        }
+      ]
+    });
+    expect(result.parseResult).toMatchObject({
+      ok: true,
+      classSymbol: "p",
+      creationArgs: [{ type: "symbol", value: "voice" }],
+      resolvedKind: "core.subpatch",
+      resolvedKindVersion: "0.2.0",
+      params: { patchId: "voice" },
+      instancePorts: [
+        {
+          id: "pitch",
+          direction: "input",
+          type: "number.float",
+          defaultValue: 69,
+          description: "Pitch in MIDI note numbers."
+        },
+        { id: "out", direction: "output", type: "signal.audio", description: "Generated audio signal." }
+      ]
+    });
+  });
+
+  it("keeps optional subpatch parse metadata absent for bare boundary ports", () => {
+    const patch: PatchDefinitionV02 = {
+      id: "bare",
+      revision: "1",
+      graph: {
+        schema: "skenion.graph",
+        schemaVersion: "0.2.0",
+        id: "bare-help",
+        revision: "1",
+        nodes: [
+          {
+            id: "input",
+            kind: "core.inlet",
+            kindVersion: "0.2.0",
+            params: { portId: "in" },
+            ports: [
+              {
+                id: "out",
+                direction: "output",
+                type: "message.any"
+              }
+            ]
+          }
+        ],
+        edges: []
+      }
+    };
+    const result = createGraphNodeFromObjectText("p bare", [], nodeRegistry, {
+      patchLibrary: createPatchLibraryV02([patch])
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.parseResult.instancePorts[0]).toEqual({
+      id: "in",
+      direction: "input",
+      type: "message.any"
+    });
+  });
+
+  it("keeps missing patch references editable as unresolved object nodes", () => {
+    const missingLibrary = createGraphNodeFromObjectText("p missing", [], nodeRegistry, {
+      patchLibrary: createPatchLibraryV02([])
+    });
+    const unavailableLibrary = createGraphNodeFromObjectText("p missing", [], nodeRegistry);
+
+    expect(missingLibrary.ok).toBe(false);
+    expect(missingLibrary.node).toMatchObject({
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      params: {
+        objectText: "p missing",
+        requestedKind: "core.subpatch"
+      }
+    });
+    expect(missingLibrary.diagnostics[0]).toMatchObject({
+      code: "patch-definition-unavailable"
+    });
+    expect(unavailableLibrary.diagnostics[0]).toMatchObject({
+      code: "patch-library-unavailable"
+    });
+
+    const missingPatchId = createGraphNodeFromObjectText("p", [], nodeRegistry, {
+      patchLibrary: createPatchLibraryV02([])
+    });
+    const tooManyArgs = createGraphNodeFromObjectText("p voice extra", [], nodeRegistry, {
+      patchLibrary: createPatchLibraryV02([])
+    });
+
+    expect(missingPatchId.diagnostics[0]).toMatchObject({
+      code: "missing-subpatch-id"
+    });
+    expect(tooManyArgs.diagnostics[0]).toMatchObject({
+      code: "invalid-subpatch-object-text"
     });
   });
 

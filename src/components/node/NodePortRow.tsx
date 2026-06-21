@@ -72,6 +72,11 @@ function PortTooltipContent({ port }: { port: NodePortView }) {
       <Text fw={700} size="xs">
         {port.label}
       </Text>
+      {port.description ? (
+        <Text c="dimmed" size="xs">
+          {port.description}
+        </Text>
+      ) : null}
       <Text size="xs">type {port.typeLabel}</Text>
       {port.storedTypeLabel && port.storedTypeLabel !== port.typeLabel ? (
         <Text size="xs">stored {port.storedTypeLabel}</Text>

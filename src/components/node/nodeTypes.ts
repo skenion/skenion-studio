@@ -5,6 +5,7 @@ export type NodePortSide = "input" | "output";
 export interface NodePortView {
   id: string;
   label: string;
+  description?: string;
   direction: NodePortSide;
   typeLabel: string;
   storedTypeLabel?: string;

@@ -6,6 +6,11 @@ import {
   type NodeTypes
 } from "@xyflow/react";
 import type { GraphDocumentV01 } from "@skenion/contracts";
+import {
+  isPatchDefinitionV02,
+  patchDefinitionToDisplayGraph,
+  type PatchDefinitionV02
+} from "../../graph/patchLibrary";
 import { createViewStateFromPositions } from "../../graph/projectDocument";
 import { toReactFlowViewModel } from "../../graph/reactFlowAdapter";
 import { ReactFlowNodeAdapter } from "../graph/ReactFlowNodeAdapter";
@@ -14,9 +19,12 @@ const nodeTypes: NodeTypes = {
   skenion: ReactFlowNodeAdapter
 };
 
-export function HelpGraphViewer({ graph }: { graph: GraphDocumentV01 }) {
-  const viewState = useMemo(() => createViewStateFromPositions(graph, {}), [graph]);
-  const viewModel = useMemo(() => toReactFlowViewModel(graph, viewState), [graph, viewState]);
+export type HelpGraphViewerDocument = GraphDocumentV01 | PatchDefinitionV02;
+
+export function HelpGraphViewer({ graph }: { graph: HelpGraphViewerDocument }) {
+  const displayGraph = useMemo(() => helpGraphDisplayDocument(graph), [graph]);
+  const viewState = useMemo(() => createViewStateFromPositions(displayGraph, {}), [displayGraph]);
+  const viewModel = useMemo(() => toReactFlowViewModel(displayGraph, viewState), [displayGraph, viewState]);
   const nodes = useMemo(
     () =>
       viewModel.nodes.map((node) => ({
@@ -57,4 +65,8 @@ export function HelpGraphViewer({ graph }: { graph: GraphDocumentV01 }) {
       </ReactFlow>
     </div>
   );
+}
+
+export function helpGraphDisplayDocument(graph: HelpGraphViewerDocument): GraphDocumentV01 {
+  return isPatchDefinitionV02(graph) ? patchDefinitionToDisplayGraph(graph) : graph;
 }

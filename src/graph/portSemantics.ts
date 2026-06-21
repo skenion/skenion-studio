@@ -9,6 +9,7 @@ export type TriggerModeV02 = "passive" | "trigger" | "latched";
 export interface PortSemanticsV02 {
   id: string;
   label: string;
+  description: string | null;
   direction: "input" | "output";
   type: string;
   storedType: string;
@@ -68,6 +69,7 @@ interface V02PortExtras {
   triggerMode?: TriggerModeV02;
   group?: string;
   styleKey?: string;
+  description?: string;
 }
 
 interface V02EdgeExtras {
@@ -90,6 +92,7 @@ export function portSemanticsForPort(node: GraphNodeV01, port: PortV01): PortSem
   return {
     id: port.id,
     label: port.label ?? port.id,
+    description: extras.description ?? null,
     direction: port.direction,
     type,
     storedType: storedTypeLabel(port.type),
@@ -283,6 +286,9 @@ function findNodePort(
 }
 
 function artistFacingType(node: GraphNodeV01, port: PortV01): string {
+  if (port.type.dataKind === "render.frame") {
+    return "render.frame";
+  }
   if (isRenderFramePort(node, port)) {
     return "render.frame";
   }
@@ -291,6 +297,12 @@ function artistFacingType(node: GraphNodeV01, port: PortV01): string {
   }
   if (port.type.flow === "event" && port.type.dataKind === "event.bang") {
     return "event.bang";
+  }
+  if (port.type.flow === "event" && port.type.dataKind === "message.any") {
+    return "message.any";
+  }
+  if (port.type.flow === "signal" && port.type.dataKind.startsWith("signal.")) {
+    return port.type.dataKind;
   }
   return `${port.type.flow}.${port.type.dataKind}`;
 }

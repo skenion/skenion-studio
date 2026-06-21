@@ -33,6 +33,11 @@ export function PortTable({ node }: { node: GraphNodeV01 }) {
                 <Text c="dimmed" size="xs">
                   {semantics.direction} · {semantics.rate} · {connectionPolicy}
                 </Text>
+                {semantics.description ? (
+                  <Text c="dimmed" size="xs">
+                    {semantics.description}
+                  </Text>
+                ) : null}
               </Table.Td>
               <Table.Td>
                 <Badge variant="light">
