@@ -16,6 +16,7 @@ import type {
   RuntimeControlEventResponse,
   RuntimeControlReadResponse,
   RuntimeControlStateResponse,
+  RuntimeExtensionListResponse,
   RuntimeGeneratedShaderResponse,
   RuntimeHistory,
   RuntimeHistoryEntry,
@@ -439,6 +440,18 @@ describe("runtime client", () => {
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(calls[0]).toEqual(["http://runtime.local/v0/io/devices", { method: "GET" }]);
+  });
+
+  it("calls runtime extension package endpoint", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(runtimeExtensionListResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+
+    await expect(client.listExtensions()).resolves.toMatchObject({
+      ok: true,
+      extensions: [{ id: "skenion/core", status: "loaded", providedHelp: ["core.value"] }]
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/extensions", { method: "GET" });
   });
 
   it("accepts runtime IO device responses", async () => {
@@ -1821,6 +1834,33 @@ function runtimeIoDeviceListResponse(overrides: Partial<RuntimeIoDeviceListRespo
       }
     ],
     ok: true,
+    ...overrides
+  };
+}
+
+function runtimeExtensionListResponse(
+  overrides: Partial<RuntimeExtensionListResponse> = {}
+): RuntimeExtensionListResponse {
+  return {
+    ok: true,
+    extensions: [
+      {
+        id: "skenion/core",
+        version: "0.1.0",
+        kind: "core-package",
+        runtimeAbiVersion: "0.1.0",
+        manifestPath: "/tmp/skenion/core/skenion.extension.json",
+        status: "loaded",
+        capabilities: ["value.number.v0.1"],
+        providedNodes: ["core.value"],
+        providedCodecs: [],
+        providedTransports: [],
+        providedHelp: ["core.value"],
+        testIds: ["value-baseline"],
+        diagnostics: []
+      }
+    ],
+    diagnostics: [],
     ...overrides
   };
 }
