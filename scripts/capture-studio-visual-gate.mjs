@@ -80,6 +80,36 @@ const captures = [
     waitForText: "authoritative"
   },
   {
+    name: "side-panel-runtime-no-devices",
+    id: "studio-sidepanel--runtime-no-devices",
+    waitForText: "Runtime Clock Sources"
+  },
+  {
+    name: "side-panel-runtime-running",
+    id: "studio-sidepanel--runtime-running",
+    waitForText: "midi-clock-main"
+  },
+  {
+    name: "side-panel-runtime-diagnostic",
+    id: "studio-sidepanel--runtime-diagnostic",
+    waitForText: "invalid-midi-input-port"
+  },
+  {
+    name: "side-panel-inspect-node",
+    id: "studio-sidepanel--inspect-node",
+    waitForText: "Fullscreen Shader"
+  },
+  {
+    name: "side-panel-inspect-edge",
+    id: "studio-sidepanel--inspect-edge",
+    waitForText: "Edge"
+  },
+  {
+    name: "side-panel-inspect-help",
+    id: "studio-sidepanel--inspect-help",
+    waitForText: "Help Graph"
+  },
+  {
     name: "help-panel-float",
     id: "help-nodehelp--float",
     waitFor: ".help-graph-viewer"

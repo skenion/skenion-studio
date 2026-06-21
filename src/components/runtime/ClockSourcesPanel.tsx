@@ -147,10 +147,10 @@ export function ClockSourcesPanel({
       <Group justify="space-between" wrap="nowrap">
         <div>
           <Text fw={800} size="sm">
-            Clock Sources
+            Runtime Clock Sources
           </Text>
           <Text c="dimmed" size="xs">
-            Runtime source snapshots
+            Runtime snapshots and explicit MIDI lifecycle
           </Text>
         </div>
         <Badge color={sources.some((source) => source.status === "running") ? "green" : "gray"} radius="sm" variant="light">

@@ -184,9 +184,9 @@ export function StudioToolbar({
             <Cable size={18} />
           </ActionIcon>
         </Tooltip>
-        <Tooltip label={inspectorOpen ? "Hide inspector" : "Show inspector"}>
+        <Tooltip label={inspectorOpen ? "Hide side panel" : "Show side panel"}>
           <ActionIcon
-            aria-label={inspectorOpen ? "Hide inspector" : "Show inspector"}
+            aria-label={inspectorOpen ? "Hide side panel" : "Show side panel"}
             onClick={onToggleInspector}
             radius="sm"
             size="lg"
