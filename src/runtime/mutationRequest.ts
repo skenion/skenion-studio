@@ -1,8 +1,4 @@
-import type {
-  GraphPatchV01,
-  RuntimeMutationRequest,
-  RuntimeViewPatchOperation
-} from "@skenion/contracts";
+import type { RuntimeMutationRequest, RuntimeViewPatchOperation } from "@skenion/contracts";
 
 export interface RuntimeViewMutationRequestInput {
   baseViewRevision: number;
@@ -19,13 +15,5 @@ export function createRuntimeViewMutationRequest(
       baseViewRevision: input.baseViewRevision,
       ops: input.ops
     }
-  };
-}
-
-export function createRuntimeGraphMutationRequest(
-  graphPatch: GraphPatchV01
-): RuntimeMutationRequest {
-  return {
-    graphPatch
   };
 }

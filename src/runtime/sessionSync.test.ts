@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createDefaultViewStateForGraph,
-  type GraphDocumentV01,
-  type NodeDefinitionManifestV01,
-  type ViewStateV01
-} from "@skenion/contracts";
+import type { GraphDocumentV02, ProjectDocumentV02, ViewStateV01 } from "@skenion/contracts";
 import {
   nextLoadedGraphFingerprint,
   runtimeGraphFingerprint,
@@ -13,16 +8,31 @@ import {
 } from "./sessionSync";
 import type { RuntimeSessionResponse } from "./types";
 
-const graph: GraphDocumentV01 = {
+const graph: GraphDocumentV02 = {
   schema: "skenion.graph",
-  schemaVersion: "0.1.0",
+  schemaVersion: "0.2.0",
   id: "graph",
   revision: "1",
   nodes: [],
   edges: []
 };
-const viewState: ViewStateV01 = createDefaultViewStateForGraph(graph);
-const nodes: NodeDefinitionManifestV01[] = [];
+const viewState: ViewStateV01 = {
+  schema: "skenion.view-state",
+  schemaVersion: "0.1.0",
+  canvas: {
+    nodes: {},
+    viewport: { x: 0, y: 0, zoom: 1 }
+  }
+};
+const project: ProjectDocumentV02 = {
+  schema: "skenion.project",
+  schemaVersion: "0.2.0",
+  id: "graph",
+  revision: "1",
+  graph,
+  viewState,
+  patchLibrary: []
+};
 
 const loadedSession = {
   ok: true,
@@ -30,7 +40,7 @@ const loadedSession = {
     sessionRevision: 1,
     viewRevision: 1,
     controlRevision: 0,
-    project: { graph, viewState, nodes },
+    project,
     diagnostics: [],
     plan: null
   },

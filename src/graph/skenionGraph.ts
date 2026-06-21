@@ -1,4 +1,4 @@
-import { validateGraphDocument } from "@skenion/contracts";
+import { validateGraphDocument, validateGraphDocumentV02 } from "@skenion/contracts";
 import type {
   DataTypeV01,
   EdgeV01,
@@ -10,6 +10,7 @@ import type {
 } from "@skenion/contracts";
 import type { Connection, Edge } from "@xyflow/react";
 import { defaultParamsForNodeKind } from "./clearColor";
+import { graphDocumentV01ToGraphDocumentV02 } from "./patchLibrary";
 import { connectionSemanticCheck } from "./portSemantics";
 
 export type ViewPositions = Record<string, { x: number; y: number }>;
@@ -82,7 +83,19 @@ export function graphSummary(graph: GraphDocumentV01): string {
 }
 
 export function validateGraph(graph: unknown): ValidationResult<GraphDocumentV01> {
-  return validateGraphDocument(graph);
+  const legacyResult = validateGraphDocument(graph);
+  if (legacyResult.ok) {
+    return legacyResult;
+  }
+  const displayGraph = graph as GraphDocumentV01;
+  if (!isDisplayGraphDocument(displayGraph)) {
+    return legacyResult;
+  }
+
+  const activeResult = validateGraphDocumentV02(graphDocumentV01ToGraphDocumentV02(displayGraph));
+  return activeResult.ok
+    ? { ok: true, value: displayGraph }
+    : { ok: false, errors: activeResult.errors };
 }
 
 export function normalizeLegacyGraphTypes(graph: GraphDocumentV01): GraphDocumentV01 {
@@ -288,6 +301,16 @@ function clonePort(port: PortV01): PortV01 {
 
 function cloneGraphNode(node: GraphNodeV01): GraphNodeV01 {
   return JSON.parse(JSON.stringify(node)) as GraphNodeV01;
+}
+
+function isDisplayGraphDocument(graph: Partial<GraphDocumentV01>): graph is GraphDocumentV01 {
+  return (
+    graph.schema === "skenion.graph" &&
+    Array.isArray(graph.nodes) &&
+    Array.isArray(graph.edges) &&
+    typeof graph.id === "string" &&
+    typeof graph.revision === "string"
+  );
 }
 
 function edgeEquals(left: EdgeV01, right: EdgeV01): boolean {

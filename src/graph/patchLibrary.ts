@@ -114,6 +114,32 @@ export function patchDefinitionToDisplayGraph(definition: PatchDefinitionV02): G
   return graphDocumentV02ToDisplayGraph(definition.graph);
 }
 
+export function graphDocumentV01ToGraphDocumentV02(graph: GraphDocumentV01): GraphDocumentV02 {
+  return {
+    schema: "skenion.graph",
+    schemaVersion: PATCH_DEFINITION_SCHEMA_VERSION,
+    id: graph.id,
+    revision: graph.revision,
+    nodes: graph.nodes.map(graphNodeToGraphNodeV02),
+    edges: graph.edges.map(graphEdgeToEdgeSpecV02)
+  };
+}
+
+export function graphNodeToGraphNodeV02(node: GraphNodeV01): GraphDocumentV02["nodes"][number] {
+  return {
+    id: node.id,
+    kind: node.kind,
+    kindVersion: node.kindVersion,
+    params: { ...node.params },
+    ports: node.ports.map(graphPortToPortSpecV02),
+    ...("portGroups" in node && Array.isArray(node.portGroups)
+      ? {
+          portGroups: node.portGroups.map((group) => ({ ...group } as GraphNodeV02PortGroup))
+        }
+      : {})
+  };
+}
+
 export function graphDocumentV02ToDisplayGraph(graph: GraphDocumentV02): GraphDocumentV01 {
   return {
     schema: "skenion.graph",
@@ -164,6 +190,31 @@ export function portSpecV02ToGraphPort(port: PortSpecV02): PortV01 {
   return omitUndefined(graphPort);
 }
 
+export function graphPortToPortSpecV02(port: PortV01): PortSpecV02 {
+  const extras = port as PortV01 & PortV02DisplayExtras;
+  const portSpec: PortSpecV02 = {
+    id: port.id,
+    direction: port.direction,
+    type: portSpecTypeFromGraphPort(port),
+    label: port.label,
+    rate: extras.rate ?? portRateFromGraphPort(port),
+    accepts: extras.accepts ? [...extras.accepts] : undefined,
+    minConnections: extras.minConnections,
+    maxConnections: extras.maxConnections,
+    mergePolicy: extras.mergePolicy,
+    fanOutPolicy: extras.fanOutPolicy,
+    triggerMode: extras.triggerMode ?? triggerModeFromGraphPort(port),
+    defaultValue: Object.hasOwn(port, "default") ? port.default : extras.defaultValue,
+    latch: extras.latch ?? (port.activation === "latched" ? true : undefined),
+    required: port.required,
+    styleKey: extras.styleKey,
+    group: extras.group,
+    description: extras.description
+  };
+
+  return omitUndefined(portSpec);
+}
+
 export function dataTypeFromPortSpecV02(port: PortSpecV02): DataTypeV01 {
   const type = normalizedPortSpecType(port.type);
   const graphType: DataTypeV01 = {
@@ -201,6 +252,29 @@ function edgeSpecV02ToGraphEdge(edge: EdgeSpecV02): EdgeV01 {
   }) as EdgeV01;
 }
 
+export function graphEdgeToEdgeSpecV02(edge: EdgeV01): EdgeSpecV02 {
+  const extras = edge as EdgeV01 & Partial<Omit<EdgeSpecV02, "id" | "source" | "target">> & { id?: string };
+  return omitUndefined({
+    id: extras.id ?? displayEdgeId(edge),
+    source: {
+      nodeId: edge.from.node,
+      portId: edge.from.port
+    },
+    target: {
+      nodeId: edge.to.node,
+      portId: edge.to.port
+    },
+    resolvedType: extras.resolvedType,
+    order: extras.order,
+    enabled: extras.enabled,
+    adapter: extras.adapter,
+    feedback: extras.feedback,
+    styleOverride: extras.styleOverride,
+    label: extras.label,
+    description: extras.description
+  });
+}
+
 function activationForPortSpec(port: PortSpecV02): PortV01["activation"] | undefined {
   if (port.triggerMode === "trigger" || port.triggerMode === "latched") {
     return port.triggerMode;
@@ -211,8 +285,64 @@ function activationForPortSpec(port: PortSpecV02): PortV01["activation"] | undef
   return undefined;
 }
 
+function triggerModeFromGraphPort(port: PortV01): PortSpecV02["triggerMode"] | undefined {
+  if (port.activation === "trigger" || port.activation === "latched") {
+    return port.activation;
+  }
+  return undefined;
+}
+
 function normalizedPortSpecType(type: string): string {
   return type.trim();
+}
+
+function portSpecTypeFromGraphPort(port: PortV01): string {
+  const dataKind = port.type.dataKind;
+  if (port.type.flow === "resource" && dataKind === "asset.video") {
+    return "asset.video";
+  }
+  if (port.type.flow === "resource" && dataKind !== "gpu.texture2d" && dataKind !== "render.frame") {
+    return `resource.${dataKind}`;
+  }
+  if (port.type.flow === "stream" && !dataKind.startsWith("stream.")) {
+    return `stream.${dataKind}`;
+  }
+  if (port.type.flow === "value" && isGenericValueDataKind(dataKind)) {
+    return `value.${dataKind}`;
+  }
+  return dataKind;
+}
+
+function isGenericValueDataKind(dataKind: string): boolean {
+  return ![
+    "boolean",
+    "color",
+    "event.bang",
+    "message.any",
+    "number.float",
+    "number.int",
+    "number.uint",
+    "string"
+  ].includes(dataKind);
+}
+
+function portRateFromGraphPort(port: PortV01): PortSpecV02["rate"] | undefined {
+  switch (port.type.flow) {
+    case "event":
+      return "event";
+    case "signal":
+      return "audio";
+    case "resource":
+      return port.type.dataKind === "gpu.texture2d"
+        ? "gpu"
+        : port.type.dataKind === "render.frame"
+          ? "render"
+          : "resource";
+    case "stream":
+      return undefined;
+    case "value":
+      return "control";
+  }
 }
 
 function flowForPortSpecType(type: string, rate: PortSpecV02["rate"]): DataFlow {
@@ -300,8 +430,14 @@ function labelForPatchPort(id: string): string {
     .join(" ");
 }
 
+function displayEdgeId(edge: EdgeV01): string {
+  return `edge_${edge.from.node}_${edge.from.port}_${edge.to.node}_${edge.to.port}`;
+}
+
 function omitUndefined<T extends object>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
   ) as T;
 }
+
+type GraphNodeV02PortGroup = NonNullable<GraphDocumentV02["nodes"][number]["portGroups"]>[number];

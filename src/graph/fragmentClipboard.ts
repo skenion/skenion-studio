@@ -3,17 +3,13 @@ import {
   validateGraphFragmentV02,
   type CanvasNodeViewV01,
   type EdgeSpecV02,
-  type EdgeV01,
   type GraphDocumentV01,
   type GraphFragmentDiagnosticV02,
   type GraphFragmentOmittedEdgeV02,
   type GraphFragmentV02,
-  type GraphNodeV01,
-  type GraphNodeV02,
-  type PortSpecV02,
-  type PortV01,
   type ViewStateV01
 } from "@skenion/contracts";
+import { graphEdgeToEdgeSpecV02, graphNodeToGraphNodeV02 } from "./patchLibrary";
 import { edgeId } from "./portSemantics";
 
 export const SKENION_GRAPH_FRAGMENT_CLIPBOARD_TYPE = "application/vnd.skenion.graph-fragment+json";
@@ -100,14 +96,14 @@ export function createGraphFragmentFromSelection(
 ): GraphFragmentBuildResult {
   const nodeIds = new Set(selection.nodeIds);
   const selectedEdgeIds = new Set(selection.edgeIds);
-  const nodes = graph.nodes.filter((node) => nodeIds.has(node.id)).map(graphNodeV01ToFragmentNodeV02);
+  const nodes = graph.nodes.filter((node) => nodeIds.has(node.id)).map(graphNodeToGraphNodeV02);
   const edges: EdgeSpecV02[] = [];
   const omittedEdges: GraphFragmentOmittedEdgeV02[] = [];
 
   for (const edge of graph.edges) {
     const id = edgeId(edge);
     if (nodeIds.has(edge.from.node) && nodeIds.has(edge.to.node)) {
-      edges.push(graphEdgeV01ToFragmentEdgeV02(edge));
+      edges.push(graphEdgeToEdgeSpecV02(edge));
       continue;
     }
     if (selectedEdgeIds.has(id)) {
@@ -194,78 +190,8 @@ function fragmentNodeViews(
   );
 }
 
-function graphNodeV01ToFragmentNodeV02(node: GraphNodeV01): GraphNodeV02 {
-  return {
-    id: node.id,
-    kind: node.kind,
-    kindVersion: node.kindVersion,
-    params: clone(node.params),
-    ports: node.ports.map(graphPortV01ToPortSpecV02)
-  };
-}
-
-function graphPortV01ToPortSpecV02(port: PortV01): PortSpecV02 {
-  const spec: PortSpecV02 = {
-    id: port.id,
-    direction: port.direction,
-    label: port.label,
-    type: portTypeV01ToPortSpecType(port),
-    rate: portRateV01ToPortSpecRate(port),
-    required: port.required,
-    defaultValue: port.default
-  };
-  if (port.activation === "trigger") {
-    spec.triggerMode = "trigger";
-  } else if (port.activation === "latched") {
-    spec.triggerMode = "latched";
-    spec.latch = true;
-  }
-  return omitUndefined(spec);
-}
-
-function graphEdgeV01ToFragmentEdgeV02(edge: EdgeV01): EdgeSpecV02 {
-  const extras = edge as EdgeV01 &
-    Partial<Omit<EdgeSpecV02, "id" | "source" | "target">> & { id?: string };
-  return omitUndefined({
-    id: edgeId(edge),
-    source: { nodeId: edge.from.node, portId: edge.from.port },
-    target: { nodeId: edge.to.node, portId: edge.to.port },
-    resolvedType: extras.resolvedType,
-    order: extras.order,
-    enabled: extras.enabled,
-    adapter: extras.adapter,
-    feedback: extras.feedback,
-    styleOverride: extras.styleOverride,
-    label: extras.label,
-    description: extras.description
-  });
-}
-
-function portTypeV01ToPortSpecType(port: PortV01): string {
-  return port.type.dataKind;
-}
-
-function portRateV01ToPortSpecRate(port: PortV01): PortSpecV02["rate"] {
-  switch (port.type.flow) {
-    case "event":
-      return "event";
-    case "signal":
-      return "audio";
-    case "resource":
-      return "resource";
-    case "stream":
-      return undefined;
-    case "value":
-      return "control";
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function omitUndefined<T extends object>(value: T): T {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
 function clone<T>(value: T): T {

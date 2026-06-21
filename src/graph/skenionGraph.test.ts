@@ -25,6 +25,7 @@ import {
   typeLabel,
   validateGraph
 } from "./skenionGraph";
+import { UNRESOLVED_OBJECT_NODE_KIND } from "./objectTextNode";
 
 describe("skenion graph helpers", () => {
   it("formats type and port keys", () => {
@@ -69,6 +70,62 @@ describe("skenion graph helpers", () => {
     expect(graphSummary(objectVisualSampleGraph)).toBe("8 nodes · 2 edges · rev 1");
     expect(validateGraph(objectVisualSampleGraph).ok).toBe(true);
     expect(validateGraph({}).ok).toBe(false);
+  });
+
+  it("reports v0.2 display graph validation errors", () => {
+    const activeDisplayGraph = {
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "active-display-valid",
+      revision: "1",
+      nodes: [
+        {
+          id: "source_1",
+          kind: "core.source",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "out",
+              direction: "output",
+              type: { flow: "value", dataKind: "number.float" },
+              description: "Preserved v0.2 port help text."
+            }
+          ]
+        }
+      ],
+      edges: []
+    };
+    const result = validateGraph({
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "active-display",
+      revision: "1",
+      nodes: [
+        {
+          id: "collector_1",
+          kind: "core.collector",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "in",
+              direction: "input",
+              type: { flow: "value", dataKind: "number.float" },
+              required: true,
+              description: "Requires an upstream value."
+            }
+          ]
+        }
+      ],
+      edges: []
+    });
+
+    expect(validateGraph(activeDisplayGraph)).toEqual({ ok: true, value: activeDisplayGraph });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.errors).toEqual([
+      "missing-required-input: input collector_1:in requires at least 1 connection(s)"
+    ]);
   });
 
   it("does not silently normalize legacy semantic type names", () => {
@@ -140,6 +197,74 @@ describe("skenion graph helpers", () => {
       0.2,
       1
     ]);
+  });
+
+  it("applies replacement patches and prunes invalid incident edges", () => {
+    const outOnly = shaderUniformSampleGraph.nodes
+      .find((node) => node.id === "shader_1")!
+      .ports.filter((port) => port.id === "out");
+    const shaderInterface = applyPatch(shaderUniformSampleGraph, {
+      type: "replaceNodeInterface",
+      nodeId: "shader_1",
+      ports: outOnly,
+      edgePolicy: "removeInvalidEdges"
+    });
+
+    expect(shaderInterface.nodes.find((node) => node.id === "shader_1")?.ports.map((port) => port.id)).toEqual([
+      "out"
+    ]);
+    expect(shaderInterface.edges).toEqual([shaderUniformSampleGraph.edges[1]]);
+
+    const targetNode = sampleGraph.nodes.find((node) => node.id === "target_1")!;
+    const sameTargetInterface = applyPatch(sampleGraph, {
+      type: "replaceNodeInterface",
+      nodeId: "target_1",
+      ports: targetNode.ports,
+      edgePolicy: "removeInvalidEdges"
+    });
+    expect(sameTargetInterface.edges).toHaveLength(sampleGraph.edges.length);
+
+    const decode = sampleGraph.nodes.find((node) => node.id === "decode_1")!;
+    const replacedDecode = applyPatch(sampleGraph, {
+      type: "replaceNode",
+      nodeId: "decode_1",
+      node: {
+        ...decode,
+        params: {
+          objectText: "decode"
+        }
+      },
+      edgePolicy: "removeInvalidEdges"
+    });
+    expect(replacedDecode.nodes.find((node) => node.id === "decode_1")).toMatchObject({
+      kind: "core.video-decode",
+      params: {
+        objectText: "decode"
+      }
+    });
+    expect(replacedDecode.edges).toHaveLength(sampleGraph.edges.length);
+
+    const unresolvedDecode = applyPatch(sampleGraph, {
+      type: "replaceNode",
+      nodeId: "decode_1",
+      node: {
+        id: "decode_1",
+        kind: UNRESOLVED_OBJECT_NODE_KIND,
+        kindVersion: "0.1.0",
+        params: {
+          objectText: "nope",
+          diagnosticMessage: "nope is unavailable",
+          requestedKind: "nope"
+        },
+        ports: []
+      },
+      edgePolicy: "removeInvalidEdges"
+    });
+    expect(unresolvedDecode.nodes.find((node) => node.id === "decode_1")?.kind).toBe(UNRESOLVED_OBJECT_NODE_KIND);
+    expect(unresolvedDecode.edges.some((edge) => edge.from.node === "decode_1" || edge.to.node === "decode_1")).toBe(
+      false
+    );
+    expect(unresolvedDecode.edges).toHaveLength(sampleGraph.edges.length - 2);
   });
 
   it("checks connection failures and success messages", () => {

@@ -1,13 +1,11 @@
 import type {
-  GraphDocumentV01,
-  NodeDefinitionManifestV01,
   RuntimeApiResponse,
   RuntimeControlEventResponse,
   RuntimeControlReadResponse,
   PasteGraphFragmentResponse,
+  RuntimeProjectRequest,
   RuntimePatchResponse,
-  RuntimeSessionResponse,
-  ViewStateV01
+  RuntimeSessionResponse
 } from "@skenion/contracts";
 
 export type {
@@ -94,11 +92,7 @@ export type {
 
 export type RuntimeConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
-export interface RuntimeProjectPayload {
-  graph: GraphDocumentV01;
-  nodes: NodeDefinitionManifestV01[];
-  viewState: ViewStateV01;
-}
+export type RuntimeProjectPayload = RuntimeProjectRequest;
 
 export type RuntimeResultKind =
   | "validate"

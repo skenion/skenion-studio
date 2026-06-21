@@ -100,6 +100,129 @@ describe("fragmentClipboard", () => {
     });
   });
 
+  it("preserves v0.2 port metadata, port groups, and edge metadata in copied fragments", () => {
+    const graph: GraphDocumentV01 = {
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "metadata-fragment",
+      revision: "1",
+      nodes: [
+        {
+          id: "source",
+          kind: "core.metadata-source",
+          kindVersion: "0.2.0",
+          params: { label: "Source" },
+          portGroups: [
+            {
+              id: "control",
+              direction: "output",
+              type: "number.float",
+              minPorts: 1,
+              label: "Control"
+            }
+          ],
+          ports: [
+            {
+              id: "out",
+              direction: "output",
+              label: "Out",
+              type: { flow: "value", dataKind: "number.float", format: "f32" },
+              accepts: ["number.int"],
+              description: "Preserved output description.",
+              fanOutPolicy: "allow",
+              group: "control",
+              maxConnections: null,
+              mergePolicy: "latest",
+              minConnections: 0,
+              rate: "control",
+              styleKey: "float-cable",
+              triggerMode: "passive"
+            }
+          ]
+        } as unknown as GraphDocumentV01["nodes"][number],
+        {
+          id: "sink",
+          kind: "core.metadata-sink",
+          kindVersion: "0.2.0",
+          params: { label: "Sink" },
+          ports: [
+            {
+              id: "in",
+              direction: "input",
+              label: "In",
+              type: { flow: "value", dataKind: "number.float", format: "f32" },
+              defaultValue: 0.25,
+              description: "Preserved input description.",
+              latch: true,
+              maxConnections: 1,
+              mergePolicy: "forbid",
+              minConnections: 1,
+              rate: "control",
+              required: true,
+              triggerMode: "latched"
+            }
+          ]
+        } as unknown as GraphDocumentV01["nodes"][number]
+      ],
+      edges: [
+        {
+          from: { node: "source", port: "out" },
+          to: { node: "sink", port: "in" },
+          id: "metadata_edge",
+          adapter: "copy",
+          description: "Preserved edge description.",
+          enabled: true,
+          feedback: { enabled: true, boundary: "manual" },
+          label: "metadata",
+          order: 2,
+          resolvedType: "number.float",
+          styleOverride: "float-cable"
+        } as GraphDocumentV01["edges"][number]
+      ]
+    };
+    const result = createGraphFragmentFromSelection(
+      graph,
+      createViewStateFromPositions(graph, {}),
+      { nodeIds: ["source", "sink"], edgeIds: ["metadata_edge"] }
+    );
+
+    expect(result.fragment?.nodes[0]?.portGroups).toEqual([
+      { id: "control", direction: "output", type: "number.float", minPorts: 1, label: "Control" }
+    ]);
+    expect(result.fragment?.nodes[0]?.ports[0]).toMatchObject({
+      accepts: ["number.int"],
+      description: "Preserved output description.",
+      fanOutPolicy: "allow",
+      group: "control",
+      maxConnections: null,
+      mergePolicy: "latest",
+      rate: "control",
+      styleKey: "float-cable",
+      triggerMode: "passive"
+    });
+    expect(result.fragment?.nodes[1]?.ports[0]).toMatchObject({
+      defaultValue: 0.25,
+      description: "Preserved input description.",
+      latch: true,
+      minConnections: 1,
+      maxConnections: 1,
+      mergePolicy: "forbid",
+      required: true,
+      triggerMode: "latched"
+    });
+    expect(result.fragment?.edges[0]).toMatchObject({
+      id: "metadata_edge",
+      adapter: "copy",
+      description: "Preserved edge description.",
+      enabled: true,
+      feedback: { enabled: true, boundary: "manual" },
+      label: "metadata",
+      order: 2,
+      resolvedType: "number.float",
+      styleOverride: "float-cable"
+    });
+  });
+
   it("reports an empty selection instead of creating an invalid fragment", () => {
     const result = createGraphFragmentFromSelection(
       testGraph,
