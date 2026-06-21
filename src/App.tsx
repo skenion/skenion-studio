@@ -7,7 +7,7 @@ import {
   type GraphDocumentV01,
   type GraphFragmentV02,
   type GraphNodeV01,
-  type GraphPatchOperationV01,
+  type ProjectDocumentV02,
   type RuntimeOperationEnvelope,
   type ViewStateV01
 } from "@skenion/contracts";
@@ -38,27 +38,28 @@ import {
   applyPatch,
   createGraphNodeFromDefinition,
   graphSummary,
-  normalizeLegacyGraphTypes,
   validateGraph,
   type ConnectionCheck,
   type GraphPatch
 } from "./graph/skenionGraph";
+import { applyActiveProjectPatches } from "./graph/activeProject";
 import { createGraphNodeFromObjectText } from "./graph/objectTextNode";
 import {
+  activeProjectDisplayGraph,
   createProjectDocument,
   createViewStateFromPositions,
+  parseGraphDocumentAsActiveProject,
   parseProjectDocument,
-  reconcileViewStateWithGraph
+  reconcileViewStateWithGraph,
+  replaceProjectRootGraphFromDisplay,
+  updateProjectViewState
 } from "./graph/projectDocument";
 import { videoAssetSizeForSource } from "./graph/videoAsset";
 import {
   analyzeGraphPortSemantics,
   findEdgeInspectorModel
 } from "./graph/portSemantics";
-import {
-  createGraphPatch,
-  graphPatchFromStudioAction
-} from "./graph/graphPatch";
+import { createPatchLibraryV02 } from "./graph/patchLibrary";
 import {
   createGraphFragmentFromSelection,
   graphClipboardShortcutAction,
@@ -79,7 +80,6 @@ import {
   type RuntimeClient
 } from "./runtime/client";
 import {
-  createRuntimeGraphMutationRequest,
   createRuntimeViewMutationRequest
 } from "./runtime/mutationRequest";
 import { createRuntimeProjectPayload } from "./runtime/payload";
@@ -163,8 +163,15 @@ export default function App() {
       remoteRuntimeUrl: launchContext.runtimeUrl
     })
   );
-  const [graph, setGraph] = useState<GraphDocumentV01>(sampleGraph);
-  const [viewState, setViewState] = useState(() => createViewStateFromPositions(sampleGraph, {}));
+  const [activeProject, setActiveProject] = useState<ProjectDocumentV02>(() =>
+    createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}))
+  );
+  const graph = useMemo(() => activeProjectDisplayGraph(activeProject), [activeProject]);
+  const viewState = activeProject.viewState;
+  const activePatchLibrary = useMemo(
+    () => createPatchLibraryV02(activeProject.patchLibrary),
+    [activeProject.patchLibrary]
+  );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(["value_1"]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -202,7 +209,6 @@ export default function App() {
   const [runtimeTelemetry, setRuntimeTelemetry] = useState<RuntimeTelemetrySnapshot | null>(null);
   const [generatedShader, setGeneratedShader] = useState<RuntimeGeneratedShaderResponse | null>(null);
   const [lastLoadedGraphFingerprint, setLastLoadedGraphFingerprint] = useState<string | null>(null);
-  const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
   const [, setPendingPatchBaseRevision] = useState<string | null>(null);
   const [, setPatchConflict] = useState<string | null>(null);
   const currentWindowMode = launchContext.windowMode;
@@ -416,7 +422,7 @@ export default function App() {
       setRuntimeStatus("connected");
       const project = value.snapshot.project;
       if (project) {
-        acceptRuntimeGraph(project.graph, project.viewState);
+        acceptRuntimeProject(project);
         setLastLoadedGraphFingerprint(runtimeSessionFingerprint(eventSession));
         if (runtimeSupportsControlState(runtimeInfo)) {
           void refreshRuntimeControlState(createActiveRuntimeClient(), runtimeInfo);
@@ -488,7 +494,7 @@ export default function App() {
         graphLocked,
         sessionLoaded: runtimeSessionLoaded(runtimeSession),
         sessionSynced: runtimeSessionSynced,
-        pendingPatchOps: pendingPatchOps.length,
+        pendingPatchOps: 0,
         history: runtimeHistory
       });
       if (runtimeBusyAction || (action === "undo" ? !availability.canUndo : !availability.canRedo)) {
@@ -501,7 +507,6 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [
-    pendingPatchOps.length,
     graphLocked,
     runtimeBusyAction,
     runtimeHistory,
@@ -603,6 +608,13 @@ export default function App() {
     setLastLoadedGraphFingerprint(null);
     clearPendingPatch();
     setRuntimeError(null);
+  }
+
+  function setViewState(update: ViewStateV01 | ((currentViewState: ViewStateV01) => ViewStateV01)) {
+    setActiveProject((currentProject) => {
+      const nextViewState = typeof update === "function" ? update(currentProject.viewState) : update;
+      return updateProjectViewState(currentProject, nextViewState);
+    });
   }
 
   async function copySelectedGraphFragment() {
@@ -755,7 +767,7 @@ export default function App() {
     const node = createGraphNodeFromDefinition(definition, graph.nodes, paramsOverride);
     const patch = { type: "addNode", node } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
-    setGraph(nextGraph);
+    setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
     recordGraphPatches([patch]);
     setViewState((currentViewState) =>
       reconcileViewStateWithGraph(nextGraph, {
@@ -796,7 +808,7 @@ export default function App() {
     const node = createGraphNodeFromDefinition(definition, graph.nodes, paramsOverride);
     const patch = { type: "addNode", node } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
-    setGraph(nextGraph);
+    setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
     recordGraphPatches([patch]);
     setViewState((currentViewState) =>
       reconcileViewStateWithGraph(nextGraph, {
@@ -823,7 +835,9 @@ export default function App() {
       return;
     }
 
-    const result = createGraphNodeFromObjectText(objectText, graph.nodes, nodeRegistry);
+    const result = createGraphNodeFromObjectText(objectText, graph.nodes, nodeRegistry, {
+      patchLibrary: activePatchLibrary
+    });
     if (!result.node) {
       setRuntimeError(result.diagnostics[0]?.message ?? "Object text could not be resolved.");
       return;
@@ -833,7 +847,7 @@ export default function App() {
 
     const patch = { type: "addNode", node } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
-    setGraph(nextGraph);
+    setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
     recordGraphPatches([patch]);
     setViewState((currentViewState) =>
       reconcileViewStateWithGraph(nextGraph, {
@@ -872,7 +886,7 @@ export default function App() {
       objectText,
       graph.nodes.filter((node) => node.id !== nodeId),
       nodeRegistry,
-      { nodeId }
+      { nodeId, patchLibrary: activePatchLibrary }
     );
     if (!result.node) {
       return;
@@ -893,7 +907,11 @@ export default function App() {
   }
 
   function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
-    setGraph(nextGraph);
+    setActiveProject((currentProject) =>
+      patches.length > 0
+        ? applyActiveProjectPatches(currentProject, patches)
+        : replaceProjectRootGraphFromDisplay(currentProject, nextGraph)
+    );
     setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
     recordGraphPatches(patches);
     setConnectionCheck(null);
@@ -905,15 +923,13 @@ export default function App() {
       return;
     }
 
-    const runtimeGraphRevision = runtimeSession?.snapshot.project?.graph.revision ?? null;
-    if (runtimeStatus !== "connected" || !runtimeSessionSynced || !runtimeGraphRevision) {
+    if (runtimeStatus !== "connected") {
       setRuntimeError("Runtime session is required before graph edits can be applied.");
       return;
     }
 
-    const operations = patches.map(graphPatchFromStudioAction);
     setPatchConflict(null);
-    void applyRuntimePatchOperations(operations, runtimeGraphRevision);
+    void loadProjectIntoRuntime(applyActiveProjectPatches(activeProject, patches));
   }
 
   function updateViewStateFromCanvas(nextViewState: ViewStateV01) {
@@ -964,7 +980,11 @@ export default function App() {
 
       if (response.ok && response.applied) {
         const project = response.snapshot.project;
-        setViewState(project ? reconcileViewStateWithGraph(project.graph, project.viewState) : nextViewState);
+        if (project) {
+          setActiveProject(parseProjectDocument(project));
+        } else {
+          setViewState(nextViewState);
+        }
         clearPendingPatch();
         return;
       }
@@ -990,77 +1010,14 @@ export default function App() {
   }
 
   function clearPendingPatch() {
-    setPendingPatchOps([]);
     setPendingPatchBaseRevision(null);
     setPatchConflict(null);
   }
 
-  async function applyRuntimePatchOperations(
-    operations: GraphPatchOperationV01[],
-    baseRevision: string
-  ) {
-    if (operations.length === 0) {
-      return;
-    }
-
-    setRuntimeBusyAction("mutateSession");
-    setRuntimeError(null);
-    setPatchConflict(null);
-    setPendingPatchOps(operations);
-    setPendingPatchBaseRevision(baseRevision);
-    try {
-      const client = createActiveRuntimeClient();
-      const patch = createGraphPatch(baseRevision, operations, {
-        id: `patch_${Date.now()}`
-      });
-      const response = await client.mutateSession(createRuntimeGraphMutationRequest(patch));
-      const nextSession = runtimeSessionFromMutation(response);
-      setRuntimeSession(nextSession);
-      setRuntimeHistory(response.history);
-      setRuntimeResult({
-        kind: "mutateSession",
-        response,
-        receivedAt: new Date().toISOString()
-      });
-      setRuntimeStatus("connected");
-
-      const project = response.snapshot.project;
-      if (response.ok && response.applied && project) {
-        acceptRuntimeGraph(project.graph, project.viewState);
-        clearPendingPatch();
-        if (runtimeSupportsControlState(runtimeInfo)) {
-          await refreshRuntimeControlState(client);
-        } else {
-          setRuntimeControlState(null);
-        }
-        await refreshRuntimePreview(client);
-        await refreshRuntimeTelemetry(client);
-        return;
-      }
-
-      const message =
-        response.diagnostics[0]?.message ?? "Runtime rejected graph patch; Studio was restored from Runtime session.";
-      setPatchConflict(message);
-      setRuntimeError(message);
-      await refreshRuntimeProjectFromRuntime(client);
-    } catch (error) {
-      setRuntimeStatus("error");
-      setRuntimeError(error instanceof Error ? error.message : "Runtime patch failed.");
-      try {
-        await refreshRuntimeProjectFromRuntime(createActiveRuntimeClient());
-      } catch {
-        // Keep the original runtime error visible.
-      }
-    } finally {
-      setRuntimeBusyAction(null);
-    }
-  }
-
-  function acceptRuntimeGraph(nextGraph: GraphDocumentV01, nextViewState?: ViewStateV01 | null) {
-    setGraph(nextGraph);
-    setViewState((currentViewState) =>
-      reconcileViewStateWithGraph(nextGraph, nextViewState ?? currentViewState)
-    );
+  function acceptRuntimeProject(nextProject: ProjectDocumentV02) {
+    const reconciledProject = parseProjectDocument(nextProject);
+    const nextGraph = activeProjectDisplayGraph(reconciledProject);
+    setActiveProject(reconciledProject);
     const nextSelectedNodeId =
       selectedNodeId && nextGraph.nodes.some((node) => node.id === selectedNodeId)
         ? selectedNodeId
@@ -1070,12 +1027,11 @@ export default function App() {
     setSelectedEdgeId(null);
     setSelectedEdgeIds([]);
     setConnectionCheck(null);
-    setLastLoadedGraphFingerprint(runtimeGraphFingerprint(nextGraph.id, nextGraph.revision));
+    setLastLoadedGraphFingerprint(runtimeGraphFingerprint(reconciledProject.graph.id, reconciledProject.graph.revision));
   }
 
   async function loadProjectIntoRuntime(
-    project: ReturnType<typeof createRuntimeProjectPayload>,
-    nextViewState = createViewStateFromPositions(project.graph, {}),
+    project: ProjectDocumentV02,
     kind: RuntimeResultKind = "loadSession"
   ) {
     if (runtimeStatus !== "connected") {
@@ -1087,7 +1043,7 @@ export default function App() {
     setRuntimeError(null);
     try {
       const client = createActiveRuntimeClient();
-      const response = await client.loadSession(project);
+      const response = await client.loadSession(createRuntimeProjectPayload(project));
       const loadedProject = response.snapshot.project;
       if (!response.ok || !loadedProject) {
         throw new RuntimeClientError(response.diagnostics[0]?.message ?? "Runtime rejected project load.");
@@ -1100,7 +1056,7 @@ export default function App() {
         receivedAt: new Date().toISOString()
       });
       setRuntimeStatus("connected");
-      acceptRuntimeGraph(loadedProject.graph, loadedProject.viewState ?? project.viewState ?? nextViewState);
+      acceptRuntimeProject(loadedProject);
       clearPendingPatch();
       setRuntimeControlState(runtimeSupportsControlState(runtimeInfo) ? await client.getControlState() : null);
       await refreshRuntimeHistory(client);
@@ -1121,17 +1077,17 @@ export default function App() {
     session: RuntimeSessionResponse
   ): Promise<RuntimeSessionResponse> {
     if (!session.snapshot.project) {
-      const seedProject = createRuntimeProjectPayload(sampleGraph, nodeRegistry);
-      const loaded = await client.loadSession(seedProject);
+      const seedProject = createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}));
+      const loaded = await client.loadSession(createRuntimeProjectPayload(seedProject));
       const loadedProject = loaded.snapshot.project;
       if (!loaded.ok || !loadedProject) {
         throw new RuntimeClientError(loaded.diagnostics[0]?.message ?? "Runtime rejected initial project load.");
       }
-      acceptRuntimeGraph(loadedProject.graph, loadedProject.viewState);
+      acceptRuntimeProject(loadedProject);
       return loaded;
     }
 
-    acceptRuntimeGraph(session.snapshot.project.graph, session.snapshot.project.viewState);
+    acceptRuntimeProject(session.snapshot.project);
     return session;
   }
 
@@ -1142,18 +1098,9 @@ export default function App() {
 
     try {
       const parsed = JSON.parse(await file.text()) as unknown;
-      const result = validateGraph(parsed);
-      if (!result.ok) {
-        setImportError(result.errors[0] ?? "Graph import failed.");
-        return;
-      }
-
-      const normalizedGraph = normalizeLegacyGraphTypes(result.value);
-      await loadProjectIntoRuntime(
-        createRuntimeProjectPayload(normalizedGraph, nodeRegistry, createViewStateFromPositions(normalizedGraph, {})),
-        createViewStateFromPositions(normalizedGraph, {})
-      );
-      selectSingleNode(normalizedGraph.nodes[0]?.id ?? null);
+      const project = parseGraphDocumentAsActiveProject(parsed);
+      await loadProjectIntoRuntime(project);
+      selectSingleNode(project.graph.nodes[0]?.id ?? null);
       setActiveHelpNodeId(null);
       setImportError(null);
       setConnectionCheck(null);
@@ -1169,10 +1116,7 @@ export default function App() {
 
     try {
       const project = parseProjectDocument(JSON.parse(await file.text()) as unknown);
-      await loadProjectIntoRuntime(
-        createRuntimeProjectPayload(project.graph, nodeRegistry, project.viewState),
-        project.viewState
-      );
+      await loadProjectIntoRuntime(project);
       selectSingleNode(project.graph.nodes[0]?.id ?? null);
       setActiveHelpNodeId(null);
       setImportError(null);
@@ -1183,17 +1127,16 @@ export default function App() {
   }
 
   function exportGraph() {
-    downloadJson(graph, `${graph.id || "skenion-graph"}.json`);
+    downloadJson(activeProject.graph, `${activeProject.graph.id || "skenion-graph"}.json`);
   }
 
   function saveProject() {
-    downloadJson(createProjectDocument(graph, viewState), `${graph.id || "skenion-project"}.skenion.json`);
+    downloadJson(activeProject, `${activeProject.id || "skenion-project"}.skenion.json`);
   }
 
   function resetSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(sampleGraph, nodeRegistry, createViewStateFromPositions(sampleGraph, {})),
-      createViewStateFromPositions(sampleGraph, {})
+      createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}))
     );
     selectSingleNode(sampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
@@ -1204,8 +1147,7 @@ export default function App() {
 
   function loadRenderSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(renderSampleGraph, nodeRegistry, createViewStateFromPositions(renderSampleGraph, {})),
-      createViewStateFromPositions(renderSampleGraph, {})
+      createProjectDocument(renderSampleGraph, createViewStateFromPositions(renderSampleGraph, {}))
     );
     selectSingleNode(renderSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
@@ -1216,8 +1158,7 @@ export default function App() {
 
   function loadShaderUniformSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(shaderUniformSampleGraph, nodeRegistry, shaderUniformSampleViewState),
-      shaderUniformSampleViewState
+      createProjectDocument(shaderUniformSampleGraph, shaderUniformSampleViewState)
     );
     selectSingleNode(shaderUniformSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
@@ -1228,8 +1169,7 @@ export default function App() {
 
   function loadShaderMultiUniformSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(shaderMultiUniformSampleGraph, nodeRegistry, shaderMultiUniformSampleViewState),
-      shaderMultiUniformSampleViewState
+      createProjectDocument(shaderMultiUniformSampleGraph, shaderMultiUniformSampleViewState)
     );
     selectSingleNode(shaderMultiUniformSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
@@ -1240,8 +1180,7 @@ export default function App() {
 
   function loadPortDemoSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(portDemoSampleGraph, nodeRegistry, portDemoSampleViewState),
-      portDemoSampleViewState
+      createProjectDocument(portDemoSampleGraph, portDemoSampleViewState)
     );
     selectSingleNode(portDemoSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
@@ -1252,8 +1191,7 @@ export default function App() {
 
   function loadObjectRoutingPanelSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(objectRoutingPanelSampleGraph, nodeRegistry, objectRoutingPanelSampleViewState),
-      objectRoutingPanelSampleViewState
+      createProjectDocument(objectRoutingPanelSampleGraph, objectRoutingPanelSampleViewState)
     );
     selectSingleNode(objectRoutingPanelSampleGraph.nodes[0]?.id ?? null);
     setActiveHelpNodeId(null);
@@ -1265,7 +1203,7 @@ export default function App() {
   function removeNode(node: GraphNodeV01) {
     const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
-    setGraph(nextGraph);
+    setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
     setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
     recordGraphPatches([patch]);
     selectSingleNode(null);
@@ -1275,8 +1213,7 @@ export default function App() {
 
   function setNodeParam(nodeId: string, key: string, value: unknown) {
     const patch = { type: "setNodeParam", nodeId, key, value } satisfies GraphPatch;
-    setGraph((currentGraph) => applyPatch(currentGraph, patch));
-    recordGraphPatches([patch]);
+    updateGraph(applyPatch(graph, patch), [patch]);
     setConnectionCheck(null);
     setRuntimeResult(null);
     if (key === "source") {
@@ -1305,8 +1242,7 @@ export default function App() {
       return;
     }
 
-    setGraph((currentGraph) => applyPatch(currentGraph, patch));
-    recordGraphPatches([patch]);
+    updateGraph(applyPatch(graph, patch), [patch]);
     setConnectionCheck(null);
     setRuntimeResult(null);
     setGeneratedShader(null);
@@ -1410,7 +1346,7 @@ export default function App() {
       objectText,
       helpWorkingCopy.graph.nodes.filter((node) => node.id !== nodeId),
       nodeRegistry,
-      { nodeId }
+      { nodeId, patchLibrary: activePatchLibrary }
     );
     if (!result.node) {
       appendClientLog("warning", result.diagnostics[0]?.message ?? "Help working copy object text could not be resolved.");
@@ -1679,7 +1615,7 @@ export default function App() {
       return session;
     }
 
-    acceptRuntimeGraph(project.graph, project.viewState);
+    acceptRuntimeProject(project);
     setRuntimeSession(session);
     setRuntimeControlState(runtimeSupportsControlState(info) ? await client.getControlState() : null);
     await refreshRuntimeHistory(client, info);
@@ -1866,7 +1802,7 @@ export default function App() {
       graphLocked,
       sessionLoaded: runtimeSessionLoaded(runtimeSession),
       sessionSynced: runtimeSessionSynced,
-      pendingPatchOps: pendingPatchOps.length,
+      pendingPatchOps: 0,
       history: runtimeHistory
     });
     if (action === "undo" ? !availability.canUndo : !availability.canRedo) {
@@ -1906,7 +1842,7 @@ export default function App() {
 
     const project = response.snapshot.project;
     if (response.ok && response.applied && project) {
-      acceptRuntimeGraph(project.graph, project.viewState);
+      acceptRuntimeProject(project);
       clearPendingPatch();
     }
 

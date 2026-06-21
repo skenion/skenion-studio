@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GraphPatchV01 } from "@skenion/contracts";
 import {
   createRuntimeClient,
   isRuntimeSessionEvent,
@@ -38,15 +37,18 @@ import type {
 } from "./types";
 
 const project = {
+  schema: "skenion.project",
+  schemaVersion: "0.2.0",
+  id: "test",
+  revision: "1",
   graph: {
     schema: "skenion.graph",
-    schemaVersion: "0.1.0",
+    schemaVersion: "0.2.0",
     id: "test",
     revision: "1",
     nodes: [],
     edges: []
   },
-  nodes: [],
   viewState: {
     schema: "skenion.view-state",
     schemaVersion: "0.1.0",
@@ -54,22 +56,16 @@ const project = {
       nodes: {},
       viewport: { x: 0, y: 0, zoom: 1 }
     }
-  }
+  },
+  patchLibrary: []
 } as RuntimeProjectPayload;
 
-const patch: GraphPatchV01 = {
-  schema: "skenion.graph.patch",
-  schemaVersion: "0.1.0",
-  id: "patch_1",
-  baseRevision: "1",
-  ops: [
-    {
-      op: "setNodeParam",
-      nodeId: "value_1",
-      key: "value",
-      value: 0.75
-    }
-  ]
+const mutation: RuntimeMutationRequest = {
+  description: "move object",
+  viewPatch: {
+    baseViewRevision: 1,
+    ops: []
+  }
 };
 
 describe("runtime client", () => {
@@ -143,7 +139,7 @@ describe("runtime client", () => {
             ...sessionResponse().snapshot,
             project: {
               ...sessionResponse().snapshot.project!,
-              nodes: [{ id: 1 }] as unknown as NonNullable<RuntimeSessionResponse["snapshot"]["project"]>["nodes"]
+              patchLibrary: [{ id: 1 }] as unknown as NonNullable<RuntimeSessionResponse["snapshot"]["project"]>["patchLibrary"]
             }
           }
         })
@@ -208,7 +204,7 @@ describe("runtime client", () => {
     await client.validateSession();
     await client.planSession();
     await client.runSession(2);
-    await client.mutateSession({ graphPatch: patch });
+    await client.mutateSession(mutation);
     await client.mutateSession({
       viewPatch: {
         baseViewRevision: 1,
@@ -230,7 +226,7 @@ describe("runtime client", () => {
     expect(calls[4][0]).toBe("http://runtime.local/v0/session/run");
     expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
     expect(calls[5][0]).toBe("http://runtime.local/v0/session/mutate");
-    expect(JSON.parse(String(calls[5][1].body))).toEqual({ graphPatch: patch });
+    expect(JSON.parse(String(calls[5][1].body))).toEqual(mutation);
     expect(calls[6][0]).toBe("http://runtime.local/v0/session/mutate");
     expect(JSON.parse(String(calls[6][1].body))).toMatchObject({ viewPatch: { baseViewRevision: 1 } });
     expect(calls[7]).toEqual(["http://runtime.local/v0/session/history", { method: "GET" }]);
@@ -781,7 +777,7 @@ describe("runtime client", () => {
       fetchImpl: vi.fn(async () => jsonResponse(patchResponse())) as typeof fetch
     });
 
-    await expect(client.mutateSession({ graphPatch: patch })).resolves.toMatchObject({
+    await expect(client.mutateSession(mutation)).resolves.toMatchObject({
       ok: true,
       applied: true,
       conflict: false,
@@ -809,7 +805,7 @@ describe("runtime client", () => {
       ) as typeof fetch
     });
 
-    await expect(client.mutateSession({ graphPatch: patch })).resolves.toMatchObject({ applied: true });
+    await expect(client.mutateSession(mutation)).resolves.toMatchObject({ applied: true });
     await expect(client.getSessionHistory()).resolves.toMatchObject({
       canUndo: false,
       undoDepth: 0,
@@ -1107,7 +1103,7 @@ describe("runtime client", () => {
       ) as typeof fetch
     });
 
-    await expect(invalidGraphClient.mutateSession({ graphPatch: patch })).rejects.toThrow("unsupported response shape");
+    await expect(invalidGraphClient.mutateSession(mutation)).rejects.toThrow("unsupported response shape");
 
     const invalidHistoryClient = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -1122,7 +1118,7 @@ describe("runtime client", () => {
         )
       ) as typeof fetch
     });
-    await expect(invalidHistoryClient.mutateSession({ graphPatch: patch })).rejects.toThrow("unsupported response shape");
+    await expect(invalidHistoryClient.mutateSession(mutation)).rejects.toThrow("unsupported response shape");
   });
 
   it("rejects unsupported runtime control response shapes", async () => {
@@ -1421,7 +1417,7 @@ describe("runtime client", () => {
                 entries: [
                   historyEntry({
                     mutation,
-                    inverseMutation: { graphPatch: patch }
+                    inverseMutation: mutation
                   })
                 ]
               })
@@ -1430,7 +1426,7 @@ describe("runtime client", () => {
         ) as typeof fetch
       });
 
-      await expect(client.mutateSession({ graphPatch: patch })).rejects.toThrow("unsupported response shape");
+      await expect(client.mutateSession(mutation)).rejects.toThrow("unsupported response shape");
     }
   });
 
@@ -1464,7 +1460,7 @@ describe("runtime client", () => {
         ) as typeof fetch
       });
 
-      await expect(client.mutateSession({ graphPatch: patch })).rejects.toThrow("unsupported response shape");
+      await expect(client.mutateSession(mutation)).rejects.toThrow("unsupported response shape");
     }
   });
 
@@ -1657,16 +1653,35 @@ function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): Runti
       viewRevision: 1,
       controlRevision: 0,
       project: {
+        schema: "skenion.project",
+        schemaVersion: "0.2.0",
+        id: "test",
+        revision: "1",
         graph: {
           schema: "skenion.graph",
-          schemaVersion: "0.1.0",
+          schemaVersion: "0.2.0",
           id: "test",
           revision: "1",
-          nodes: [],
+          nodes: [
+            {
+              id: "value_1",
+              kind: "core.float",
+              kindVersion: "0.1.0",
+              params: { label: "Float" },
+              ports: [
+                {
+                  id: "value",
+                  direction: "output",
+                  type: "number.float",
+                  rate: "control"
+                }
+              ]
+            }
+          ],
           edges: []
         },
         viewState: viewStateResponse(),
-        nodes: []
+        patchLibrary: []
       },
       diagnostics: [],
       plan: null
@@ -1711,6 +1726,7 @@ function patchResponse(overrides: Partial<RuntimePatchResponse> = {}): RuntimePa
       sessionRevision: 2,
       project: {
         ...sessionResponse().snapshot.project!,
+        revision: "2",
         graph: {
           ...sessionResponse().snapshot.project!.graph,
           revision: "2"
@@ -2058,8 +2074,8 @@ function historyEntry(overrides: Partial<RuntimeHistoryEntry> = {}): RuntimeHist
     id: "history_000001",
     sequence: 1,
     kind: "apply",
-    mutation: { graphPatch: patch },
-    inverseMutation: { graphPatch: { ...patch, id: "inverse_patch_1", baseRevision: "2" } },
+    mutation,
+    inverseMutation: mutation,
     createdAt: "unix-ms:0",
     ...overrides
   };

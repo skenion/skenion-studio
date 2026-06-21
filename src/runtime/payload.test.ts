@@ -1,29 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { nodeRegistry } from "../data/registry";
+import { validateProjectDocumentV02 } from "@skenion/contracts";
 import { sampleGraph } from "../data/sampleGraph";
+import { createProjectDocument, createViewStateFromPositions, parseGraphDocumentAsActiveProject } from "../graph/projectDocument";
 import minimalValueProject from "../../.deps/skenion-examples/compatibility/v0.1/projects/valid/minimal-value.project.json";
 import { createRuntimeProjectPayload } from "./payload";
-import type { RuntimeApiResponse, RuntimeProjectPayload } from "./types";
+import type { RuntimeApiResponse } from "./types";
 
 describe("runtime payload", () => {
-  it("packages the current graph and node registry for Runtime API calls", () => {
-    const payload = createRuntimeProjectPayload(sampleGraph, nodeRegistry);
+  it("materializes the active v0.2 project for Runtime API calls", () => {
+    const activeProject = createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}));
+    const payload = createRuntimeProjectPayload(activeProject);
 
-    expect(payload.graph).toBe(sampleGraph);
-    expect(payload.nodes).toBe(nodeRegistry);
-    expect(payload.nodes.length).toBeGreaterThan(0);
-    expect(payload.graph.schema).toBe("skenion.graph");
-    expect(payload.graph.schemaVersion).toBe("0.1.0");
-    expect(payload.viewState.schema).toBe("skenion.view-state");
-    expect(payload.nodes.every((node) => node.schema === "skenion.node.definition")).toBe(true);
-    expect(payload.nodes.every((node) => node.schemaVersion === "0.1.0")).toBe(true);
+    expect(validateProjectDocumentV02(payload).ok).toBe(true);
+    expect(payload).toEqual(activeProject);
+    expect(payload).not.toBe(activeProject);
+    expect(payload.graph).not.toBe(activeProject.graph);
+    expect(payload.schemaVersion).toBe("0.2.0");
+    expect(payload.graph.schemaVersion).toBe("0.2.0");
+    expect(payload.graph.id).toBe(sampleGraph.id);
+    expect(payload.graph.revision).toBe(sampleGraph.revision);
+    expect(payload.graph.nodes.map((node) => node.id)).toEqual(sampleGraph.nodes.map((node) => node.id));
   });
 
-  it("accepts the examples minimal project payload shape and runtime response envelope", () => {
-    const payload = createRuntimeProjectPayload(
-      minimalValueProject.graph as RuntimeProjectPayload["graph"],
-      minimalValueProject.nodes as RuntimeProjectPayload["nodes"]
-    );
+  it("migrates legacy examples before creating runtime payloads", () => {
+    const activeProject = parseGraphDocumentAsActiveProject(minimalValueProject.graph);
+    const payload = createRuntimeProjectPayload(activeProject);
     const response = {
       ok: true,
       diagnostics: [],
@@ -31,10 +32,10 @@ describe("runtime payload", () => {
       report: null
     } satisfies RuntimeApiResponse;
 
-    expect(payload.graph.schema).toBe("skenion.graph");
-    expect(payload.graph.schemaVersion).toBe("0.1.0");
-    expect(payload.nodes.length).toBeGreaterThan(0);
-    expect(payload.nodes.every((node) => node.schema === "skenion.node.definition")).toBe(true);
+    expect(validateProjectDocumentV02(payload).ok).toBe(true);
+    expect(payload.schemaVersion).toBe("0.2.0");
+    expect(payload.graph.schemaVersion).toBe("0.2.0");
+    expect(payload.patchLibrary).toEqual([]);
     expect(response.ok).toBe(true);
   });
 });

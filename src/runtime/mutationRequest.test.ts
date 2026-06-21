@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { GraphPatchV01, RuntimeViewPatchOperation } from "@skenion/contracts";
-import {
-  createRuntimeGraphMutationRequest,
-  createRuntimeViewMutationRequest
-} from "./mutationRequest";
+import type { RuntimeViewPatchOperation } from "@skenion/contracts";
+import { createRuntimeViewMutationRequest } from "./mutationRequest";
 
 describe("runtime mutation requests", () => {
   it("builds view mutation requests without a hardcoded client identity", () => {
@@ -34,20 +31,14 @@ describe("runtime mutation requests", () => {
     expect("clientId" in request).toBe(false);
   });
 
-  it("builds graph mutation requests without a hardcoded client identity", () => {
-    const graphPatch: GraphPatchV01 = {
-      schema: "skenion.graph.patch",
-      schemaVersion: "0.1.0",
-      id: "patch_1",
-      baseRevision: "rev_1",
+  it("does not build retired v0.1 graph mutation requests", () => {
+    const request = createRuntimeViewMutationRequest({
+      baseViewRevision: 1,
+      description: "move object",
       ops: []
-    };
+    });
 
-    const request = createRuntimeGraphMutationRequest(graphPatch);
-
-    expect(request).toEqual({ graphPatch });
-    expect("clientId" in request).toBe(false);
-    expect(request.graphPatch).toBeDefined();
-    expect("clientId" in request.graphPatch!).toBe(false);
+    expect("graphPatch" in request).toBe(false);
+    expect("operation" in request).toBe(false);
   });
 });

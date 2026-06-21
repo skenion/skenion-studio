@@ -1,9 +1,9 @@
 import type {
   EdgeV01,
   GraphDocumentV01,
-  GraphPatchEventV01,
   ValidationResult
 } from "@skenion/contracts";
+import { graphDocumentV01ToGraphDocumentV02 } from "../graph/patchLibrary";
 import type { EdgeInspectorModel, GraphSemanticDiagnostic } from "../graph/portSemantics";
 import type { NodeCardView, NodePortView } from "../components/node/nodeTypes";
 import type {
@@ -379,8 +379,11 @@ export const runtimeSession: RuntimeSessionResponse = {
     viewRevision: 2,
     controlRevision: 4,
     project: {
-      graph: storyGraph,
-      nodes: [],
+      schema: "skenion.project",
+      schemaVersion: "0.2.0",
+      id: storyGraph.id,
+      revision: storyGraph.revision,
+      graph: graphDocumentV01ToGraphDocumentV02(storyGraph),
       viewState: {
         schema: "skenion.view-state",
         schemaVersion: "0.1.0",
@@ -388,7 +391,8 @@ export const runtimeSession: RuntimeSessionResponse = {
           nodes: {},
           viewport: { x: 0, y: 0, zoom: 1 }
         }
-      }
+      },
+      patchLibrary: []
     },
     diagnostics: [],
     plan: null
@@ -493,56 +497,29 @@ export const runtimeTelemetryWithRenderError: RuntimeTelemetrySnapshot = {
   ]
 };
 
-const patchEvent: GraphPatchEventV01 = {
-  schema: "skenion.graph.patch.event",
-  schemaVersion: "0.1.0",
-  id: "event_001",
-  sequence: 1,
-  kind: "apply",
-  patch: {
-    schema: "skenion.graph.patch",
-    schemaVersion: "0.1.0",
-    id: "patch_001",
-    baseRevision: "6",
-    ops: [
-      {
-        op: "setNodeParam",
-        nodeId: "shader_1",
-        key: "source",
-        value: "..."
-      }
-    ]
-  },
-  inversePatch: {
-    schema: "skenion.graph.patch",
-    schemaVersion: "0.1.0",
-    id: "patch_001_inverse",
-    baseRevision: "7",
-    ops: [
-      {
-        op: "setNodeParam",
-        nodeId: "shader_1",
-        key: "source",
-        value: "previous"
-      }
-    ]
-  },
-  revisionBefore: "6",
-  revisionAfter: "7",
-  createdAt: "2026-06-17T00:00:00.000Z"
-};
-
 export const runtimeHistory: RuntimeHistory = {
   schema: "skenion.runtime.history",
   schemaVersion: "0.1.0",
   entries: [
     {
-      id: patchEvent.id,
-      sequence: patchEvent.sequence,
+      id: "event_001",
+      sequence: 1,
       kind: "apply",
-      mutation: { graphPatch: patchEvent.patch },
-      inverseMutation: { graphPatch: patchEvent.inversePatch },
-      createdAt: patchEvent.createdAt
+      mutation: {
+        description: "Move shader node",
+        viewPatch: {
+          baseViewRevision: 1,
+          ops: []
+        }
+      },
+      inverseMutation: {
+        description: "Restore shader node",
+        viewPatch: {
+          baseViewRevision: 2,
+          ops: []
+        }
+      },
+      createdAt: "2026-06-17T00:00:00.000Z"
     }
   ],
   undoDepth: 1,

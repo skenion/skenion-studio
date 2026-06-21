@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { GraphNodeV01 } from "@skenion/contracts";
-import { graphPatchFromStudioAction } from "./graphPatch";
 import {
   DEFAULT_FULLSCREEN_SHADER_SOURCE,
   FULLSCREEN_SHADER_LANGUAGE,
@@ -52,12 +51,6 @@ describe("fullscreen shader graph helpers", () => {
 
     expect(patch).toEqual({
       type: "setNodeParam",
-      nodeId: "shader_1",
-      key: "source",
-      value: "next source"
-    });
-    expect(graphPatchFromStudioAction(patch)).toEqual({
-      op: "setNodeParam",
       nodeId: "shader_1",
       key: "source",
       value: "next source"

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { GraphNodeV01 } from "@skenion/contracts";
-import { graphPatchFromStudioAction } from "./graphPatch";
 import {
   DEFAULT_FLOAT_REPRESENTATION,
   DEFAULT_FLOAT_VALUE,
@@ -40,12 +39,6 @@ describe("float value graph helpers", () => {
 
     expect(patch).toEqual({
       type: "setNodeParam",
-      nodeId: "value_1",
-      key: "value",
-      value: 1.25
-    });
-    expect(graphPatchFromStudioAction(patch)).toEqual({
-      op: "setNodeParam",
       nodeId: "value_1",
       key: "value",
       value: 1.25

@@ -4,7 +4,9 @@ import {
   createPatchLibraryV02,
   createSubpatchNodeFromDefinition,
   findPatchDefinition,
+  graphDocumentV01ToGraphDocumentV02,
   graphDocumentV02ToDisplayGraph,
+  graphPortToPortSpecV02,
   isPatchDefinitionV02,
   patchDisplayName,
   patchDefinitionToDisplayGraph,
@@ -173,6 +175,69 @@ describe("patchLibrary", () => {
     ).toBe("latched");
   });
 
+  it("maps display-only v0.1 port type hints back into v0.2 port specs", () => {
+    const graph = graphDocumentV01ToGraphDocumentV02({
+      schema: "skenion.graph",
+      schemaVersion: "0.1.0",
+      id: "port-types",
+      revision: "1",
+      nodes: [
+        {
+          id: "types",
+          kind: "core.types",
+          kindVersion: "0.1.0",
+          params: {},
+          ports: [
+            {
+              id: "audio",
+              direction: "output",
+              type: { flow: "signal", dataKind: "signal.audio" }
+            },
+            {
+              id: "buffer",
+              direction: "output",
+              type: { flow: "resource", dataKind: "buffer.mesh" }
+            },
+            {
+              id: "frame",
+              direction: "output",
+              type: { flow: "resource", dataKind: "render.frame" }
+            },
+            {
+              id: "custom",
+              direction: "input",
+              type: { flow: "value", dataKind: "custom.scalar" }
+            }
+          ]
+        }
+      ],
+      edges: []
+    });
+
+    expect(graph.nodes[0]?.ports.map((port) => ({ id: port.id, rate: port.rate, type: port.type }))).toEqual([
+      { id: "audio", rate: "audio", type: "signal.audio" },
+      { id: "buffer", rate: "resource", type: "resource.buffer.mesh" },
+      { id: "frame", rate: "render", type: "render.frame" },
+      { id: "custom", rate: "control", type: "value.custom.scalar" }
+    ]);
+    expect(
+      graphPortToPortSpecV02({
+        id: "fallback-default",
+        direction: "input",
+        type: { flow: "value", dataKind: "number.float", format: "f32" },
+        defaultValue: 0.5
+      } as Parameters<typeof graphPortToPortSpecV02>[0] & { defaultValue: number }).defaultValue
+    ).toBe(0.5);
+    expect(
+      graphPortToPortSpecV02({
+        id: "legacy-default",
+        direction: "input",
+        type: { flow: "value", dataKind: "number.float", format: "f32" },
+        default: 0.75
+      }).defaultValue
+    ).toBe(0.75);
+  });
+
   it("converts v0.2 graphs to readonly v0.1 display graphs", () => {
     const patch = testPatchDefinition();
     const graph = patchDefinitionToDisplayGraph(patch);
@@ -222,6 +287,30 @@ describe("patchLibrary", () => {
 
     expect(graph.nodes.map((node) => node.id)).toEqual(["pitch_in", "trigger", "audio_out", "display"]);
     expect(plainEdgeGraph.edges[0]).not.toHaveProperty("feedback");
+  });
+
+  it("converts display graphs back into active v0.2 graphs without losing metadata", () => {
+    const displayGraph = patchDefinitionToDisplayGraph(testPatchDefinition());
+    const activeGraph = graphDocumentV01ToGraphDocumentV02(displayGraph);
+
+    expect(activeGraph.schemaVersion).toBe("0.2.0");
+    expect(activeGraph.nodes[1]?.ports[0]).toMatchObject({
+      id: "bang",
+      type: "event.bang",
+      rate: "event",
+      triggerMode: "trigger",
+      description: "Start the envelope."
+    });
+    expect(activeGraph.nodes[1]?.portGroups).toEqual([
+      { id: "control", direction: "output", type: "event.bang", minPorts: 1, label: "Control" }
+    ]);
+    expect(activeGraph.edges[0]).toMatchObject({
+      id: "edge_trigger_display",
+      source: { nodeId: "trigger", portId: "bang" },
+      target: { nodeId: "display", portId: "out" },
+      label: "demo",
+      feedback: { enabled: true, boundary: "render-frame" }
+    });
   });
 });
 
