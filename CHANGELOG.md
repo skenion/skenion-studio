@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.28.0...skenion-studio-v0.29.0) (2026-06-21)
+
+
+### Features
+
+* **graph:** implement fragment clipboard help working copies ([#89](https://github.com/echovisionlab/skenion-studio/issues/89)) ([53c106f](https://github.com/echovisionlab/skenion-studio/commit/53c106f475c695c35626ba4fafb0625b4d090430))
+
 ## [0.28.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.27.0...skenion-studio-v0.28.0) (2026-06-21)
 
 
