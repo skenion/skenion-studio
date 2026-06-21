@@ -1,7 +1,7 @@
 import { Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
-import type { GraphDocumentV01, GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
+import type { GraphDocumentV01, GraphFragmentV02, GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
 import { ConnectionDiagnosticsPanel } from "./inspector/ConnectionDiagnosticsPanel";
 import { EdgeInspector } from "./inspector/EdgeInspector";
 import { FeedbackPolicyDialog } from "./inspector/FeedbackPolicyDialog";
@@ -13,6 +13,7 @@ import type {
   GraphSemanticDiagnostic
 } from "../graph/portSemantics";
 import type { ConnectionCheck } from "../graph/skenionGraph";
+import type { GraphFragmentBuildResult } from "../graph/fragmentClipboard";
 import type { RuntimeGeneratedShaderResponse } from "../runtime/types";
 
 interface InspectorPanelProps {
@@ -29,6 +30,9 @@ interface InspectorPanelProps {
   runtimeAssetImportEnabled: boolean;
   runtimeShaderDiagnostics: ShaderDiagnosticV01[];
   onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void>;
+  onHelpClipboardWriteError?: (message: string) => void;
+  onHelpCopyFragment?: (fragment: GraphFragmentV02, result: GraphFragmentBuildResult) => void;
+  onHelpCopyFragmentError?: (message: string) => void;
   onLoadGeneratedShader?: () => void;
   onOpenHelpGraph?: (nodeKind: string) => void;
   onRemoveNode: (node: GraphNodeV01) => void;
@@ -46,6 +50,9 @@ export function InspectorPanel({
   helpNodeId,
   node,
   onImportAsset,
+  onHelpClipboardWriteError,
+  onHelpCopyFragment,
+  onHelpCopyFragmentError,
   onLoadGeneratedShader,
   onOpenHelpGraph,
   onRemoveNode,
@@ -87,6 +94,9 @@ export function InspectorPanel({
             graphLocked={graphLocked}
             onLoadGeneratedShader={onLoadGeneratedShader}
             onImportAsset={onImportAsset}
+            onHelpClipboardWriteError={onHelpClipboardWriteError}
+            onHelpCopyFragment={onHelpCopyFragment}
+            onHelpCopyFragmentError={onHelpCopyFragmentError}
             onOpenHelpGraph={onOpenHelpGraph}
             onRemoveNode={onRemoveNode}
             onSetNodeParam={onSetNodeParam}
@@ -99,7 +109,10 @@ export function InspectorPanel({
           <NodeHelp
             help={paletteHelp}
             helpGraph={paletteHelpGraph}
-            onOpenAsNewGraph={
+            onClipboardWriteError={onHelpClipboardWriteError}
+            onCopyFragment={onHelpCopyFragment}
+            onCopyFragmentError={onHelpCopyFragmentError}
+            onOpenAsEditableCopy={
               paletteHelpGraph && onOpenHelpGraph ? () => onOpenHelpGraph(paletteHelp.id) : undefined
             }
           />

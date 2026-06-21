@@ -1,6 +1,6 @@
 import { Badge, Group, Stack, Text } from "@mantine/core";
 import { ExternalLink } from "lucide-react";
-import type { BuiltinNodeHelpV01 } from "@skenion/contracts";
+import type { BuiltinNodeHelpV01, GraphFragmentV02 } from "@skenion/contracts";
 import {
   isPatchDefinitionV02,
   patchDescription,
@@ -11,17 +11,24 @@ import {
 } from "../../graph/patchLibrary";
 import { HelpGraphViewer, type HelpGraphViewerDocument } from "../help/HelpGraphViewer";
 import { Button } from "../core/Button/Button";
+import type { GraphFragmentBuildResult } from "../../graph/fragmentClipboard";
 
 export type NodeHelpDocument = BuiltinNodeHelpV01 | PatchDefinitionV02;
 
 export function NodeHelp({
   help,
   helpGraph,
-  onOpenAsNewGraph
+  onClipboardWriteError,
+  onCopyFragment,
+  onCopyFragmentError,
+  onOpenAsEditableCopy
 }: {
   help: NodeHelpDocument;
   helpGraph?: HelpGraphViewerDocument;
-  onOpenAsNewGraph?: () => void;
+  onClipboardWriteError?: (message: string) => void;
+  onCopyFragment?: (fragment: GraphFragmentV02, result: GraphFragmentBuildResult) => void;
+  onCopyFragmentError?: (message: string) => void;
+  onOpenAsEditableCopy?: () => void;
 }) {
   const view = nodeHelpView(help);
   const graph = helpGraph ?? (isPatchDefinitionV02(help) ? help : undefined);
@@ -97,18 +104,23 @@ export function NodeHelp({
             <Text fw={700} size="xs">
               {graphTitle}
             </Text>
-            {onOpenAsNewGraph ? (
+            {onOpenAsEditableCopy ? (
               <Button
                 leftSection={<ExternalLink size={14} />}
-                onClick={onOpenAsNewGraph}
+                onClick={onOpenAsEditableCopy}
                 size="compact-xs"
                 variant="light"
               >
-                Open as New Graph
+                Open as editable copy
               </Button>
             ) : null}
           </Group>
-          <HelpGraphViewer graph={graph} />
+          <HelpGraphViewer
+            graph={graph}
+            onClipboardWriteError={onClipboardWriteError}
+            onCopyFragment={onCopyFragment}
+            onCopyFragmentError={onCopyFragmentError}
+          />
         </Stack>
       ) : null}
     </Stack>

@@ -47,7 +47,9 @@ interface GraphCanvasProps {
   graphLocked?: boolean;
   viewState: ViewStateV01;
   selectedEdgeId: string | null;
+  selectedEdgeIds?: string[];
   selectedNodeId: string | null;
+  selectedNodeIds?: string[];
   onConnectionCheck: (check: ConnectionCheck | null) => void;
   onAddNodeAtPosition?: (
     definitionId: string,
@@ -64,9 +66,11 @@ interface GraphCanvasProps {
   runtimeControlValues?: Record<string, RuntimeControlValue>;
   onShowNodeHelp?: (definitionId: string) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
+  onSelectedEdgesChange?: (edgeIds: string[]) => void;
   onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
   onViewStateChange: (viewState: ViewStateV01) => void;
   onSelectedNodeChange: (nodeId: string | null) => void;
+  onSelectedNodesChange?: (nodeIds: string[]) => void;
 }
 
 export function GraphCanvas({
@@ -74,7 +78,9 @@ export function GraphCanvas({
   graphLocked = true,
   viewState,
   selectedEdgeId,
+  selectedEdgeIds = selectedEdgeId ? [selectedEdgeId] : [],
   selectedNodeId,
+  selectedNodeIds = selectedNodeId ? [selectedNodeId] : [],
   onConnectionCheck,
   onAddNodeAtPosition,
   onImportAsset,
@@ -87,9 +93,11 @@ export function GraphCanvas({
   runtimeControlValues = {},
   onShowNodeHelp,
   onSelectedEdgeChange,
+  onSelectedEdgesChange,
   onGraphChange,
   onViewStateChange,
-  onSelectedNodeChange
+  onSelectedNodeChange,
+  onSelectedNodesChange
 }: GraphCanvasProps) {
   const nodeViewStateKey = JSON.stringify(viewState.canvas.nodes);
   const graphLayoutViewState = useMemo(
@@ -443,12 +451,12 @@ export function GraphCanvas({
   );
 
   const selectedNodes = useMemo(
-    () => applyNodeSelection(nodes, selectedNodeId),
-    [nodes, selectedNodeId]
+    () => applyNodeSelection(nodes, selectedNodeIds),
+    [nodes, selectedNodeIds]
   );
   const selectedEdges = useMemo(
-    () => applyEdgeSelection(edges, selectedEdgeId),
-    [edges, selectedEdgeId]
+    () => applyEdgeSelection(edges, selectedEdgeIds),
+    [edges, selectedEdgeIds]
   );
 
   return (
@@ -471,13 +479,17 @@ export function GraphCanvas({
       onEdgesDelete={onEdgesDelete}
       onEdgeClick={(_event, edge) => {
         onSelectedEdgeChange(edge.id);
+        onSelectedEdgesChange?.([edge.id]);
         onSelectedNodeChange(null);
+        onSelectedNodesChange?.([]);
       }}
       onEdgeContextMenu={(event, edge) => {
         event.preventDefault();
         event.stopPropagation();
         onSelectedEdgeChange(edge.id);
+        onSelectedEdgesChange?.([edge.id]);
         onSelectedNodeChange(null);
+        onSelectedNodesChange?.([]);
         setContextMenu({
           type: "edge",
           edgeId: edge.id,
@@ -487,13 +499,17 @@ export function GraphCanvas({
       }}
       onNodeClick={(_event, node) => {
         onSelectedNodeChange(node.id);
+        onSelectedNodesChange?.([node.id]);
         onSelectedEdgeChange(null);
+        onSelectedEdgesChange?.([]);
       }}
       onNodeContextMenu={(event, node) => {
         event.preventDefault();
         event.stopPropagation();
         onSelectedNodeChange(node.id);
+        onSelectedNodesChange?.([node.id]);
         onSelectedEdgeChange(null);
+        onSelectedEdgesChange?.([]);
         setContextMenu({
           type: "node",
           nodeId: node.id,
@@ -507,7 +523,9 @@ export function GraphCanvas({
       onNodesDelete={onNodesDelete}
       onPaneClick={() => {
         onSelectedNodeChange(null);
+        onSelectedNodesChange?.([]);
         onSelectedEdgeChange(null);
+        onSelectedEdgesChange?.([]);
         setContextMenu(null);
       }}
       onPaneContextMenu={(event) => {
@@ -531,6 +549,14 @@ export function GraphCanvas({
           screenX: event.clientX,
           screenY: event.clientY
         });
+      }}
+      onSelectionChange={({ nodes: nextSelectedNodes, edges: nextSelectedEdges }) => {
+        const nextNodeIds = nextSelectedNodes.map((node) => node.id);
+        const nextEdgeIds = nextSelectedEdges.map((edge) => edge.id);
+        onSelectedNodesChange?.(nextNodeIds);
+        onSelectedEdgesChange?.(nextEdgeIds);
+        onSelectedNodeChange(nextNodeIds[0] ?? null);
+        onSelectedEdgeChange(nextNodeIds.length > 0 ? null : nextEdgeIds[0] ?? null);
       }}
       onMoveEnd={(_event, nextViewport) => onMoveEnd(nextViewport)}
     >
@@ -734,10 +760,11 @@ function reconcileFlowEdges(currentEdges: Edge[], nextEdges: Edge[]): Edge[] {
   return changed ? reconciled : currentEdges;
 }
 
-function applyNodeSelection(nodes: StudioFlowNode[], selectedNodeId: string | null): StudioFlowNode[] {
+function applyNodeSelection(nodes: StudioFlowNode[], selectedNodeIds: string[]): StudioFlowNode[] {
+  const selectedNodeIdSet = new Set(selectedNodeIds);
   let changed = false;
   const selectedNodes = nodes.map((node) => {
-    const selected = node.id === selectedNodeId;
+    const selected = selectedNodeIdSet.has(node.id);
     if (Boolean(node.selected) === selected) {
       return node;
     }
@@ -759,10 +786,11 @@ function mergeFlowNode(currentNode: StudioFlowNode, nextNode: StudioFlowNode): S
   };
 }
 
-function applyEdgeSelection(edges: Edge[], selectedEdgeId: string | null): Edge[] {
+function applyEdgeSelection(edges: Edge[], selectedEdgeIds: string[]): Edge[] {
+  const selectedEdgeIdSet = new Set(selectedEdgeIds);
   let changed = false;
   const selectedEdges = edges.map((edge) => {
-    const selected = edge.id === selectedEdgeId;
+    const selected = selectedEdgeIdSet.has(edge.id);
     if (Boolean(edge.selected) === selected) {
       return edge;
     }

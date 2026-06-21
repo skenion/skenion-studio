@@ -91,7 +91,7 @@ function responsePlan(response: RuntimeActionResponse): RuntimePlan | null {
     return response.plan;
   }
   if ("snapshot" in response) {
-    return response.snapshot.plan;
+    return isRuntimePlan(response.snapshot.plan) ? response.snapshot.plan : null;
   }
   return null;
 }
@@ -101,4 +101,15 @@ function responseReport(response: RuntimeActionResponse): RuntimeDummyExecutionR
     return response.report;
   }
   return null;
+}
+
+function isRuntimePlan(value: unknown): value is RuntimePlan {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "graphId" in value &&
+    "nodes" in value &&
+    "edges" in value &&
+    "groups" in value
+  );
 }

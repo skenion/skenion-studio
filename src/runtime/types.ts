@@ -4,6 +4,7 @@ import type {
   RuntimeApiResponse,
   RuntimeControlEventResponse,
   RuntimeControlReadResponse,
+  PasteGraphFragmentResponse,
   RuntimePatchResponse,
   RuntimeSessionResponse,
   ViewStateV01
@@ -58,6 +59,8 @@ export type {
   RuntimeLogSnapshotResponse,
   RuntimeMutationRequest,
   RuntimeMutationResponse,
+  RuntimeOperationEnvelope,
+  PasteGraphFragmentResponse,
   RuntimePatchResponse,
   RuntimePlan,
   RuntimePlanEdge,
@@ -100,6 +103,7 @@ export type RuntimeResultKind =
   | "planSession"
   | "runSession"
   | "mutateSession"
+  | "sessionOperation"
   | "undoPatch"
   | "redoPatch"
   | "controlEvent"
@@ -109,6 +113,7 @@ export type RuntimeActionResponse =
   | RuntimeApiResponse
   | RuntimePatchResponse
   | RuntimeSessionResponse
+  | PasteGraphFragmentResponse
   | RuntimeControlEventResponse
   | RuntimeControlReadResponse;
 

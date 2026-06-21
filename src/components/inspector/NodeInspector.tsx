@@ -2,8 +2,9 @@ import { Divider, Group, Stack, Text } from "@mantine/core";
 import { BookOpen, Trash2 } from "lucide-react";
 import { Fragment, useState, type ReactNode } from "react";
 import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
-import type { GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
+import type { GraphFragmentV02, GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
 import type { RuntimeGeneratedShaderResponse } from "../../runtime/types";
+import type { GraphFragmentBuildResult } from "../../graph/fragmentClipboard";
 import { AssetControls } from "./AssetControls";
 import { BooleanValueControls } from "./BooleanValueControls";
 import { ClearColorControls } from "./ClearColorControls";
@@ -85,6 +86,9 @@ export function NodeInspector({
   node,
   onRemoveNode,
   onLoadGeneratedShader,
+  onHelpClipboardWriteError,
+  onHelpCopyFragment,
+  onHelpCopyFragmentError,
   onImportAsset,
   onOpenHelpGraph,
   onSetNodeParam,
@@ -101,6 +105,9 @@ export function NodeInspector({
   node: GraphNodeV01;
   runtimeShaderDiagnostics?: ShaderDiagnosticV01[];
   onLoadGeneratedShader?: () => void;
+  onHelpClipboardWriteError?: (message: string) => void;
+  onHelpCopyFragment?: (fragment: GraphFragmentV02, result: GraphFragmentBuildResult) => void;
+  onHelpCopyFragmentError?: (message: string) => void;
   onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void>;
   onOpenHelpGraph?: (nodeKind: string) => void;
   onRemoveNode: (node: GraphNodeV01) => void;
@@ -343,7 +350,10 @@ export function NodeInspector({
         <NodeHelp
           help={help}
           helpGraph={helpGraph}
-          onOpenAsNewGraph={helpGraph && onOpenHelpGraph ? () => onOpenHelpGraph(node.kind) : undefined}
+          onClipboardWriteError={onHelpClipboardWriteError}
+          onCopyFragment={onHelpCopyFragment}
+          onCopyFragmentError={onHelpCopyFragmentError}
+          onOpenAsEditableCopy={helpGraph && onOpenHelpGraph ? () => onOpenHelpGraph(node.kind) : undefined}
         />
       ) : null}
 

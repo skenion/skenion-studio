@@ -14,6 +14,7 @@ import {
   isRuntimeIoDeviceListResponse,
   isRuntimeLogSnapshotResponse,
   isRuntimePatchResponse,
+  isPasteGraphFragmentResponse,
   isRuntimePreviewStatus,
   isRuntimeSessionResponse,
   isRuntimeTelemetrySnapshot
@@ -36,6 +37,8 @@ import type {
   RuntimeExtensionListResponse,
   RuntimeHistory,
   RuntimeMutationRequest,
+  RuntimeOperationEnvelope,
+  PasteGraphFragmentResponse,
   RuntimePatchResponse,
   RuntimePreviewStartRequest,
   RuntimePreviewStatus,
@@ -65,6 +68,7 @@ export interface RuntimeClient {
   planSession: () => Promise<RuntimeSessionResponse>;
   runSession: (frames: number) => Promise<RuntimeSessionResponse>;
   mutateSession: (mutation: RuntimeMutationRequest) => Promise<RuntimePatchResponse>;
+  runSessionOperation: (operation: RuntimeOperationEnvelope) => Promise<PasteGraphFragmentResponse>;
   getSessionHistory: () => Promise<RuntimeHistory>;
   undoSessionPatch: () => Promise<RuntimePatchResponse>;
   redoSessionPatch: () => Promise<RuntimePatchResponse>;
@@ -148,6 +152,8 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
     ),
     runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/run", { frames }),
     mutateSession: (mutation) => postRuntimePatchResponse(fetchImpl, baseUrl, "/v0/session/mutate", mutation),
+    runSessionOperation: (operation) =>
+      postRuntimeOperationResponse(fetchImpl, baseUrl, "/v0/session/operation", operation),
     getSessionHistory: () =>
       requestJson<RuntimeHistory>(
         fetchImpl,
@@ -361,6 +367,27 @@ async function postRuntimePatchResponse(
       method: "POST"
     },
     isRuntimePatchResponse
+  );
+}
+
+async function postRuntimeOperationResponse(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  path: string,
+  body: RuntimeOperationEnvelope
+): Promise<PasteGraphFragmentResponse> {
+  return requestJson<PasteGraphFragmentResponse>(
+    fetchImpl,
+    baseUrl,
+    path,
+    {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    },
+    isPasteGraphFragmentResponse
   );
 }
 

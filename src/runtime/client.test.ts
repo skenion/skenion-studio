@@ -9,6 +9,7 @@ import {
   runtimeSessionEventsStreamUrl
 } from "./client";
 import type {
+  RuntimeOperationEnvelope,
   RuntimeAsset,
   RuntimeAssetGetResponse,
   RuntimeAssetImportResponse,
@@ -226,6 +227,23 @@ describe("runtime client", () => {
     expect(calls[8]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
     expect(calls[9]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
     expect(calls[10]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+  });
+
+  it("posts paste operations to the runtime session.operation endpoint", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(pasteOperationResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+    const operation = pasteOperation();
+
+    await expect(client.runSessionOperation(operation)).resolves.toMatchObject({
+      ok: true,
+      applied: true,
+      revisionAfter: "2"
+    });
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(calls[0][0]).toBe("http://runtime.local/v0/session/operation");
+    expect(JSON.parse(String(calls[0][1].body))).toEqual(operation);
   });
 
   it("calls runtime control endpoints", async () => {
@@ -1567,10 +1585,19 @@ function runtimeSessionEvent(overrides: Partial<RuntimeSessionEvent> = {}): Runt
     schema: "skenion.runtime.session.event",
     schemaVersion: "0.1.0",
     id: "session_event_000001",
+    sessionId: "session_1",
     sequence: 1,
+    sessionRevision: 1,
     kind: "snapshot",
     snapshot: sessionResponse().snapshot,
     history: historyResponse(),
+    replay: {
+      cursor: "1",
+      previousCursor: null,
+      replayed: false,
+      gap: null,
+      overflow: false
+    },
     diagnostics: [],
     createdAt: "unix-ms:0",
     ...overrides
@@ -1596,6 +1623,70 @@ function patchResponse(overrides: Partial<RuntimePatchResponse> = {}): RuntimePa
     history: historyResponse(),
     diagnostics: [],
     ...overrides
+  };
+}
+
+function pasteOperation(): RuntimeOperationEnvelope {
+  return {
+    schema: "skenion.runtime.operation",
+    schemaVersion: "0.1.0",
+    id: "operation_1",
+    kind: "pasteGraphFragment",
+    request: {
+      target: {
+        path: { kind: "root" },
+        baseRevision: "1"
+      },
+      fragment: {
+        schema: "skenion.graph.fragment",
+        schemaVersion: "0.2.0",
+        nodes: [
+          {
+            id: "value_1",
+            kind: "core.float",
+            kindVersion: "0.1.0",
+            params: { label: "Float" },
+            ports: [
+              {
+                id: "out",
+                direction: "output",
+                type: "number.float",
+                rate: "control"
+              }
+            ]
+          }
+        ],
+        edges: []
+      },
+      options: {
+        idConflictPolicy: "remap",
+        outsideEndpointPolicy: "omit",
+        preserveRelativePositions: true
+      }
+    }
+  };
+}
+
+function pasteOperationResponse() {
+  return {
+    schema: "skenion.runtime.paste-graph-fragment.response",
+    schemaVersion: "0.1.0",
+    ok: true,
+    applied: true,
+    conflict: false,
+    target: {
+      path: { kind: "root" },
+      baseRevision: "1"
+    },
+    revisionBefore: "1",
+    revisionAfter: "2",
+    historyEntryId: "history_1",
+    idRemap: {
+      nodeIdMap: { value_1: "value_2" },
+      edgeIdMap: {},
+      omittedEdgeIds: []
+    },
+    diagnostics: []
   };
 }
 
