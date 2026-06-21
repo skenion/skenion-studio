@@ -483,16 +483,6 @@ function isRuntimeApiResponse(value: unknown): value is RuntimeApiResponse {
   );
 }
 
-function isRuntimeProjectPayload(value: unknown): value is RuntimeProjectPayload {
-  return (
-    isRecord(value) &&
-    validateGraphDocument(value.graph).ok &&
-    validateViewState(value.viewState).ok &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every((node) => isRecord(node) && typeof node.id === "string")
-  );
-}
-
 function isRuntimeSessionResponse(value: unknown): value is RuntimeSessionResponse {
   return (
     isRecord(value) &&

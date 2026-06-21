@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { GraphNodeV01, NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { nodeRegistry } from "../data/registry";
 import {
   createGraphNodeFromObjectText,
@@ -119,6 +120,68 @@ describe("object text graph node adapter", () => {
     expect(genericObjectTextForNode(decode.node!)).toBe("decode");
     expect(genericObjectTextForNode(upload.node!)).toBe("upload");
     expect(genericObjectTextForNode(preview.node!)).toBe("preview");
+  });
+
+  it("normalizes bracketed native aliases and reports missing native definitions", () => {
+    const missingDecode = createGraphNodeFromObjectText(
+      "[decode]",
+      [],
+      nodeRegistry.filter((definition) => definition.id !== "core.video-decode")
+    );
+
+    expect(missingDecode.ok).toBe(false);
+    expect(missingDecode.node).toMatchObject({
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      params: {
+        objectText: "decode",
+        requestedKind: "core.video-decode"
+      }
+    });
+    expect(missingDecode.diagnostics[0]).toMatchObject({
+      code: "unavailable-object-kind"
+    });
+  });
+
+  it("mirrors native alias port activation and defaults into parse results", () => {
+    const registryWithDefault = nodeRegistry.map((definition): NodeDefinitionManifestV01 => {
+      if (definition.id !== "core.video-decode") {
+        return definition;
+      }
+      return {
+        ...definition,
+        ports: definition.ports.map((port, index) =>
+          index === 0
+            ? {
+                ...port,
+                activation: "latched",
+                default: "fixture"
+              }
+            : port
+        )
+      };
+    });
+
+    const result = createGraphNodeFromObjectText("[decode]", [], registryWithDefault);
+
+    expect(result.ok).toBe(true);
+    expect(result.parseResult.displayText).toBe("decode");
+    expect(result.parseResult.instancePorts[0]).toMatchObject({
+      activation: "latched",
+      defaultValue: "fixture"
+    });
+  });
+
+  it("falls back from blank object text to label and kind display text", () => {
+    const node: GraphNodeV01 = {
+      id: "sensor_1",
+      kind: "user.sensor",
+      kindVersion: "0.1.0",
+      params: {},
+      ports: []
+    };
+
+    expect(genericObjectTextForNode({ ...node, params: { objectText: "  ", label: "Temperature" } })).toBe("Temperature");
+    expect(genericObjectTextForNode({ ...node, params: { objectText: "  ", label: " " } })).toBe("user.sensor");
   });
 
   it("keeps namespaced extension candidates and warns namespace-less unknown classes", () => {

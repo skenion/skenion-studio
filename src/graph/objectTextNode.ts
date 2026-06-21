@@ -242,9 +242,7 @@ function unresolvedObjectResult(
   existingNodes: GraphNodeV01[],
   nodeId?: string
 ): ObjectTextNodeBuildResult {
-  const diagnosticMessage = diagnostics.find((diagnostic) => diagnostic.severity === "error")?.message ??
-    diagnostics[0]?.message ??
-    `Object text could not be resolved: ${displayText}`;
+  const diagnosticMessage = diagnostics[0].message;
   return {
     ok: false,
     node: {
@@ -295,19 +293,11 @@ function diagnosticsForUnresolvedParse(
       }
     ];
   }
-  return parseResult.diagnostics.length > 0
-    ? parseResult.diagnostics
-    : [
-        {
-          severity: "error",
-          code: "unresolved-object-text",
-          message: `Object text could not be resolved: ${parseResult.displayText}`
-        }
-      ];
+  return parseResult.diagnostics;
 }
 
 function requestedKindForParseResult(parseResult: ObjectTextParseResultV01): string {
-  return parseResult.resolvedKind ?? parseResult.classSymbol ?? parseResult.displayText;
+  return parseResult.resolvedKind ?? parseResult.classSymbol!;
 }
 
 function unavailableObjectKindDiagnostic(kind: string): ObjectTextDiagnosticV01 {
