@@ -1,34 +1,39 @@
 import type {
+  CanvasNodeViewV01,
   GraphDocumentV01,
-  GraphPatchEventV01,
-  GraphPatchHistoryV01,
   GraphPatchV01,
   GeneratedShaderSourceMapV01,
   NodeDefinitionManifestV01,
-  ShaderDiagnosticV01
+  ShaderDiagnosticV01,
+  ViewStateV01
 } from "@skenion/contracts";
 
 export type {
   ClockFieldV01,
-  ClockSourceListResponse,
-  ClockSourceSnapshot,
-  ClockSourceSnapshotResponse,
   ClockStateV01,
   ClockTimeSignatureV01,
-  MidiClockSourceStartRequest,
-  MidiClockSourceStartResponse,
-  MidiClockSourceStopRequest,
-  MidiClockSourceStopResponse,
-  MidiInputDescriptor,
-  MidiInputListResponse,
-  RuntimeClockDiagnostic
+  RuntimeIoBindingConfig,
+  RuntimeIoDeviceDescriptor,
+  RuntimeIoDeviceListResponse,
+  RuntimeIoDirection,
+  RuntimeIoInlineFrame,
+  RuntimeIoTransportKind
 } from "@skenion/contracts";
+
+export type RuntimeIoDiagnosticSeverity = "warning" | "error";
+
+export interface RuntimeIoDiagnostic {
+  severity: RuntimeIoDiagnosticSeverity;
+  code: string;
+  message: string;
+}
 
 export type RuntimeConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
 export interface RuntimeProjectPayload {
   graph: GraphDocumentV01;
   nodes: NodeDefinitionManifestV01[];
+  viewState: ViewStateV01;
 }
 
 export interface RuntimeHealth {
@@ -42,6 +47,29 @@ export interface RuntimeInfo {
   version: string;
   apiVersion: string;
   capabilities: string[];
+}
+
+export interface RuntimeLogEvent {
+  id: number;
+  timestamp: string;
+  source: "runtime";
+  level: RuntimeDiagnosticSeverity;
+  code: string | null;
+  message: string;
+}
+
+export interface RuntimeLogRetention {
+  replayLimit: number;
+  replayLevels: RuntimeDiagnosticSeverity[];
+}
+
+export interface RuntimeLogSnapshotResponse {
+  schema: "skenion.runtime.logs";
+  schemaVersion: string;
+  ok: boolean;
+  events: RuntimeLogEvent[];
+  retention: RuntimeLogRetention;
+  diagnostics: RuntimeDiagnostic[];
 }
 
 export interface RuntimeAsset {
@@ -150,33 +178,105 @@ export interface RuntimeApiResponse {
 
 export interface RuntimeSessionResponse {
   ok: boolean;
-  loaded: boolean;
-  graphId: string | null;
-  graphRevision: string | null;
-  sessionRevision: number;
-  controlRevision: number;
+  snapshot: RuntimeSessionSnapshot;
   diagnostics: RuntimeDiagnostic[];
-  plan: RuntimePlan | null;
   report: RuntimeDummyExecutionReport | null;
 }
 
-export interface RuntimeSessionProjectResponse {
-  ok: boolean;
-  loaded: boolean;
-  project: RuntimeProjectPayload | null;
-  session: RuntimeSessionResponse;
+export interface RuntimeSessionSnapshot {
+  sessionRevision: number;
+  viewRevision: number;
+  controlRevision: number;
+  project: RuntimeProjectSnapshot | null;
   diagnostics: RuntimeDiagnostic[];
+  plan: RuntimePlan | null;
+}
+
+export interface RuntimeProjectSnapshot {
+  graph: GraphDocumentV01;
+  viewState: ViewStateV01;
+  nodes: NodeDefinitionManifestV01[];
 }
 
 export interface RuntimePatchResponse {
   ok: boolean;
   applied: boolean;
   conflict: boolean;
-  graph: GraphDocumentV01 | null;
-  session: RuntimeSessionResponse;
-  event: GraphPatchEventV01 | null;
-  history: GraphPatchHistoryV01;
+  snapshot: RuntimeSessionSnapshot;
+  history: RuntimeHistory;
   diagnostics: RuntimeDiagnostic[];
+}
+
+export type RuntimeMutationResponse = RuntimePatchResponse;
+
+export interface RuntimeMutationRequest {
+  graphPatch?: GraphPatchV01;
+  viewPatch?: RuntimeViewPatch;
+  clientId?: string;
+  description?: string;
+}
+
+export interface RuntimeViewPatch {
+  baseViewRevision: number;
+  ops: RuntimeViewPatchOperation[];
+}
+
+export type RuntimeViewPatchOperation =
+  | {
+      op: "setNodeView";
+      nodeId: string;
+      view: CanvasNodeViewV01;
+    }
+  | {
+      op: "moveNodeView";
+      nodeId: string;
+      from?: CanvasNodeViewV01;
+      to: CanvasNodeViewV01;
+    };
+
+export interface RuntimeHistory {
+  schema: "skenion.runtime.history";
+  schemaVersion: string;
+  entries: RuntimeHistoryEntry[];
+  canUndo: boolean;
+  canRedo: boolean;
+  undoDepth: number;
+  redoDepth: number;
+}
+
+export interface RuntimeHistoryEntry {
+  id: string;
+  sequence: number;
+  kind: RuntimeHistoryEntryKind;
+  mutation: RuntimeMutationRequest;
+  inverseMutation: RuntimeMutationRequest;
+  subjectEventId?: string;
+  clientId?: string;
+  description?: string;
+  createdAt: string;
+}
+
+export type RuntimeHistoryEntryKind = "apply" | "undo" | "redo";
+
+export type RuntimeSessionEventKind =
+  | "snapshot"
+  | "load"
+  | "clear"
+  | "mutate"
+  | "undo"
+  | "redo";
+
+export interface RuntimeSessionEvent {
+  schema: "skenion.runtime.session.event";
+  schemaVersion: string;
+  id: string;
+  sequence: number;
+  kind: RuntimeSessionEventKind;
+  snapshot: RuntimeSessionSnapshot;
+  history: RuntimeHistory;
+  mutation?: RuntimeHistoryEntry;
+  diagnostics: RuntimeDiagnostic[];
+  createdAt: string;
 }
 
 export type RuntimePreviewState = "stopped" | "starting" | "running" | "exited" | "error";
@@ -344,8 +444,6 @@ export interface RuntimeSessionRunRequest {
   frames: number;
 }
 
-export type RuntimeSessionPatchRequest = GraphPatchV01;
-
 export type RuntimeResultKind =
   | "validate"
   | "plan"
@@ -355,7 +453,7 @@ export type RuntimeResultKind =
   | "validateSession"
   | "planSession"
   | "runSession"
-  | "applyPatch"
+  | "mutateSession"
   | "undoPatch"
   | "redoPatch"
   | "controlEvent"

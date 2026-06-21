@@ -11,14 +11,27 @@ import { UINT_VALUE_NODE_KIND, readUIntRepresentationParam, readUIntValueParam }
 import { MESSAGE_NODE_KIND, readMessageValueParam } from "../../graph/messageNode";
 import {
   isBangControlNode,
+  readBangParams,
   isSliderFloatNode,
   isToggleControlNode,
   readPanelLabelParam,
   readSliderFloatParams,
   readToggleControlValue
 } from "../../graph/panelControls";
-import { VIDEO_ASSET_NODE_KIND, readVideoAssetParams } from "../../graph/videoAsset";
+import {
+  DEFAULT_VIDEO_ASSET_HEIGHT,
+  DEFAULT_VIDEO_ASSET_WIDTH,
+  MAX_VIDEO_ASSET_HEIGHT,
+  MAX_VIDEO_ASSET_WIDTH,
+  MIN_VIDEO_ASSET_HEIGHT,
+  MIN_VIDEO_ASSET_WIDTH,
+  VIDEO_ASSET_NODE_KIND,
+  type VideoAssetParams,
+  readVideoAssetParams
+} from "../../graph/videoAsset";
 import { PANEL_NODE_KIND, readPanelParams } from "../../graph/panelNode";
+import { genericObjectTextForNode } from "../../graph/objectTextDisplay";
+import { isUnresolvedObjectNode } from "../../graph/objectTextNode";
 import type { NodeCardView, NodePortHandleRenderer, NodePortView } from "../node/nodeTypes";
 import type { RuntimeControlMessage, RuntimeControlValue } from "../../runtime/types";
 import { bangControlMessage, controlMessageFromValue } from "../../runtime/controlMessage";
@@ -32,8 +45,10 @@ export interface ObjectNodeRendererProps {
   layoutEditable?: boolean;
   node: GraphNodeV01;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
+  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void> | void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
+  onObjectTextCommit?: (nodeId: string, text: string) => void;
   runtimeControlEnabled?: boolean;
   runtimeControlPulseKey?: number;
   runtimeControlValue?: RuntimeControlValue;
@@ -46,8 +61,11 @@ export function ObjectNodeRenderer({
   card,
   layoutEditable = false,
   node,
+  onImportAsset,
   onObjectControl,
   onObjectLiveControl,
+  onObjectParamChange,
+  onObjectTextCommit,
   runtimeControlEnabled = false,
   runtimeControlPulseKey = 0,
   runtimeControlValue,
@@ -102,6 +120,7 @@ export function ObjectNodeRenderer({
           }
           onObjectControl?.(node.id, "in", bangControlMessage());
         }}
+        preserveActivationClickPropagation
         outputPorts={card.outputs}
         renderInputHandle={renderInputHandle}
         renderOutputHandle={renderOutputHandle}
@@ -205,39 +224,289 @@ export function ObjectNodeRenderer({
 
   const fallbackNode = node as GraphNodeV01;
   if (fallbackNode.kind === VIDEO_ASSET_NODE_KIND) {
-    const asset = readVideoAssetParams(fallbackNode);
     return (
-      <ObjectBox
-        className={styles.assetObject}
+      <VideoAssetObject
+        card={card}
         chromePolicy={viewSpec.chromePolicy}
-        inputPorts={card.inputs}
         layoutEditable={layoutEditable}
-        outputPorts={card.outputs}
+        node={fallbackNode}
+        onImportAsset={onImportAsset}
+        onObjectParamChange={onObjectParamChange}
         renderInputHandle={renderInputHandle}
         renderOutputHandle={renderOutputHandle}
         selected={selected}
-      >
-        <span className={styles.assetKind}>asset.video</span>
-        <span className={styles.assetName}>{asset.name || "Choose video asset"}</span>
-        <span className={styles.assetRef}>{asset.assetRef || "missing assetRef"}</span>
-      </ObjectBox>
+      />
     );
   }
 
   return (
-    <ObjectBox
-      className={styles.genericObject}
+    <GenericObjectBox
+      card={card}
       chromePolicy={viewSpec.chromePolicy}
+      layoutEditable={layoutEditable}
+      node={fallbackNode}
+      onObjectTextCommit={onObjectTextCommit}
+      renderInputHandle={renderInputHandle}
+      renderOutputHandle={renderOutputHandle}
+      selected={selected}
+    />
+  );
+}
+
+function GenericObjectBox({
+  card,
+  chromePolicy,
+  layoutEditable,
+  node,
+  onObjectTextCommit,
+  renderInputHandle,
+  renderOutputHandle,
+  selected
+}: {
+  card: NodeCardView;
+  chromePolicy: ObjectChromePolicy;
+  layoutEditable: boolean;
+  node: GraphNodeV01;
+  onObjectTextCommit?: (nodeId: string, text: string) => void;
+  renderInputHandle?: NodePortHandleRenderer;
+  renderOutputHandle?: NodePortHandleRenderer;
+  selected?: boolean;
+}) {
+  const displayText = genericObjectTextForNode(node);
+  const unresolved = isUnresolvedObjectNode(node);
+  const diagnosticMessage = typeof node.params.diagnosticMessage === "string" ? node.params.diagnosticMessage : undefined;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(displayText);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const finishedEditRef = useRef(false);
+  const editable = layoutEditable && Boolean(onObjectTextCommit);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(displayText);
+    }
+  }, [displayText, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const beginEdit = () => {
+    if (!editable) {
+      return;
+    }
+    finishedEditRef.current = false;
+    setDraft(displayText);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    if (finishedEditRef.current) {
+      return;
+    }
+    finishedEditRef.current = true;
+    setDraft(displayText);
+    setEditing(false);
+  };
+
+  const commitEdit = (value = draft) => {
+    if (finishedEditRef.current) {
+      return;
+    }
+    finishedEditRef.current = true;
+    const nextText = value.trim();
+    setEditing(false);
+    if (nextText.length === 0 || nextText === displayText) {
+      return;
+    }
+    onObjectTextCommit?.(node.id, nextText);
+  };
+
+  return (
+    <ObjectBox
+      className={[styles.genericObject, unresolved ? styles.unresolvedObject : ""].filter(Boolean).join(" ")}
+      chromePolicy={chromePolicy}
+      inputPorts={card.inputs}
+      layoutEditable={layoutEditable}
+      onDoubleClick={editable ? beginEdit : undefined}
+      outputPorts={card.outputs}
+      renderInputHandle={renderInputHandle}
+      renderOutputHandle={renderOutputHandle}
+      selected={selected}
+      title={diagnosticMessage}
+    >
+      {editing ? (
+        <input
+          ref={inputRef}
+          aria-label="Object text"
+          className={[styles.objectTextInput, "nodrag", "nopan"].join(" ")}
+          onBlur={(event) => commitEdit(event.currentTarget.value)}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.stopPropagation();
+              commitEdit(event.currentTarget.value);
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              cancelEdit();
+            }
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          value={draft}
+        />
+      ) : (
+        <span className={styles.genericText}>{displayText}</span>
+      )}
+    </ObjectBox>
+  );
+}
+
+function VideoAssetObject({
+  card,
+  chromePolicy,
+  layoutEditable,
+  node,
+  onImportAsset,
+  onObjectParamChange,
+  renderInputHandle,
+  renderOutputHandle,
+  selected
+}: {
+  card: NodeCardView;
+  chromePolicy: ObjectChromePolicy;
+  layoutEditable: boolean;
+  node: GraphNodeV01;
+  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void> | void;
+  onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
+  renderInputHandle?: NodePortHandleRenderer;
+  renderOutputHandle?: NodePortHandleRenderer;
+  selected?: boolean;
+}) {
+  const asset = readVideoAssetParams(node);
+  const assetSize = displaySizeForAsset(asset);
+  const [draftSize, setDraftSize] = useState(assetSize);
+  const draftSizeRef = useRef(draftSize);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canResize = layoutEditable && Boolean(onObjectParamChange);
+  const resizeAspectRatio = loadedAssetHasMedia(asset)
+    ? asset.aspectRatio
+    : DEFAULT_VIDEO_ASSET_WIDTH / DEFAULT_VIDEO_ASSET_HEIGHT;
+
+  useEffect(() => {
+    setDraftSize(assetSize);
+    draftSizeRef.current = assetSize;
+  }, [assetSize.height, assetSize.width]);
+
+  const commitSize = (size: { width: number; height: number }) => {
+    if (size.width === asset.width && size.height === asset.height) {
+      return;
+    }
+    onObjectParamChange?.(node.id, "width", size.width);
+    onObjectParamChange?.(node.id, "height", size.height);
+  };
+
+  const handleResizePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!canResize || !isPrimaryPointerButton(event.button)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    const handle = event.currentTarget;
+    const start = {
+      height: draftSizeRef.current.height,
+      pointerId: event.pointerId,
+      width: draftSizeRef.current.width,
+      x: event.clientX,
+      y: event.clientY
+    };
+    const aspectRatio = resizeAspectRatio > 0 ? resizeAspectRatio : start.width / start.height;
+    handle.setPointerCapture(event.pointerId);
+
+    const updateSize = (moveEvent: globalThis.PointerEvent) => {
+      const nextSize = resizeAssetBox(start, moveEvent.clientX - start.x, moveEvent.clientY - start.y, aspectRatio);
+      draftSizeRef.current = nextSize;
+      setDraftSize(nextSize);
+    };
+    const endResize = (endEvent: globalThis.PointerEvent) => {
+      if (endEvent.pointerId !== start.pointerId) {
+        return;
+      }
+      window.removeEventListener("pointermove", updateSize);
+      window.removeEventListener("pointerup", endResize);
+      window.removeEventListener("pointercancel", endResize);
+      if (handle.hasPointerCapture(start.pointerId)) {
+        handle.releasePointerCapture(start.pointerId);
+      }
+      commitSize(draftSizeRef.current);
+    };
+
+    window.addEventListener("pointermove", updateSize);
+    window.addEventListener("pointerup", endResize);
+    window.addEventListener("pointercancel", endResize);
+  };
+
+  return (
+    <ObjectBox
+      className={styles.assetObject}
+      chromePolicy={chromePolicy}
       inputPorts={card.inputs}
       layoutEditable={layoutEditable}
       outputPorts={card.outputs}
       renderInputHandle={renderInputHandle}
       renderOutputHandle={renderOutputHandle}
       selected={selected}
-      style={{ "--node-accent": card.accentColor ?? "#868e96" } as CSSProperties}
+      onDoubleClick={() => {
+        if (onImportAsset) {
+          fileInputRef.current?.click();
+        }
+      }}
+      style={{
+        height: draftSize.height,
+        width: draftSize.width
+      }}
     >
-      <span className={styles.genericLabel}>{card.label}</span>
-      <span className={styles.genericKind}>{fallbackNode.kind}</span>
+      <input
+        ref={fileInputRef}
+        accept="video/*"
+        className={styles.assetFileInput}
+        disabled={!onImportAsset}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) {
+            void onImportAsset?.(node, file);
+          }
+        }}
+        type="file"
+      />
+      <div className={styles.assetFrame}>
+        {asset.thumbnailDataUrl ? (
+          <img alt="" className={styles.assetThumbnail} draggable={false} src={asset.thumbnailDataUrl} />
+        ) : (
+          <div className={styles.assetPlaceholder} />
+        )}
+        {asset.name ? <span className={styles.assetCaption}>{asset.name}</span> : null}
+      </div>
+      {canResize ? (
+        <button
+          aria-label="Resize asset"
+          className={[styles.assetResizeHandle, "nodrag", "nopan"].join(" ")}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onPointerDown={handleResizePointerDown}
+          type="button"
+        />
+      ) : null}
     </ObjectBox>
   );
 }
@@ -344,6 +613,7 @@ function BangControlObject({
   runtimeControlEnabled: boolean;
   selected?: boolean;
 }) {
+  const bangParams = readBangParams(node);
   const [active, setActive] = useState(false);
   const resetTimerRef = useRef<number | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
@@ -428,7 +698,7 @@ function BangControlObject({
       selected={selected}
     >
       <button
-        aria-label="Bang"
+        aria-label={bangParams.label}
         className={[styles.bangTrigger, "nodrag", "nopan"].join(" ")}
         disabled={!runtimeControlEnabled}
         onClick={(event) => {
@@ -450,7 +720,10 @@ function BangControlObject({
         onPointerUp={handlePointerUp}
         type="button"
       >
-        <span className={[styles.bangDot, active ? styles.bangActive : ""].filter(Boolean).join(" ")} />
+        <span
+          className={[styles.bangDot, active ? styles.bangActive : ""].filter(Boolean).join(" ")}
+          style={{ borderRadius: bangParams.radius }}
+        />
       </button>
     </ObjectBox>
   );
@@ -464,12 +737,15 @@ function ObjectBox({
   inputPorts = [],
   layoutEditable,
   onActivate,
+  onDoubleClick,
   outputPorts = [],
+  preserveActivationClickPropagation = false,
   renderInputHandle,
   renderOutputHandle,
   role,
   selected,
-  style
+  style,
+  title
 }: {
   children: ReactNode;
   chromePolicy: ObjectChromePolicy;
@@ -478,12 +754,15 @@ function ObjectBox({
   inputPorts?: NodePortView[];
   layoutEditable: boolean;
   onActivate?: () => void;
+  onDoubleClick?: () => void;
   outputPorts?: NodePortView[];
+  preserveActivationClickPropagation?: boolean;
   renderInputHandle?: NodePortHandleRenderer;
   renderOutputHandle?: NodePortHandleRenderer;
   role?: "button";
   selected?: boolean;
   style?: CSSProperties;
+  title?: string;
 }) {
   const objectStyle = {
     ...style,
@@ -494,8 +773,10 @@ function ObjectBox({
     if (!onActivate || disabled) {
       return;
     }
-    event.preventDefault();
-    event.stopPropagation();
+    if (!preserveActivationClickPropagation) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     onActivate();
   };
 
@@ -506,6 +787,15 @@ function ObjectBox({
     event.preventDefault();
     event.stopPropagation();
     onActivate();
+  };
+
+  const handleDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!onDoubleClick || disabled) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    onDoubleClick();
   };
 
   return (
@@ -523,10 +813,12 @@ function ObjectBox({
         .filter(Boolean)
         .join(" ")}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
       role={role}
       style={objectStyle}
       tabIndex={role === "button" && !disabled ? 0 : undefined}
+      title={title}
     >
       {renderInputHandle && inputPorts.length > 0 ? (
         <div className={[styles.handleList, styles.inputHandles].join(" ")}>
@@ -805,6 +1097,59 @@ function numericDisplayValue(
     return controlIntValue(runtimeControlValue) ?? readIntValueParam(node);
   }
   return controlUIntValue(runtimeControlValue) ?? readUIntValueParam(node);
+}
+
+function resizeAssetBox(
+  start: { height: number; width: number },
+  deltaX: number,
+  deltaY: number,
+  aspectRatio: number
+): { width: number; height: number } {
+  const safeAspectRatio = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : start.width / start.height;
+  const rawWidth =
+    Math.abs(deltaX) >= Math.abs(deltaY)
+      ? start.width + deltaX
+      : (start.height + deltaY) * safeAspectRatio;
+  const widthByBounds = clampNumber(rawWidth, MIN_VIDEO_ASSET_WIDTH, MAX_VIDEO_ASSET_WIDTH);
+  let nextWidth = widthByBounds;
+  let nextHeight = Math.round(nextWidth / safeAspectRatio);
+
+  if (nextHeight < MIN_VIDEO_ASSET_HEIGHT) {
+    nextHeight = MIN_VIDEO_ASSET_HEIGHT;
+    nextWidth = Math.round(nextHeight * safeAspectRatio);
+  }
+  if (nextHeight > MAX_VIDEO_ASSET_HEIGHT) {
+    nextHeight = MAX_VIDEO_ASSET_HEIGHT;
+    nextWidth = Math.round(nextHeight * safeAspectRatio);
+  }
+
+  return {
+    height: clampNumber(nextHeight, MIN_VIDEO_ASSET_HEIGHT, MAX_VIDEO_ASSET_HEIGHT),
+    width: clampNumber(nextWidth, MIN_VIDEO_ASSET_WIDTH, MAX_VIDEO_ASSET_WIDTH)
+  };
+}
+
+function displaySizeForAsset(asset: VideoAssetParams): { width: number; height: number } {
+  if (loadedAssetHasMedia(asset)) {
+    return {
+      height: asset.height,
+      width: asset.width
+    };
+  }
+
+  const width = clampNumber(asset.width, MIN_VIDEO_ASSET_WIDTH, MAX_VIDEO_ASSET_WIDTH);
+  return {
+    height: Math.round(width / (DEFAULT_VIDEO_ASSET_WIDTH / DEFAULT_VIDEO_ASSET_HEIGHT)),
+    width
+  };
+}
+
+function loadedAssetHasMedia(asset: VideoAssetParams): boolean {
+  return Boolean(asset.assetRef || asset.thumbnailDataUrl);
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 export function isPrimaryPointerButton(button: number): boolean {

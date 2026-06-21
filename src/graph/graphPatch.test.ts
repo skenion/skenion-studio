@@ -6,6 +6,7 @@ import {
   createGraphNodeFromDefinition,
   type GraphPatch
 } from "./skenionGraph";
+import { UNRESOLVED_OBJECT_NODE_KIND } from "./objectTextNode";
 import {
   acceptGraphPatchQueue,
   applyGraphPatchToLocalGraph,
@@ -92,6 +93,59 @@ describe("graph patch model", () => {
     } satisfies GraphPatch;
     const nextSampleGraph = applyPatch(sampleGraph, targetPatch);
     expect(nextSampleGraph.edges).toHaveLength(sampleGraph.edges.length);
+  });
+
+  it("creates replaceNode patch operations and keeps only valid incident edges", () => {
+    const decode = sampleGraph.nodes.find((node) => node.id === "decode_1")!;
+    const replacement = {
+      ...decode,
+      params: {
+        objectText: "decode"
+      }
+    };
+    const replacePatch = {
+      type: "replaceNode",
+      nodeId: "decode_1",
+      node: replacement,
+      edgePolicy: "removeInvalidEdges"
+    } satisfies GraphPatch;
+    const replaced = applyPatch(sampleGraph, replacePatch);
+
+    expect(graphPatchFromStudioAction(replacePatch)).toEqual({
+      op: "replaceNode",
+      nodeId: "decode_1",
+      node: replacement,
+      edgePolicy: "removeInvalidEdges"
+    });
+    expect(replaced.nodes.find((node) => node.id === "decode_1")).toMatchObject({
+      kind: "core.video-decode",
+      params: {
+        objectText: "decode"
+      }
+    });
+    expect(replaced.edges).toHaveLength(sampleGraph.edges.length);
+
+    const unresolvedPatch = {
+      type: "replaceNode",
+      nodeId: "decode_1",
+      node: {
+        id: "decode_1",
+        kind: UNRESOLVED_OBJECT_NODE_KIND,
+        kindVersion: "0.1.0",
+        params: {
+          objectText: "nope",
+          diagnosticMessage: "nope is unavailable",
+          requestedKind: "nope"
+        },
+        ports: []
+      },
+      edgePolicy: "removeInvalidEdges"
+    } satisfies GraphPatch;
+    const unresolved = applyPatch(sampleGraph, unresolvedPatch);
+
+    expect(unresolved.nodes.find((node) => node.id === "decode_1")?.kind).toBe(UNRESOLVED_OBJECT_NODE_KIND);
+    expect(unresolved.edges.some((edge) => edge.from.node === "decode_1" || edge.to.node === "decode_1")).toBe(false);
+    expect(unresolved.edges).toHaveLength(sampleGraph.edges.length - 2);
   });
 
   it("creates graph patches with the runtime base revision", () => {

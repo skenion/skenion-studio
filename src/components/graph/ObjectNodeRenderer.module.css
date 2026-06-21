@@ -5,10 +5,9 @@
   min-width: max(32px, var(--object-port-min-width, 32px));
   max-width: 260px;
   min-height: 20px;
-  border: 1px solid #8a949f;
-  border-radius: 1px;
-  background: #f8f9fa;
-  color: #111827;
+  border: 1px solid var(--sk-border-strong);
+  background: var(--sk-surface);
+  color: var(--sk-text);
   box-shadow: none;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
@@ -31,8 +30,8 @@
 .chromeWidget.layoutEditable,
 .chromeWidget.selected,
 .chromeWidget:focus-within {
-  border-color: #8a949f;
-  background: var(--object-chrome-background, #f8f9fa);
+  border-color: var(--sk-border-strong);
+  background: var(--object-chrome-background, var(--sk-surface));
 }
 
 .chromeBox {
@@ -100,7 +99,7 @@
   border-color: transparent;
   background: transparent;
   box-shadow: none;
-  color: #111827;
+  color: var(--sk-text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -119,7 +118,7 @@
   min-width: 180px;
   min-height: 104px;
   border-color: rgb(0 0 0 / 22%);
-  color: #07130a;
+  color: var(--sk-text);
   box-shadow: none;
 }
 
@@ -135,15 +134,15 @@
   padding: 2px 5px;
   border: 1px solid rgb(0 0 0 / 18%);
   background: rgb(255 255 255 / 18%);
-  color: #06120b;
+  color: var(--sk-text);
   overflow-wrap: anywhere;
 }
 
 .messageObject {
   min-width: 90px;
-  border-color: #1f2933;
-  background: #f8f9fa;
-  color: #111827;
+  border-color: var(--sk-border-strong);
+  background: var(--sk-surface);
+  color: var(--sk-text);
   cursor: pointer;
 }
 
@@ -158,11 +157,11 @@
 }
 
 .bangObject {
-  --object-chrome-background: #f8fafc;
+  --object-chrome-background: var(--sk-surface);
   min-width: 26px;
   min-height: 26px;
   justify-content: center;
-  color: #111827;
+  color: var(--sk-text);
   cursor: pointer;
 }
 
@@ -195,9 +194,8 @@
   display: block;
   width: 18px;
   height: 18px;
-  border: 2px solid #4b5563;
-  border-radius: 999px;
-  background: #f8fafc;
+  border: 2px solid var(--sk-border-strong);
+  background: var(--sk-surface);
 }
 
 .bangActive {
@@ -206,10 +204,10 @@
 }
 
 .toggleObject {
-  --object-chrome-background: #f8f9fa;
+  --object-chrome-background: var(--sk-surface);
   min-width: 26px;
   min-height: 26px;
-  color: #111827;
+  color: var(--sk-text);
   cursor: pointer;
 }
 
@@ -224,9 +222,8 @@
   display: block;
   width: 18px;
   height: 18px;
-  border: 1px solid #374151;
-  border-radius: 1px;
-  background: #f8f9fa;
+  border: 1px solid var(--sk-border-strong);
+  background: var(--sk-surface);
 }
 
 .toggleSwitch::after {
@@ -234,18 +231,17 @@
   width: 10px;
   height: 10px;
   margin: 2px;
-  border-radius: 0;
   background: transparent;
   content: "";
   transition: transform 120ms ease;
 }
 
 .toggleOn {
-  background: #f8f9fa;
+  background: var(--sk-surface);
 }
 
 .toggleOn::after {
-  background: #111827;
+  background: var(--sk-text);
   transform: none;
 }
 
@@ -258,8 +254,8 @@
 
 .sliderObject {
   width: 210px;
-  border-color: #4b5563;
-  background: #f7f8fa;
+  border-color: var(--sk-border-strong);
+  background: var(--sk-surface);
 }
 
 .sliderObject .content {
@@ -283,8 +279,8 @@
 
 .valueObject {
   min-width: max(42px, var(--object-port-min-width, 32px));
-  border-color: #4b5563;
-  background: #f8f9fa;
+  border-color: var(--sk-border-strong);
+  background: var(--sk-surface);
 }
 
 .valueObject .content {
@@ -297,7 +293,7 @@
 .valueText {
   min-width: 0;
   overflow: hidden;
-  color: #111827;
+  color: var(--sk-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -309,7 +305,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #111827;
+  color: var(--sk-text);
   cursor: ew-resize;
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -333,36 +329,46 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 1px solid #4b5563;
+  border: 1px solid var(--sk-border-strong);
   flex: 0 0 auto;
 }
 
 .genericObject {
-  min-width: 116px;
-  border-left: 4px solid var(--node-accent, #868e96);
+  min-width: max(72px, var(--object-port-min-width, 32px));
+  border-color: var(--sk-border-strong);
+  background: var(--sk-surface);
+}
+
+.unresolvedObject {
+  border-color: #f08c00;
+  background: #fff3bf;
+  color: #5f3dc4;
 }
 
 .genericObject .content {
-  gap: 1px;
+  padding: 1px 6px;
 }
 
-.genericLabel {
+.genericText {
   min-width: 0;
   overflow: hidden;
-  color: #111827;
-  font-weight: 850;
+  color: var(--sk-text);
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.genericKind {
-  min-width: 0;
-  overflow: hidden;
-  color: #6b7280;
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.objectTextInput {
+  width: 100%;
+  min-width: 72px;
+  max-width: 240px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
 }
 
 .routingBadges {
@@ -377,7 +383,6 @@
 .routingBadges span {
   max-width: 128px;
   padding: 1px 4px;
-  border-radius: 3px;
   background: rgb(255 255 255 / 16%);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -385,32 +390,78 @@
 }
 
 .assetObject {
-  width: 220px;
-  border-color: #7c3aed;
-  background: #f5f3ff;
-  color: #24124d;
+  max-width: none;
+  border-color: #4b5563;
+  background: #111827;
+  color: #f8fafc;
 }
 
 .assetObject .content {
-  gap: 2px;
+  position: relative;
+  display: block;
+  height: 100%;
+  padding: 0;
 }
 
-.assetKind {
-  color: #5b21b6;
-  font-size: 10px;
-  text-transform: uppercase;
+.assetFrame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
-.assetName,
-.assetRef {
+.assetFileInput {
+  display: none;
+}
+
+.assetThumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.assetPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: #d1d5db;
+}
+
+.assetCaption {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  left: 8px;
   min-width: 0;
+  padding: 3px 5px;
+  background: rgb(17 24 39 / 68%);
+  color: #f8fafc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.assetRef {
-  color: #6b7280;
-  font-size: 10px;
-  font-weight: 600;
+.assetResizeHandle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  z-index: 7;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid #1f2937;
+  background: #f8fafc;
+  cursor: nwse-resize;
+}
+
+.assetResizeHandle::before {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid #4b5563;
+  border-bottom: 1px solid #4b5563;
+  content: "";
 }

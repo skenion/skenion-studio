@@ -66,6 +66,13 @@ export function graphPatchFromStudioAction(
         op: "removeNode",
         nodeId: patch.nodeId
       };
+    case "replaceNode":
+      return {
+        op: "replaceNode",
+        nodeId: patch.nodeId,
+        node: clone(patch.node),
+        edgePolicy: patch.edgePolicy
+      };
     case "addEdge":
       return {
         op: "addEdge",

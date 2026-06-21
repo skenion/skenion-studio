@@ -1,5 +1,6 @@
-import { Code, Modal, Stack, Text } from "@mantine/core";
+import { Code, Stack, Text } from "@mantine/core";
 import type { EdgeInspectorModel } from "../../graph/portSemantics";
+import { Dialog } from "../core/Dialog/Dialog";
 
 export function FeedbackPolicyDialog({
   edge,
@@ -11,7 +12,7 @@ export function FeedbackPolicyDialog({
   opened: boolean;
 }) {
   return (
-    <Modal onClose={onClose} opened={opened} radius="sm" title="Feedback Policy">
+    <Dialog onClose={onClose} opened={opened} title="Feedback Policy">
       <Stack gap="sm">
         <Text size="sm">
           v0.14 only records feedback as explicit v0.2 edge metadata. Runtime validation can classify the cycle, but it does not execute feedback paths yet.
@@ -32,6 +33,6 @@ export function FeedbackPolicyDialog({
           </Code>
         ) : null}
       </Stack>
-    </Modal>
+    </Dialog>
   );
 }

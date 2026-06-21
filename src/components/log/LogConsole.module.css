@@ -1,0 +1,57 @@
+.toolbar {
+  margin-bottom: 8px;
+}
+
+.console {
+  max-height: 58vh;
+  overflow: auto;
+  border: 1px solid #dbe1e8;
+  background: #101820;
+  color: #d9e2ec;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 86px 64px 72px minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 8px;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+  white-space: pre-wrap;
+}
+
+.line:last-child {
+  border-bottom: 0;
+}
+
+.timestamp {
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+
+.source {
+  color: #93c5fd;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.level {
+  color: #9ca3af;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.warning .level {
+  color: #fbbf24;
+}
+
+.error .level {
+  color: #f87171;
+}

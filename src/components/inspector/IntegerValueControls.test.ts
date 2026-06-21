@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { NumberInput } from "@mantine/core";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 import { IntegerValueControls } from "./IntegerValueControls";
 
 describe("IntegerValueControls", () => {
-  it("emits truncated finite integer value changes only", () => {
+  it("normalizes committed graph param edits to integers", () => {
     const changes: number[] = [];
     const element = IntegerValueControls({
       representation: "i32",
@@ -12,14 +12,12 @@ describe("IntegerValueControls", () => {
       onChange: (value) => changes.push(value),
       onRepresentationChange: () => undefined
     });
-    const input = findElementByType(element, NumberInput);
-    if (!input?.props.onChange) {
-      throw new Error("expected IntegerValueControls to render a NumberInput");
+    const input = findElementByType(element, DeferredNumberInput);
+    if (!input?.props.normalize || !input.props.onCommit) {
+      throw new Error("expected IntegerValueControls to render a DeferredNumberInput");
     }
 
-    input.props.onChange(33.8);
-    input.props.onChange("34");
-    input.props.onChange(Number.NaN);
+    input.props.onCommit(input.props.normalize(33.8));
 
     expect(changes).toEqual([33]);
   });
@@ -28,13 +26,23 @@ describe("IntegerValueControls", () => {
 function findElementByType(
   node: ReactNode,
   type: unknown
-): ReactElement<{ children?: ReactNode; onChange?: (value: unknown) => void; value?: unknown }> | null {
+): ReactElement<{
+  children?: ReactNode;
+  normalize?: (value: number) => number;
+  onCommit?: (value: number) => void;
+  value?: unknown;
+}> | null {
   if (!isValidElement(node)) {
     return null;
   }
 
   if (node.type === type) {
-    return node as ReactElement<{ children?: ReactNode; onChange?: (value: unknown) => void; value?: unknown }>;
+    return node as ReactElement<{
+      children?: ReactNode;
+      normalize?: (value: number) => number;
+      onCommit?: (value: number) => void;
+      value?: unknown;
+    }>;
   }
 
   const children = (node.props as { children?: ReactNode }).children;

@@ -26,9 +26,11 @@ export interface SkenionNodeData extends Record<string, unknown> {
   kind: string;
   kindVersion: string;
   layoutEditable?: boolean;
+  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void> | void;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
+  onObjectTextCommit?: (nodeId: string, text: string) => void;
   primaryFlow: DataFlow;
   runtimeControlEnabled?: boolean;
   runtimeControlPulseKey?: number;

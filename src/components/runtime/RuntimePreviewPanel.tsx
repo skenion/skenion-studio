@@ -40,16 +40,16 @@ export function RuntimePreviewPanel({
           Preview
         </Text>
         <Group gap={6} wrap="nowrap">
-          <Badge color={previewBadgeColor(previewState, previewStale)} radius="sm" variant="light">
+          <Badge color={previewBadgeColor(previewState, previewStale)} variant="light">
             {previewState}
           </Badge>
           {previewStale ? (
-            <Badge color="yellow" radius="sm" variant="light">
+            <Badge color="yellow" variant="light">
               stale
             </Badge>
           ) : null}
           {previewStatus ? (
-            <Badge color={previewStatus.controlLive ? "teal" : "yellow"} radius="sm" variant="light">
+            <Badge color={previewStatus.controlLive ? "teal" : "yellow"} variant="light">
               {previewStatus.controlLive ? "control live" : "control pending"}
             </Badge>
           ) : null}
@@ -74,19 +74,19 @@ export function RuntimePreviewPanel({
       </Code>
 
       <Group gap="xs" grow>
-        <Button disabled={!connected} leftSection={<RefreshCw size={15} />} loading={busyAction === "previewStatus"} onClick={onRefreshPreview} radius="sm" size="xs" variant="light">
+        <Button disabled={!connected} leftSection={<RefreshCw size={15} />} loading={busyAction === "previewStatus"} onClick={onRefreshPreview} size="xs" variant="light">
           Refresh Status
         </Button>
-        <Button disabled={!canStartPreview(previewActionState)} leftSection={<MonitorPlay size={15} />} loading={busyAction === "startPreview"} onClick={onStartPreview} radius="sm" size="xs" variant={previewState === "stopped" ? "filled" : "light"}>
+        <Button disabled={!canStartPreview(previewActionState)} leftSection={<MonitorPlay size={15} />} loading={busyAction === "startPreview"} onClick={onStartPreview} size="xs" variant={previewState === "stopped" ? "filled" : "light"}>
           Start Preview
         </Button>
       </Group>
 
       <Group gap="xs" grow>
-        <Button disabled={!canStopPreview(previewStatus)} leftSection={<Square size={15} />} loading={busyAction === "stopPreview"} onClick={onStopPreview} radius="sm" size="xs" variant="light">
+        <Button disabled={!canStopPreview(previewStatus)} leftSection={<Square size={15} />} loading={busyAction === "stopPreview"} onClick={onStopPreview} size="xs" variant="light">
           Stop Preview
         </Button>
-        <Button disabled={!canRestartPreview(previewActionState)} leftSection={<RotateCw size={15} />} loading={busyAction === "restartPreview"} onClick={onRestartPreview} radius="sm" size="xs" variant={previewButtonVariant(previewStatus)}>
+        <Button disabled={!canRestartPreview(previewActionState)} leftSection={<RotateCw size={15} />} loading={busyAction === "restartPreview"} onClick={onRestartPreview} size="xs" variant={previewButtonVariant(previewStatus)}>
           Restart Preview
         </Button>
       </Group>
@@ -94,7 +94,7 @@ export function RuntimePreviewPanel({
       {previewStatus?.diagnostics.length ? (
         <Stack gap={4}>
           {previewStatus.diagnostics.slice(0, 3).map((diagnostic) => (
-            <Alert color={diagnostic.severity === "error" ? "red" : "yellow"} key={diagnostic.message} radius="sm" variant="light">
+            <Alert color={diagnostic.severity === "error" ? "red" : "yellow"} key={diagnostic.message} variant="light">
               {diagnostic.message}
             </Alert>
           ))}

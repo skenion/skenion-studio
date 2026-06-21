@@ -1,10 +1,62 @@
 :root {
-  color: #1f2933;
-  background: #f3f5f7;
+  --font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --sk-bg: #f3f5f7;
+  --sk-surface: #ffffff;
+  --sk-surface-muted: #eef2f5;
+  --sk-surface-subtle: #eef2f7;
+  --sk-border: #dde2e8;
+  --sk-border-strong: #1f2933;
+  --sk-text: #1f2933;
+  --sk-text-muted: #6b7280;
+  --sk-shadow: rgb(31 41 51 / 12%);
+  --sk-blue: #1864ab;
+  --sk-blue-soft: #e7f5ff;
+  --sk-grid-dot: #d8dee6;
+  color: var(--sk-text);
+  background: var(--sk-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-mantine-color-scheme="light"]),
+  html:not([data-mantine-color-scheme="light"]) body {
+    background-color: var(--mantine-color-body, #1a1b1e);
+    color-scheme: dark;
+  }
+}
+
+html[data-mantine-color-scheme="dark"] {
+  --sk-bg: #141619;
+  --sk-surface: #1d2025;
+  --sk-surface-muted: #171a1f;
+  --sk-surface-subtle: #242933;
+  --sk-border: #343a46;
+  --sk-border-strong: #cbd5e1;
+  --sk-text: #e7edf5;
+  --sk-text-muted: #9ca3af;
+  --sk-shadow: rgb(0 0 0 / 28%);
+  --sk-blue: #74c0fc;
+  --sk-blue-soft: #172033;
+  --sk-grid-dot: #343a46;
+  background-color: var(--mantine-color-body, #1a1b1e);
+  color-scheme: dark;
+}
+
+html[data-mantine-color-scheme="dark"] body {
+  background-color: var(--mantine-color-body, #1a1b1e) !important;
+}
+
+html[data-mantine-color-scheme="light"] {
+  background-color: var(--mantine-color-body, #fff);
+  color-scheme: light;
+}
+
+html[data-mantine-color-scheme="light"] body {
+  background-color: var(--mantine-color-body, #fff) !important;
 }
 
 html,
@@ -18,35 +70,11 @@ body {
   min-width: 320px;
 }
 
-:where(.mantine-ActionIcon-root, .mantine-Button-root) {
-  border-color: transparent;
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: none;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease,
-    opacity 120ms ease;
-}
-
-:where(.mantine-ActionIcon-root, .mantine-Button-root)[data-variant="filled"] {
-  color: var(--mantine-color-blue-7);
-}
-
-:where(.mantine-ActionIcon-root, .mantine-Button-root)[data-selected] {
-  color: var(--mantine-color-blue-7);
-}
-
-:where(.mantine-ActionIcon-root, .mantine-Button-root):not(:disabled):not([data-disabled]):hover {
-  background: #eef2f7 !important;
-  background-color: #eef2f7 !important;
-}
-
 .studio-toolbar {
   height: 58px;
   padding: 0 14px;
-  border-bottom: 1px solid #dde2e8;
-  background: #ffffff;
+  border-bottom: 1px solid var(--sk-border);
+  background: var(--sk-surface);
 }
 
 .studio-mark {
@@ -54,18 +82,17 @@ body {
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid #1f2933;
-  border-radius: 7px;
-  background: #ffffff;
-  color: #1f2933;
+  border: 1px solid var(--sk-border-strong);
+  background: var(--sk-surface);
+  color: var(--sk-text);
   font-weight: 900;
 }
 
 .studio-main {
   position: relative;
-  height: calc(100vh - 58px);
+  height: calc(100vh - 88px);
   min-height: 540px;
-  background: #eef2f5;
+  background: var(--sk-surface-muted);
 }
 
 .studio-alert {
@@ -75,7 +102,7 @@ body {
   left: 50%;
   width: min(720px, calc(100% - 32px));
   transform: translateX(-50%);
-  box-shadow: 0 10px 28px rgb(31 41 51 / 12%);
+  box-shadow: 0 10px 28px var(--sk-shadow);
 }
 
 .panel-shell {
@@ -85,12 +112,12 @@ body {
 
 .palette-scroll,
 .aside-scroll {
-  height: calc(100vh - 132px);
+  height: calc(100vh - 162px);
 }
 
 .runtime-panel {
   padding-bottom: 12px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--sk-border);
 }
 
 .runtime-json {
@@ -110,7 +137,6 @@ body {
   flex: 0 0 auto;
   width: 9px;
   height: 9px;
-  border-radius: 2px;
 }
 
 .skenion-flow {
@@ -122,9 +148,8 @@ body {
   height: 320px;
   min-height: 260px;
   overflow: hidden;
-  border: 1px solid #dbe1e8;
-  border-radius: 8px;
-  background: #eef2f5;
+  border: 1px solid var(--sk-border);
+  background: var(--sk-surface-muted);
 }
 
 .help-flow .react-flow__node-skenion {
@@ -133,11 +158,10 @@ body {
 
 .connection-status {
   padding: 7px 10px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 8px 20px rgb(31 41 51 / 12%);
-  color: #1f2933;
+  border: 1px solid var(--sk-border);
+  background: color-mix(in srgb, var(--sk-surface) 94%, transparent);
+  box-shadow: 0 8px 20px var(--sk-shadow);
+  color: var(--sk-text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -148,19 +172,17 @@ body {
   display: grid;
   min-width: 168px;
   padding: 5px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #ffffff;
-  box-shadow: 0 14px 34px rgb(31 41 51 / 18%);
+  border: 1px solid var(--sk-border);
+  background: var(--sk-surface);
+  box-shadow: 0 14px 34px var(--sk-shadow);
 }
 
 .canvas-context-menu button {
   min-height: 28px;
   padding: 5px 8px;
   border: 0;
-  border-radius: 4px;
   background: transparent;
-  color: #1f2933;
+  color: var(--sk-text);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -168,7 +190,7 @@ body {
 }
 
 .canvas-context-menu button:hover {
-  background: #eef2f7;
+  background: var(--sk-surface-subtle);
 }
 
 .canvas-context-menu button.is-danger {
@@ -185,7 +207,7 @@ body {
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #1864ab !important;
+  stroke: var(--sk-blue) !important;
   stroke-width: var(--skenion-selected-edge-stroke-width, 2.75px) !important;
 }
 
@@ -194,15 +216,15 @@ body {
 }
 
 .react-flow__edge.selected .react-flow__edge-textbg {
-  fill: #e7f5ff;
-  stroke: #74c0fc;
+  fill: var(--sk-blue-soft);
+  stroke: var(--sk-blue);
   stroke-width: 1px;
 }
 
 .react-flow__edge.selected .react-flow__arrowhead polyline,
 .react-flow__edge.selected marker path {
-  fill: #1864ab;
-  stroke: #1864ab;
+  fill: var(--sk-blue);
+  stroke: var(--sk-blue);
 }
 
 .ports-table th,
@@ -212,11 +234,11 @@ body {
 
 @media (max-width: 900px) {
   .studio-main {
-    height: 620px;
+    height: 590px;
   }
 
   .palette-scroll,
   .aside-scroll {
-    height: 360px;
+    height: 330px;
   }
 }

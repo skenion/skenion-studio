@@ -1,4 +1,4 @@
-import { Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Group, Select, Stack, Text } from "@mantine/core";
 import {
   COLOR_REPRESENTATIONS,
   COLOR_SPACES,
@@ -6,6 +6,7 @@ import {
   type ColorSpace,
   type RgbaColor
 } from "../../graph/colorRgba";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 
 export interface ColorRgbaControlsProps {
   color: RgbaColor;
@@ -57,16 +58,14 @@ export function ColorRgbaControls({
       </Group>
       <Group grow>
         {(["R", "G", "B", "A"] as const).map((label, index) => (
-          <NumberInput
+          <DeferredNumberInput
             decimalScale={3}
             key={label}
             label={label}
             max={1}
             min={0}
-            onChange={(value) => {
-              if (typeof value !== "number" || !Number.isFinite(value)) {
-                return;
-              }
+            normalize={clampColorComponent}
+            onCommit={(value) => {
               const nextColor = [...color] as RgbaColor;
               nextColor[index] = value;
               onChange(nextColor);
@@ -79,4 +78,8 @@ export function ColorRgbaControls({
       </Group>
     </Stack>
   );
+}
+
+function clampColorComponent(value: number) {
+  return Math.min(1, Math.max(0, value));
 }

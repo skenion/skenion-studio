@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Group, Stack } from "@mantine/core";
-import { Gauge, PanelRightClose, Settings, Upload } from "lucide-react";
+import { PanelRightClose, ScrollText, Settings, Upload } from "lucide-react";
 import { IconButton } from "./IconButton";
 
 const meta = {
@@ -25,7 +25,7 @@ export const ToolbarStates: Story = {
   render: () => (
     <Group gap="xs">
       <IconButton icon={<Upload size={18} />} label="Upload" />
-      <IconButton color="blue" icon={<Gauge size={18} />} label="Runtime Control" />
+      <IconButton color="blue" icon={<ScrollText size={18} />} label="Logs" />
       <IconButton color="blue" icon={<PanelRightClose size={18} />} label="Inspector" selected />
       <IconButton icon={<Settings size={18} />} label="Settings" />
     </Group>

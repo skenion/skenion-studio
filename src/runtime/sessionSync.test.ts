@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  createDefaultViewStateForGraph,
+  type GraphDocumentV01,
+  type NodeDefinitionManifestV01,
+  type ViewStateV01
+} from "@skenion/contracts";
+import {
   nextLoadedGraphFingerprint,
   runtimeGraphFingerprint,
   runtimeSessionFingerprint,
@@ -7,23 +13,41 @@ import {
 } from "./sessionSync";
 import type { RuntimeSessionResponse } from "./types";
 
+const graph: GraphDocumentV01 = {
+  schema: "skenion.graph",
+  schemaVersion: "0.1.0",
+  id: "graph",
+  revision: "1",
+  nodes: [],
+  edges: []
+};
+const viewState: ViewStateV01 = createDefaultViewStateForGraph(graph);
+const nodes: NodeDefinitionManifestV01[] = [];
+
 const loadedSession = {
   ok: true,
-  loaded: true,
-  graphId: "graph",
-  graphRevision: "1",
-  sessionRevision: 1,
-  controlRevision: 0,
+  snapshot: {
+    sessionRevision: 1,
+    viewRevision: 1,
+    controlRevision: 0,
+    project: { graph, viewState, nodes },
+    diagnostics: [],
+    plan: null
+  },
   diagnostics: [],
-  plan: null,
   report: null
+} satisfies RuntimeSessionResponse;
+
+const emptySession = {
+  ...loadedSession,
+  snapshot: { ...loadedSession.snapshot, project: null }
 } satisfies RuntimeSessionResponse;
 
 describe("runtime session sync", () => {
   it("fingerprints loaded runtime sessions", () => {
     expect(runtimeGraphFingerprint("graph", "1")).toBe("graph@1");
     expect(runtimeSessionFingerprint(loadedSession)).toBe("graph@1");
-    expect(runtimeSessionFingerprint({ ...loadedSession, loaded: false })).toBeNull();
+    expect(runtimeSessionFingerprint(emptySession)).toBeNull();
   });
 
   it("marks graph changes as not synced", () => {
@@ -35,6 +59,6 @@ describe("runtime session sync", () => {
   it("updates the loaded fingerprint only after successful session load", () => {
     expect(nextLoadedGraphFingerprint(null, loadedSession, "graph@1")).toBe("graph@1");
     expect(nextLoadedGraphFingerprint("graph@1", { ...loadedSession, ok: false }, "graph@2")).toBe("graph@1");
-    expect(nextLoadedGraphFingerprint("graph@1", { ...loadedSession, loaded: false }, "graph@2")).toBe("graph@1");
+    expect(nextLoadedGraphFingerprint("graph@1", emptySession, "graph@2")).toBe("graph@1");
   });
 });

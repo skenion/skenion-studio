@@ -4,10 +4,11 @@ import {
   createPolymorphicComponent,
   type ButtonProps as MantineButtonProps
 } from "@mantine/core";
+import styles from "./Button.module.css";
 
 export type ButtonIntent = "neutral" | "primary" | "danger";
 
-export interface ButtonProps extends MantineButtonProps {
+export interface ButtonProps extends Omit<MantineButtonProps, "radius"> {
   intent?: ButtonIntent;
   selected?: boolean;
 }
@@ -26,9 +27,9 @@ function intentColor(intent: ButtonIntent) {
 
 function ButtonInner(
   {
+    className,
     color,
     intent = "neutral",
-    radius = "sm",
     selected = false,
     variant = "subtle",
     ...props
@@ -38,9 +39,9 @@ function ButtonInner(
   return (
     <MantineButton
       color={color ?? intentColor(intent)}
+      className={[styles.button, className].filter(Boolean).join(" ")}
       data-selected={selected || undefined}
       data-skenion-core-button="button"
-      radius={radius}
       ref={ref}
       variant={variant}
       {...props}

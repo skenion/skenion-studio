@@ -31,7 +31,7 @@ export function RuntimePatchPanel({
         <Text c="dimmed" size="xs">
           Patch Sync
         </Text>
-        <Badge color={patchBadgeColor(hasPendingPatch, patchConflict)} radius="sm" variant="light">
+        <Badge color={patchBadgeColor(hasPendingPatch, patchConflict)} variant="light">
           {patchBadgeLabel(hasPendingPatch, patchConflict)}
         </Badge>
       </Group>
@@ -53,7 +53,6 @@ export function RuntimePatchPanel({
           leftSection={<SendHorizontal size={15} />}
           loading={busyAction === "applyPatch"}
           onClick={onApplyPendingPatch}
-          radius="sm"
           size="xs"
           variant={hasPendingPatch ? "filled" : "light"}
         >
@@ -63,7 +62,6 @@ export function RuntimePatchPanel({
           disabled={!hasPendingPatch}
           leftSection={<X size={15} />}
           onClick={onClearPendingPatch}
-          radius="sm"
           size="xs"
           variant="light"
         >
@@ -72,7 +70,7 @@ export function RuntimePatchPanel({
       </Group>
 
       {patchConflict ? (
-        <Alert color="red" radius="sm" variant="light">
+        <Alert color="red" variant="light">
           {patchConflict}
         </Alert>
       ) : null}

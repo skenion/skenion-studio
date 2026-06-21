@@ -1,88 +1,76 @@
 // @vitest-environment happy-dom
-import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MantineProvider } from "@mantine/core";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GraphNodeV01 } from "@skenion/contracts";
+import { theme } from "../../theme";
 import { NodeInspector } from "./NodeInspector";
 
-const actEnvironment = globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean };
-actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
-
 describe("NodeInspector", () => {
-  let mountedRoot: Root | null = null;
-  let mountedContainer: HTMLDivElement | null = null;
-
-  afterEach(() => {
-    if (mountedRoot) {
-      act(() => {
-        mountedRoot?.unmount();
-      });
-    }
-    mountedContainer?.remove();
-    mountedRoot = null;
-    mountedContainer = null;
-    document.body.innerHTML = "";
-  });
-
-  it("keeps persistent object settings out of the inspect surface", () => {
+  it("renders persistent object settings inline in the inspect surface", () => {
     const html = renderToStaticMarkup(
-      createElement(MantineProvider, null, createElement(NodeInspector, props()))
+      createElement(MantineProvider, { theme }, createElement(NodeInspector, props()))
     );
 
-    expect(html).toContain("aria-label=\"Object Settings\"");
     expect(html).toContain("Float");
-    expect(html).not.toContain("Send name");
-    expect(html).not.toContain("Receive name");
+    expect(html).toContain("Send name");
+    expect(html).toContain("Receive name");
+    expect(html).not.toContain("aria-label=\"Object Settings\"");
   });
 
-  it("opens persistent object settings in a dialog", async () => {
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    mountedRoot = root;
-    mountedContainer = container;
+  it("renders message object settings when a message node is selected", () => {
+    const html = renderToStaticMarkup(
+      createElement(MantineProvider, { theme }, createElement(NodeInspector, props(messageNode())))
+    );
 
-    await act(async () => {
-      root.render(createElement(MantineProvider, null, createElement(NodeInspector, props())));
-    });
-
-    await clickButton(container, "Object Settings");
-
-    expect(document.body.textContent).toContain("Object Settings");
-    expect(document.body.textContent).toContain("Send name");
-    expect(document.body.textContent).toContain("Receive name");
+    expect(html).toContain("Message Graph Param");
+    expect(html).toContain("Send name");
+    expect(html).toContain("Receive name");
   });
 });
 
-async function clickButton(container: HTMLElement, label: string) {
-  const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-    candidate.textContent?.includes(label) || candidate.getAttribute("aria-label") === label
-  );
-  if (!button) {
-    throw new Error(`button not found: ${label}`);
-  }
-
-  await act(async () => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await Promise.resolve();
-  });
-}
-
-function props(): Parameters<typeof NodeInspector>[0] {
+function props(selectedNode = node()): Parameters<typeof NodeInspector>[0] {
   return {
     graphLocked: false,
-    node: node(),
+    node: selectedNode,
     onImportAsset: async () => undefined,
     onRemoveNode: () => undefined,
-    onSendRuntimeControl: () => undefined,
     onSetNodeParam: () => undefined,
     onSyncShaderInputs: () => undefined,
     runtimeAssetImportBusy: false,
-    runtimeAssetImportEnabled: false,
-    runtimeControlBusy: false,
-    runtimeControlEnabled: false
+    runtimeAssetImportEnabled: false
+  };
+}
+
+function messageNode(): GraphNodeV01 {
+  return {
+    id: "message_1",
+    kind: "core.message",
+    kindVersion: "0.1.0",
+    params: {
+      receiveName: "",
+      sendName: "",
+      value: ""
+    },
+    ports: [
+      {
+        id: "in",
+        direction: "input",
+        type: {
+          dataKind: "message.any",
+          flow: "event"
+        }
+      },
+      {
+        id: "out",
+        direction: "output",
+        type: {
+          dataKind: "message.any",
+          flow: "event"
+        }
+      }
+    ]
   };
 }
 

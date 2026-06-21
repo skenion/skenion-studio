@@ -1,30 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  ClockSourceListResponse,
-  ClockSourceSnapshot,
-  ClockSourceSnapshotResponse,
-  ClockStateV01,
-  GraphPatchEventV01,
-  GraphPatchHistoryV01,
-  GraphPatchV01
-} from "@skenion/contracts";
-import { createRuntimeClient, normalizeRuntimeUrl, RuntimeClientError } from "./client";
+import type { GraphPatchV01 } from "@skenion/contracts";
+import {
+  createRuntimeClient,
+  normalizeRuntimeUrl,
+  RuntimeClientError,
+  runtimeLogStreamUrl,
+  runtimeSessionEventsStreamUrl
+} from "./client";
 import type {
   RuntimeAsset,
   RuntimeAssetGetResponse,
   RuntimeAssetImportResponse,
   RuntimeAssetListResponse,
-  MidiClockSourceStartResponse,
-  MidiClockSourceStopResponse,
-  MidiInputListResponse,
   RuntimeControlEventResponse,
   RuntimeControlReadResponse,
   RuntimeControlStateResponse,
   RuntimeGeneratedShaderResponse,
+  RuntimeHistory,
+  RuntimeHistoryEntry,
+  RuntimeIoDeviceListResponse,
+  RuntimeLogSnapshotResponse,
   RuntimePatchResponse,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
-  RuntimeSessionProjectResponse,
   RuntimeSessionResponse,
   RuntimeTelemetrySnapshot
 } from "./types";
@@ -38,7 +36,15 @@ const project = {
     nodes: [],
     edges: []
   },
-  nodes: []
+  nodes: [],
+  viewState: {
+    schema: "skenion.view-state",
+    schemaVersion: "0.1.0",
+    canvas: {
+      nodes: {},
+      viewport: { x: 0, y: 0, zoom: 1 }
+    }
+  }
 } as RuntimeProjectPayload;
 
 const patch: GraphPatchV01 = {
@@ -60,6 +66,9 @@ describe("runtime client", () => {
   it("normalizes runtime URLs", () => {
     expect(normalizeRuntimeUrl(" http://localhost:3761/ ")).toBe("http://localhost:3761");
     expect(() => normalizeRuntimeUrl(" ")).toThrow(RuntimeClientError);
+    expect(runtimeSessionEventsStreamUrl("http://localhost:3761/")).toBe(
+      "http://localhost:3761/v0/session/events/stream"
+    );
   });
 
   it("parses runtime info responses", async () => {
@@ -124,9 +133,7 @@ describe("runtime client", () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
       String(_input).endsWith("/v0/session/history")
         ? jsonResponse(historyResponse())
-        : String(_input).endsWith("/v0/session/project")
-        ? jsonResponse(sessionProjectResponse())
-        : String(_input).endsWith("/v0/session/patch") ||
+        : String(_input).endsWith("/v0/session/mutate") ||
             String(_input).endsWith("/v0/session/undo") ||
             String(_input).endsWith("/v0/session/redo")
         ? jsonResponse(patchResponse())
@@ -135,12 +142,17 @@ describe("runtime client", () => {
     const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
 
     await client.getSession();
-    await client.getSessionProject();
     await client.loadSession(project);
     await client.validateSession();
     await client.planSession();
     await client.runSession(2);
-    await client.applySessionPatch(patch);
+    await client.mutateSession({ graphPatch: patch });
+    await client.mutateSession({
+      viewPatch: {
+        baseViewRevision: 1,
+        ops: [{ op: "setNodeView", nodeId: "value_1", view: viewStateResponse().canvas.nodes.value_1 ?? { x: 0, y: 0 } }]
+      }
+    });
     await client.getSessionHistory();
     await client.undoSessionPatch();
     await client.redoSessionPatch();
@@ -149,15 +161,16 @@ describe("runtime client", () => {
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(fetchMock).toHaveBeenCalledTimes(11);
     expect(calls[0]).toEqual(["http://runtime.local/v0/session", { method: "GET" }]);
-    expect(calls[1]).toEqual(["http://runtime.local/v0/session/project", { method: "GET" }]);
-    expect(calls[2][0]).toBe("http://runtime.local/v0/session/load");
-    expect(JSON.parse(String(calls[2][1].body))).toEqual(project);
-    expect(calls[3]).toEqual(["http://runtime.local/v0/session/validate", { method: "POST" }]);
-    expect(calls[4]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
-    expect(calls[5][0]).toBe("http://runtime.local/v0/session/run");
-    expect(JSON.parse(String(calls[5][1].body))).toEqual({ frames: 2 });
-    expect(calls[6][0]).toBe("http://runtime.local/v0/session/patch");
-    expect(JSON.parse(String(calls[6][1].body))).toEqual(patch);
+    expect(calls[1][0]).toBe("http://runtime.local/v0/session/load");
+    expect(JSON.parse(String(calls[1][1].body))).toEqual(project);
+    expect(calls[2]).toEqual(["http://runtime.local/v0/session/validate", { method: "POST" }]);
+    expect(calls[3]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
+    expect(calls[4][0]).toBe("http://runtime.local/v0/session/run");
+    expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
+    expect(calls[5][0]).toBe("http://runtime.local/v0/session/mutate");
+    expect(JSON.parse(String(calls[5][1].body))).toEqual({ graphPatch: patch });
+    expect(calls[6][0]).toBe("http://runtime.local/v0/session/mutate");
+    expect(JSON.parse(String(calls[6][1].body))).toMatchObject({ viewPatch: { baseViewRevision: 1 } });
     expect(calls[7]).toEqual(["http://runtime.local/v0/session/history", { method: "GET" }]);
     expect(calls[8]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
     expect(calls[9]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
@@ -333,7 +346,7 @@ describe("runtime client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(calls[0][0]).toBe("http://runtime.local/v0/assets/import");
     expect((calls[0][1].body as FormData).get("file")).toBe(file);
-    expect((calls[0][1].body as FormData).get("kind")).toBe("video");
+    expect((calls[0][1].body as FormData).get("kind")).toBeNull();
     expect((calls[1][1].body as FormData).get("kind")).toBeNull();
     expect(calls[2]).toEqual(["http://runtime.local/v0/assets", { method: "GET" }]);
     expect(calls[3]).toEqual(["http://runtime.local/v0/assets/asset%2Fwith%20space", { method: "GET" }]);
@@ -348,84 +361,45 @@ describe("runtime client", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/session/telemetry", { method: "GET" });
   });
 
-  it("calls runtime clock source endpoints", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-      String(_input).endsWith("/v0/clock/sources")
-        ? jsonResponse(clockSourceListResponse())
-        : String(_input).endsWith("/v0/clock/midi/inputs")
-        ? jsonResponse(midiInputListResponse())
-        : String(_input).endsWith("/v0/clock/midi/start")
-        ? jsonResponse(midiClockSourceStartResponse())
-        : String(_input).endsWith("/v0/clock/midi/stop")
-        ? jsonResponse(midiClockSourceStopResponse())
-        : jsonResponse(clockSourceSnapshotResponse())
-    );
-    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+  it("calls runtime log snapshot endpoint and builds stream URLs", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(runtimeLogSnapshotResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local/", fetchImpl: fetchMock as typeof fetch });
 
-    await client.listClockSources();
-    await client.getClockSource("midi/clock main");
-    await client.listMidiInputs();
-    await client.startMidiClockSource({
-      inputPortIndex: 2,
-      sourceId: "midi-clock-main",
-      timeSignature: { numerator: 4, denominator: 4 }
+    await expect(client.getRuntimeLogs()).resolves.toMatchObject({
+      events: [
+        {
+          code: "io-device-enumeration-failed",
+          level: "error",
+          source: "runtime"
+        }
+      ],
+      schema: "skenion.runtime.logs"
     });
-    await client.stopMidiClockSource({ sourceId: "midi-clock-main" });
 
-    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(calls[0]).toEqual(["http://runtime.local/v0/clock/sources", { method: "GET" }]);
-    expect(calls[1]).toEqual(["http://runtime.local/v0/clock/sources/midi%2Fclock%20main", { method: "GET" }]);
-    expect(calls[2]).toEqual(["http://runtime.local/v0/clock/midi/inputs", { method: "GET" }]);
-    expect(calls[3][0]).toBe("http://runtime.local/v0/clock/midi/start");
-    expect(JSON.parse(String(calls[3][1].body))).toEqual({
-      inputPortIndex: 2,
-      sourceId: "midi-clock-main",
-      timeSignature: { numerator: 4, denominator: 4 }
-    });
-    expect(calls[4][0]).toBe("http://runtime.local/v0/clock/midi/stop");
-    expect(JSON.parse(String(calls[4][1].body))).toEqual({ sourceId: "midi-clock-main" });
+    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/runtime/logs", { method: "GET" });
+    expect(runtimeLogStreamUrl("http://runtime.local/")).toBe("http://runtime.local/v0/runtime/logs/stream");
   });
 
-  it("accepts runtime clock source responses with authority metadata", async () => {
+  it("calls runtime IO discovery endpoint", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(runtimeIoDeviceListResponse()));
+    const client = createRuntimeClient({ baseUrl: "http://runtime.local", fetchImpl: fetchMock as typeof fetch });
+
+    await client.listIoDevices();
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(calls[0]).toEqual(["http://runtime.local/v0/io/devices", { method: "GET" }]);
+  });
+
+  it("accepts runtime IO device responses", async () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
-      fetchImpl: vi.fn(async (_input: RequestInfo | URL) =>
-        String(_input).endsWith("/v0/clock/midi/inputs")
-          ? jsonResponse(midiInputListResponse({ inputs: [] }))
-          : String(_input).endsWith("/v0/clock/midi/start")
-          ? jsonResponse(midiClockSourceStartResponse({ diagnostics: [{ severity: "warning", code: "clock-source-already-running", message: "source is already running" }] }))
-          : jsonResponse(
-              clockSourceListResponse({
-                sources: [
-                  clockSourceSnapshot({
-                    latestSnapshot: clockState({
-                      lastUpdateHostTimeNs: undefined,
-                      timecode: { authority: "estimated", source: "midi-clock-main", value: "00:00:00:00" }
-                    })
-                  })
-                ]
-              })
-            )
-      ) as typeof fetch
+      fetchImpl: vi.fn(async () => jsonResponse(runtimeIoDeviceListResponse({ devices: [] }))) as typeof fetch
     });
 
-    await expect(client.listClockSources()).resolves.toMatchObject({
-      sources: [
-        {
-          latestSnapshot: {
-            songPositionSixteenth: { authority: "authoritative" },
-            tempoBpm: { authority: "unavailable" }
-          }
-        }
-      ]
-    });
-    await expect(client.listMidiInputs()).resolves.toMatchObject({
+    await expect(client.listIoDevices()).resolves.toMatchObject({
       ok: true,
-      inputs: []
-    });
-    await expect(client.startMidiClockSource({ inputPortIndex: 0, sourceId: "midi-clock-main" })).resolves.toMatchObject({
-      diagnostics: [{ code: "clock-source-already-running" }]
+      devices: []
     });
   });
 
@@ -639,18 +613,17 @@ describe("runtime client", () => {
       fetchImpl: vi.fn(async () => jsonResponse(patchResponse())) as typeof fetch
     });
 
-    await expect(client.applySessionPatch(patch)).resolves.toMatchObject({
+    await expect(client.mutateSession({ graphPatch: patch })).resolves.toMatchObject({
       ok: true,
       applied: true,
       conflict: false,
-      graph: {
-        revision: "2"
-      },
-      session: {
-        graphRevision: "2"
-      },
-      event: {
-        kind: "apply"
+      snapshot: {
+        project: {
+          graph: {
+            revision: "2"
+          }
+        },
+        sessionRevision: 2
       },
       history: {
         undoDepth: 1
@@ -663,18 +636,16 @@ describe("runtime client", () => {
       baseUrl: "http://runtime.local",
       fetchImpl: vi.fn(async (_input: RequestInfo | URL) =>
         String(_input).endsWith("/v0/session/history")
-          ? jsonResponse(historyResponse({ canUndo: false, undoDepth: 0, events: [] }))
-          : jsonResponse(patchResponse({ event: null }))
+          ? jsonResponse(historyResponse({ canUndo: false, undoDepth: 0, entries: [] }))
+          : jsonResponse(patchResponse())
       ) as typeof fetch
     });
 
-    await expect(client.applySessionPatch(patch)).resolves.toMatchObject({
-      event: null
-    });
+    await expect(client.mutateSession({ graphPatch: patch })).resolves.toMatchObject({ applied: true });
     await expect(client.getSessionHistory()).resolves.toMatchObject({
       canUndo: false,
       undoDepth: 0,
-      events: []
+      entries: []
     });
   });
 
@@ -684,20 +655,24 @@ describe("runtime client", () => {
       fetchImpl: vi.fn(async () =>
         jsonResponse(
           sessionResponse({
-            loaded: false,
-            graphId: null,
-            graphRevision: null,
-            sessionRevision: 0,
-            controlRevision: 0
+            snapshot: {
+              sessionRevision: 0,
+              viewRevision: 0,
+              controlRevision: 0,
+              project: null,
+              diagnostics: [],
+              plan: null
+            }
           })
         )
       ) as typeof fetch
     });
 
     await expect(client.getSession()).resolves.toMatchObject({
-      loaded: false,
-      graphId: null,
-      graphRevision: null
+      snapshot: {
+        project: null,
+        sessionRevision: 0
+      }
     });
   });
 
@@ -707,15 +682,18 @@ describe("runtime client", () => {
       fetchImpl: vi.fn(async () =>
         jsonResponse(
           sessionResponse({
-            plan: { graphId: "test" },
-            report: { graphId: "test", frameCount: 2 }
-          } as Partial<RuntimeSessionResponse>)
+            snapshot: {
+              ...sessionResponse().snapshot,
+              plan: { graphId: "test", graphRevision: "1", nodes: [], edges: [], groups: [] }
+            },
+            report: { graphId: "test", graphRevision: "1", frameCount: 2, frames: [] }
+          })
         )
       ) as typeof fetch
     });
 
     await expect(client.runSession(2)).resolves.toMatchObject({
-      plan: { graphId: "test" },
+      snapshot: { plan: { graphId: "test" } },
       report: { frameCount: 2 }
     });
   });
@@ -828,22 +806,20 @@ describe("runtime client", () => {
     await expect(client.getSession()).rejects.toThrow("unsupported response shape");
   });
 
-  it("rejects unsupported runtime session project response shapes", async () => {
-    const invalidProjectClient = createRuntimeClient({
+  it("rejects legacy runtime session response duplicate shapes", async () => {
+    const legacySessionClient = createRuntimeClient({
       baseUrl: "http://runtime.local",
       fetchImpl: vi.fn(async () =>
         jsonResponse(
-          sessionProjectResponse({
-            project: {
-              ...project,
-              nodes: [{} as RuntimeProjectPayload["nodes"][number]]
-            }
-          })
+          {
+            ...sessionResponse(),
+            graphId: "test"
+          }
         )
       ) as typeof fetch
     });
 
-    await expect(invalidProjectClient.getSessionProject()).rejects.toThrow("unsupported response shape");
+    await expect(legacySessionClient.getSession()).rejects.toThrow("unsupported response shape");
   });
 
   it("rejects unsupported runtime patch response shapes", async () => {
@@ -852,34 +828,25 @@ describe("runtime client", () => {
       fetchImpl: vi.fn(async () =>
         jsonResponse(
           patchResponse({
-            graph: {
-              schema: "skenion.graph",
-              schemaVersion: "0.1.0",
-              id: "test",
-              revision: "2",
-              nodes: []
-            } as unknown as RuntimePatchResponse["graph"]
+            snapshot: {
+              ...patchResponse().snapshot,
+              project: {
+                ...patchResponse().snapshot.project!,
+                graph: {
+                  schema: "skenion.graph",
+                  schemaVersion: "0.1.0",
+                  id: "test",
+                  revision: "2",
+                  nodes: []
+                } as unknown as NonNullable<RuntimePatchResponse["snapshot"]["project"]>["graph"]
+              }
+            }
           })
         )
       ) as typeof fetch
     });
 
-    await expect(invalidGraphClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
-
-    const invalidEventClient = createRuntimeClient({
-      baseUrl: "http://runtime.local",
-      fetchImpl: vi.fn(async () =>
-        jsonResponse(
-          patchResponse({
-            event: {
-              ...patchEvent(),
-              kind: "reverse"
-            } as unknown as RuntimePatchResponse["event"]
-          })
-        )
-      ) as typeof fetch
-    });
-    await expect(invalidEventClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
+    await expect(invalidGraphClient.mutateSession({ graphPatch: patch })).rejects.toThrow("unsupported response shape");
 
     const invalidHistoryClient = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -894,7 +861,7 @@ describe("runtime client", () => {
         )
       ) as typeof fetch
     });
-    await expect(invalidHistoryClient.applySessionPatch(patch)).rejects.toThrow("unsupported response shape");
+    await expect(invalidHistoryClient.mutateSession({ graphPatch: patch })).rejects.toThrow("unsupported response shape");
   });
 
   it("rejects unsupported runtime control response shapes", async () => {
@@ -1114,92 +1081,27 @@ describe("runtime client", () => {
     await expect(invalidGetClient.getAsset("asset_1")).rejects.toThrow("unsupported response shape");
   });
 
-  it("rejects unsupported runtime clock source response shapes", async () => {
-    const invalidListShapes: unknown[] = [
-      null,
-      { ok: true, diagnostics: [] },
-      { ok: true, sources: "none", diagnostics: [] },
-      clockSourceListResponse({
-        sources: [{ ...clockSourceSnapshot(), status: "paused" as ClockSourceSnapshot["status"] }]
-      }),
-      clockSourceListResponse({
-        sources: [
-          {
-            ...clockSourceSnapshot(),
-            latestSnapshot: 1 as unknown as ClockStateV01
-          }
-        ]
-      }),
-      clockSourceListResponse({
-        sources: [
-          {
-            ...clockSourceSnapshot(),
-            latestSnapshot: {
-              ...clockState(),
-              capabilities: [1]
-            } as unknown as ClockStateV01
-          }
-        ]
-      }),
-      clockSourceListResponse({
-        sources: [
-          clockSourceSnapshot({
-            latestSnapshot: clockState({
-              timecode: { authority: "estimated", source: "midi-clock-main", value: 12 } as unknown as ClockStateV01["timecode"]
-            })
-          })
-        ]
-      }),
-      clockSourceListResponse({
-        diagnostics: [{ severity: "info", code: "hidden", message: "wrong severity" }] as unknown as ClockSourceListResponse["diagnostics"]
-      })
-    ];
-
-    for (const shape of invalidListShapes) {
-      const client = createRuntimeClient({
-        baseUrl: "http://runtime.local",
-        fetchImpl: vi.fn(async () => jsonResponse(shape)) as typeof fetch
-      });
-      await expect(client.listClockSources()).rejects.toThrow("unsupported response shape");
-    }
-
-    const invalidSourceClient = createRuntimeClient({
-      baseUrl: "http://runtime.local",
-      fetchImpl: vi.fn(async () =>
-        jsonResponse(clockSourceSnapshotResponse({ source: { ...clockSourceSnapshot(), sourceKind: 42 } as unknown as ClockSourceSnapshot }))
-      ) as typeof fetch
-    });
-    await expect(invalidSourceClient.getClockSource("midi-clock-main")).rejects.toThrow("unsupported response shape");
-
-    const invalidInputClient = createRuntimeClient({
+  it("rejects unsupported runtime IO device response shapes", async () => {
+    const invalidIoDeviceClient = createRuntimeClient({
       baseUrl: "http://runtime.local",
       fetchImpl: vi.fn(async () =>
         jsonResponse(
-          midiInputListResponse({
-            inputs: [{ backend: "midir", id: "device-1", index: 0, name: "USB MIDI", stable: true } as unknown as MidiInputListResponse["inputs"][number]]
+          runtimeIoDeviceListResponse({
+            devices: [
+              {
+                backend: "midir",
+                directions: ["sideways"],
+                id: "device-1",
+                name: "USB MIDI",
+                stable: true,
+                transportKind: "midi"
+              }
+            ] as unknown as RuntimeIoDeviceListResponse["devices"]
           })
         )
       ) as typeof fetch
     });
-    await expect(invalidInputClient.listMidiInputs()).rejects.toThrow("unsupported response shape");
-
-    const invalidStartClient = createRuntimeClient({
-      baseUrl: "http://runtime.local",
-      fetchImpl: vi.fn(async () =>
-        jsonResponse(midiClockSourceStartResponse({ source: { ...clockSourceSnapshot(), diagnostics: [{ severity: "debug", code: "x", message: "bad" }] } as unknown as ClockSourceSnapshot }))
-      ) as typeof fetch
-    });
-    await expect(invalidStartClient.startMidiClockSource({ inputPortIndex: 0, sourceId: "midi-clock-main" })).rejects.toThrow(
-      "unsupported response shape"
-    );
-
-    const invalidStopClient = createRuntimeClient({
-      baseUrl: "http://runtime.local",
-      fetchImpl: vi.fn(async () => jsonResponse({ ok: true, source: null, diagnostics: "none" })) as typeof fetch
-    });
-    await expect(invalidStopClient.stopMidiClockSource({ sourceId: "midi-clock-main" })).rejects.toThrow(
-      "unsupported response shape"
-    );
+    await expect(invalidIoDeviceClient.listIoDevices()).rejects.toThrow("unsupported response shape");
   });
 
   it("rejects unsupported runtime telemetry shapes", async () => {
@@ -1343,27 +1245,27 @@ describe("runtime client", () => {
 function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): RuntimeSessionResponse {
   return {
     ok: true,
-    loaded: true,
-    graphId: "test",
-    graphRevision: "1",
-    sessionRevision: 1,
-    controlRevision: 0,
+    snapshot: {
+      sessionRevision: 1,
+      viewRevision: 1,
+      controlRevision: 0,
+      project: {
+        graph: {
+          schema: "skenion.graph",
+          schemaVersion: "0.1.0",
+          id: "test",
+          revision: "1",
+          nodes: [],
+          edges: []
+        },
+        viewState: viewStateResponse(),
+        nodes: []
+      },
+      diagnostics: [],
+      plan: null
+    },
     diagnostics: [],
-    plan: null,
     report: null,
-    ...overrides
-  };
-}
-
-function sessionProjectResponse(
-  overrides: Partial<RuntimeSessionProjectResponse> = {}
-): RuntimeSessionProjectResponse {
-  return {
-    ok: true,
-    loaded: true,
-    project,
-    session: sessionResponse(),
-    diagnostics: [],
     ...overrides
   };
 }
@@ -1373,30 +1275,45 @@ function patchResponse(overrides: Partial<RuntimePatchResponse> = {}): RuntimePa
     ok: true,
     applied: true,
     conflict: false,
-    graph: {
-      schema: "skenion.graph",
-      schemaVersion: "0.1.0",
-      id: "test",
-      revision: "2",
-      nodes: [],
-      edges: []
+    snapshot: {
+      ...sessionResponse().snapshot,
+      sessionRevision: 2,
+      project: {
+        ...sessionResponse().snapshot.project!,
+        graph: {
+          ...sessionResponse().snapshot.project!.graph,
+          revision: "2"
+        }
+      }
     },
-    session: sessionResponse({
-      graphRevision: "2",
-      sessionRevision: 2
-    }),
-    event: patchEvent(),
     history: historyResponse(),
     diagnostics: [],
     ...overrides
   };
 }
 
-function historyResponse(overrides: Partial<GraphPatchHistoryV01> = {}): GraphPatchHistoryV01 {
+function viewStateResponse() {
   return {
-    schema: "skenion.graph.patch.history",
+    schema: "skenion.view-state",
     schemaVersion: "0.1.0",
-    events: [patchEvent()],
+    canvas: {
+      nodes: {
+        value_1: { x: 0, y: 0 }
+      },
+      viewport: {
+        x: 0,
+        y: 0,
+        zoom: 1
+      }
+    }
+  } as const;
+}
+
+function historyResponse(overrides: Partial<RuntimeHistory> = {}): RuntimeHistory {
+  return {
+    schema: "skenion.runtime.history",
+    schemaVersion: "0.1.0",
+    entries: [historyEntry()],
     canUndo: true,
     canRedo: false,
     undoDepth: 1,
@@ -1501,6 +1418,32 @@ function previewResponse(overrides: Partial<RuntimePreviewStatus> = {}): Runtime
   };
 }
 
+function runtimeLogSnapshotResponse(
+  overrides: Partial<RuntimeLogSnapshotResponse> = {}
+): RuntimeLogSnapshotResponse {
+  return {
+    schema: "skenion.runtime.logs",
+    schemaVersion: "0.1.0",
+    ok: true,
+    events: [
+      {
+        id: 1,
+        timestamp: "unix-ms:1",
+        source: "runtime",
+        level: "error",
+        code: "io-device-enumeration-failed",
+        message: "failed to enumerate IO devices"
+      }
+    ],
+    retention: {
+      replayLimit: 200,
+      replayLevels: ["warning", "error"]
+    },
+    diagnostics: [],
+    ...overrides
+  };
+}
+
 function telemetryResponse(overrides: Partial<RuntimeTelemetrySnapshot> = {}): RuntimeTelemetrySnapshot {
   return {
     schema: "skenion.runtime.telemetry",
@@ -1569,72 +1512,17 @@ function generatedShaderResponse(
   };
 }
 
-function clockState(overrides: Partial<ClockStateV01> = {}): ClockStateV01 {
-  return {
-    bar: { authority: "derived", source: "midi-clock-main", value: 2 },
-    beat: { authority: "derived", source: "midi-clock-main", value: 1 },
-    capabilities: ["running", "tick", "ppq-position", "song-position", "bar-beat", "time-signature"],
-    division: { authority: "derived", source: "midi-clock-main", value: 1 },
-    lastUpdateHostTimeNs: 1234,
-    latencySeconds: { authority: "unavailable", source: "midi-clock-main", value: null },
-    phase01: { authority: "derived", source: "midi-clock-main", value: 0.25 },
-    ppqPosition: { authority: "derived", source: "midi-clock-main", value: 4.5 },
-    running: { authority: "authoritative", source: "midi-clock-main", value: true },
-    sampleFrame: { authority: "unavailable", source: "midi-clock-main", value: null },
-    sampleRate: { authority: "unavailable", source: "midi-clock-main", value: null },
-    songPositionSixteenth: { authority: "authoritative", source: "midi-clock-main", value: 18 },
-    sourceId: "midi-clock-main",
-    sourceKind: "midi-clock",
-    tempoBpm: { authority: "unavailable", source: "midi-clock-main", value: null },
-    tickInDivision: { authority: "derived", source: "midi-clock-main", value: 0 },
-    tickIndex: { authority: "authoritative", source: "midi-clock-main", value: 108 },
-    timeSeconds: { authority: "unavailable", source: "midi-clock-main", value: null },
-    timeSignature: { authority: "authoritative", source: "midi-clock-main", value: { numerator: 4, denominator: 4 } },
-    timecode: { authority: "unavailable", source: "midi-clock-main", value: null },
-    ...overrides
-  };
-}
-
-function clockSourceSnapshot(overrides: Partial<ClockSourceSnapshot> = {}): ClockSourceSnapshot {
+function runtimeIoDeviceListResponse(overrides: Partial<RuntimeIoDeviceListResponse> = {}): RuntimeIoDeviceListResponse {
   return {
     diagnostics: [],
-    latestSnapshot: clockState(),
-    sourceId: "midi-clock-main",
-    sourceKind: "midi-clock",
-    status: "running",
-    ...overrides
-  };
-}
-
-function clockSourceListResponse(overrides: Partial<ClockSourceListResponse> = {}): ClockSourceListResponse {
-  return {
-    diagnostics: [],
-    ok: true,
-    sources: [clockSourceSnapshot()],
-    ...overrides
-  };
-}
-
-function clockSourceSnapshotResponse(
-  overrides: Partial<ClockSourceSnapshotResponse> = {}
-): ClockSourceSnapshotResponse {
-  return {
-    diagnostics: [],
-    ok: true,
-    source: clockSourceSnapshot(),
-    ...overrides
-  };
-}
-
-function midiInputListResponse(overrides: Partial<MidiInputListResponse> = {}): MidiInputListResponse {
-  return {
-    diagnostics: [],
-    inputs: [
+    devices: [
       {
         backend: "midir",
-        id: null,
+        directions: ["input"],
+        id: "midir:input:0",
         index: 0,
         name: "USB MIDI",
+        transportKind: "midi",
         stable: false
       }
     ],
@@ -1643,43 +1531,13 @@ function midiInputListResponse(overrides: Partial<MidiInputListResponse> = {}): 
   };
 }
 
-function midiClockSourceStartResponse(
-  overrides: Partial<MidiClockSourceStartResponse> = {}
-): MidiClockSourceStartResponse {
+function historyEntry(overrides: Partial<RuntimeHistoryEntry> = {}): RuntimeHistoryEntry {
   return {
-    diagnostics: [],
-    ok: true,
-    source: clockSourceSnapshot(),
-    ...overrides
-  };
-}
-
-function midiClockSourceStopResponse(
-  overrides: Partial<MidiClockSourceStopResponse> = {}
-): MidiClockSourceStopResponse {
-  return {
-    diagnostics: [],
-    ok: true,
-    source: clockSourceSnapshot({ status: "stopped" }),
-    ...overrides
-  };
-}
-
-function patchEvent(overrides: Partial<GraphPatchEventV01> = {}): GraphPatchEventV01 {
-  return {
-    schema: "skenion.graph.patch.event",
-    schemaVersion: "0.1.0",
-    id: "event_000001",
+    id: "history_000001",
     sequence: 1,
     kind: "apply",
-    patch,
-    inversePatch: {
-      ...patch,
-      id: "inverse_patch_1",
-      baseRevision: "2"
-    },
-    revisionBefore: "1",
-    revisionAfter: "2",
+    mutation: { graphPatch: patch },
+    inverseMutation: { graphPatch: { ...patch, id: "inverse_patch_1", baseRevision: "2" } },
     createdAt: "unix-ms:0",
     ...overrides
   };

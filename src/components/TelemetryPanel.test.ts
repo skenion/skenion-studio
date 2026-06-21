@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MantineProvider } from "@mantine/core";
 import { describe, expect, it } from "vitest";
+import { theme } from "../theme";
 import { TelemetryPanel } from "./TelemetryPanel";
 import type { RuntimeTelemetrySnapshot } from "../runtime/types";
 
@@ -66,7 +67,7 @@ describe("TelemetryPanel", () => {
 
 function renderPanel(telemetry: RuntimeTelemetrySnapshot | null): string {
   return renderToStaticMarkup(
-    createElement(MantineProvider, null, createElement(TelemetryPanel, { telemetry }))
+    createElement(MantineProvider, { theme }, createElement(TelemetryPanel, { telemetry }))
   );
 }
 

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { GraphNodeV01 } from "@skenion/contracts";
 import {
   defaultBangParams,
+  DEFAULT_BANG_RADIUS,
   defaultSliderFloatParams,
   defaultToggleControlParams,
   isBangControlNode,
   isSliderFloatNode,
   isToggleControlNode,
+  readBangParams,
   readPanelLabelParam,
   readSliderFloatParams,
   runtimeControlValueForPanelNode
@@ -44,7 +46,7 @@ describe("panel control graph helpers", () => {
   });
 
   it("provides defaults and fallback panel params", () => {
-    expect(defaultBangParams()).toEqual({ label: "Bang" });
+    expect(defaultBangParams()).toEqual({ label: "Bang", radius: DEFAULT_BANG_RADIUS });
     expect(defaultSliderFloatParams()).toEqual({
       label: "Value",
       max: 1,
@@ -56,6 +58,11 @@ describe("panel control graph helpers", () => {
     expect(defaultToggleControlParams()).toEqual({ label: "Enabled", value: false, widget: "toggle" });
     expect(readPanelLabelParam(node("core.bang", {}))).toBe("node_1");
     expect(readPanelLabelParam(node("core.bang", { label: "" }))).toBe("node_1");
+    expect(readBangParams(node("core.bang", { radius: 0 }))).toEqual({ label: "node_1", radius: "0px" });
+    expect(readBangParams(node("core.bang", { radius: "0" }))).toEqual({ label: "node_1", radius: "0px" });
+    expect(readBangParams(node("core.bang", { label: "Fire", radius: "50%" }))).toEqual({ label: "Fire", radius: "50%" });
+    expect(readBangParams(node("core.bang", { radius: null }))).toEqual({ label: "node_1", radius: DEFAULT_BANG_RADIUS });
+    expect(readBangParams(node("core.bang", { radius: "bad" }))).toEqual({ label: "node_1", radius: DEFAULT_BANG_RADIUS });
     expect(readSliderFloatParams(node("core.float", { value: "bad", min: 2, max: 1, step: 0, widget: "slider" }))).toEqual({
       label: "node_1",
       value: 0,

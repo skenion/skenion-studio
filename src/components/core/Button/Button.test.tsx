@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { theme } from "../../../theme";
 import { Button } from "./Button";
 
 let container: HTMLDivElement | null = null;
@@ -41,7 +42,7 @@ describe("Button", () => {
 
 function renderButton(node: React.ReactNode): HTMLButtonElement {
   act(() => {
-    root?.render(<MantineProvider>{node}</MantineProvider>);
+    root?.render(<MantineProvider theme={theme}>{node}</MantineProvider>);
   });
 
   const button = container?.querySelector("button");

@@ -1,19 +1,13 @@
 import {
   validateGraphDocument,
-  validateGraphPatchEvent,
-  validateGraphPatchHistory
+  validateGraphPatch,
+  validateViewState
 } from "@skenion/contracts";
-import type { GraphPatchHistoryV01 } from "@skenion/contracts";
 import type {
   RuntimeApiResponse,
   RuntimeAssetGetResponse,
   RuntimeAssetImportResponse,
   RuntimeAssetListResponse,
-  ClockSourceListResponse,
-  ClockSourceSnapshotResponse,
-  ClockStateV01,
-  ClockFieldV01,
-  ClockTimeSignatureV01,
   RuntimeControlEventRequest,
   RuntimeControlEventResponse,
   RuntimeControlMessage,
@@ -23,19 +17,20 @@ import type {
   RuntimeControlValue,
   RuntimeHealth,
   RuntimeInfo,
-  MidiClockSourceStartRequest,
-  MidiClockSourceStartResponse,
-  MidiClockSourceStopRequest,
-  MidiClockSourceStopResponse,
-  MidiInputListResponse,
+  RuntimeDiagnosticSeverity,
+  RuntimeLogEvent,
+  RuntimeLogSnapshotResponse,
+  RuntimeIoDeviceListResponse,
   RuntimeGeneratedShaderResponse,
+  RuntimeHistory,
+  RuntimeMutationRequest,
   RuntimePatchResponse,
   RuntimePreviewStartRequest,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
-  RuntimeSessionPatchRequest,
-  RuntimeSessionProjectResponse,
+  RuntimeSessionEvent,
   RuntimeSessionResponse,
+  RuntimeSessionSnapshot,
   RuntimeTelemetrySnapshot
 } from "./types";
 
@@ -58,17 +53,17 @@ const SHADER_DIAGNOSTIC_SOURCES = new Set(["user", "generated", "runtime"]);
 export interface RuntimeClient {
   getHealth: () => Promise<RuntimeHealth>;
   getRuntimeInfo: () => Promise<RuntimeInfo>;
+  getRuntimeLogs: () => Promise<RuntimeLogSnapshotResponse>;
   validateProject: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   buildPlan: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   runProject: (project: RuntimeProjectPayload, frames: number) => Promise<RuntimeApiResponse>;
   getSession: () => Promise<RuntimeSessionResponse>;
-  getSessionProject: () => Promise<RuntimeSessionProjectResponse>;
   loadSession: (project: RuntimeProjectPayload) => Promise<RuntimeSessionResponse>;
   validateSession: () => Promise<RuntimeSessionResponse>;
   planSession: () => Promise<RuntimeSessionResponse>;
   runSession: (frames: number) => Promise<RuntimeSessionResponse>;
-  applySessionPatch: (patch: RuntimeSessionPatchRequest) => Promise<RuntimePatchResponse>;
-  getSessionHistory: () => Promise<GraphPatchHistoryV01>;
+  mutateSession: (mutation: RuntimeMutationRequest) => Promise<RuntimePatchResponse>;
+  getSessionHistory: () => Promise<RuntimeHistory>;
   undoSessionPatch: () => Promise<RuntimePatchResponse>;
   redoSessionPatch: () => Promise<RuntimePatchResponse>;
   sendControlEvent: (request: RuntimeControlEventRequest) => Promise<RuntimeControlEventResponse>;
@@ -83,11 +78,7 @@ export interface RuntimeClient {
   getAsset: (assetId: string) => Promise<RuntimeAssetGetResponse>;
   getGeneratedShader: () => Promise<RuntimeGeneratedShaderResponse>;
   getTelemetry: () => Promise<RuntimeTelemetrySnapshot>;
-  listClockSources: () => Promise<ClockSourceListResponse>;
-  getClockSource: (sourceId: string) => Promise<ClockSourceSnapshotResponse>;
-  listMidiInputs: () => Promise<MidiInputListResponse>;
-  startMidiClockSource: (request: MidiClockSourceStartRequest) => Promise<MidiClockSourceStartResponse>;
-  stopMidiClockSource: (request: MidiClockSourceStopRequest) => Promise<MidiClockSourceStopResponse>;
+  listIoDevices: () => Promise<RuntimeIoDeviceListResponse>;
   clearSession: () => Promise<RuntimeSessionResponse>;
 }
 
@@ -111,6 +102,14 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
     getHealth: () => requestJson<RuntimeHealth>(fetchImpl, baseUrl, "/health", { method: "GET" }, isHealth),
     getRuntimeInfo: () =>
       requestJson<RuntimeInfo>(fetchImpl, baseUrl, "/v0/runtime/info", { method: "GET" }, isRuntimeInfo),
+    getRuntimeLogs: () =>
+      requestJson<RuntimeLogSnapshotResponse>(
+        fetchImpl,
+        baseUrl,
+        "/v0/runtime/logs",
+        { method: "GET" },
+        isRuntimeLogSnapshotResponse
+      ),
     validateProject: (project) => postRuntimeResponse(fetchImpl, baseUrl, "/v0/validate", project),
     buildPlan: (project) => postRuntimeResponse(fetchImpl, baseUrl, "/v0/plan", project),
     runProject: (project, frames) =>
@@ -120,14 +119,6 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       }),
     getSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "GET" }, isRuntimeSessionResponse),
-    getSessionProject: () =>
-      requestJson<RuntimeSessionProjectResponse>(
-        fetchImpl,
-        baseUrl,
-        "/v0/session/project",
-        { method: "GET" },
-        isRuntimeSessionProjectResponse
-      ),
     loadSession: (project) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/load", project),
     validateSession: () =>
       requestJson<RuntimeSessionResponse>(
@@ -146,14 +137,14 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         isRuntimeSessionResponse
     ),
     runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/run", { frames }),
-    applySessionPatch: (patch) => postRuntimePatchResponse(fetchImpl, baseUrl, "/v0/session/patch", patch),
+    mutateSession: (mutation) => postRuntimePatchResponse(fetchImpl, baseUrl, "/v0/session/mutate", mutation),
     getSessionHistory: () =>
-      requestJson<GraphPatchHistoryV01>(
+      requestJson<RuntimeHistory>(
         fetchImpl,
         baseUrl,
         "/v0/session/history",
         { method: "GET" },
-        isGraphPatchHistory
+        isRuntimeHistory
       ),
     undoSessionPatch: () =>
       requestJson<RuntimePatchResponse>(
@@ -224,11 +215,9 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         isRuntimePreviewStatus
       ),
     importAsset: (file, kind) => {
+      void kind;
       const form = new FormData();
       form.set("file", file);
-      if (kind) {
-        form.set("kind", kind);
-      }
       return requestJson<RuntimeAssetImportResponse>(
         fetchImpl,
         baseUrl,
@@ -272,34 +261,14 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         { method: "GET" },
         isRuntimeTelemetrySnapshot
       ),
-    listClockSources: () =>
-      requestJson<ClockSourceListResponse>(
+    listIoDevices: () =>
+      requestJson<RuntimeIoDeviceListResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/clock/sources",
+        "/v0/io/devices",
         { method: "GET" },
-        isClockSourceListResponse
+        isRuntimeIoDeviceListResponse
       ),
-    getClockSource: (sourceId) =>
-      requestJson<ClockSourceSnapshotResponse>(
-        fetchImpl,
-        baseUrl,
-        `/v0/clock/sources/${encodeURIComponent(sourceId)}`,
-        { method: "GET" },
-        isClockSourceSnapshotResponse
-      ),
-    listMidiInputs: () =>
-      requestJson<MidiInputListResponse>(
-        fetchImpl,
-        baseUrl,
-        "/v0/clock/midi/inputs",
-        { method: "GET" },
-        isMidiInputListResponse
-      ),
-    startMidiClockSource: (request) =>
-      postMidiClockSourceStartResponse(fetchImpl, baseUrl, "/v0/clock/midi/start", request),
-    stopMidiClockSource: (request) =>
-      postMidiClockSourceStopResponse(fetchImpl, baseUrl, "/v0/clock/midi/stop", request),
     clearSession: () =>
       requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
   };
@@ -312,6 +281,14 @@ export function normalizeRuntimeUrl(url: string): string {
   }
 
   return trimmed.replace(/\/+$/, "");
+}
+
+export function runtimeLogStreamUrl(url: string = DEFAULT_RUNTIME_URL): string {
+  return `${normalizeRuntimeUrl(url)}/v0/runtime/logs/stream`;
+}
+
+export function runtimeSessionEventsStreamUrl(url: string = DEFAULT_RUNTIME_URL): string {
+  return `${normalizeRuntimeUrl(url)}/v0/session/events/stream`;
 }
 
 async function postRuntimeResponse(
@@ -419,48 +396,6 @@ async function postRuntimeControlEventResponse(
   );
 }
 
-async function postMidiClockSourceStartResponse(
-  fetchImpl: FetchLike,
-  baseUrl: string,
-  path: string,
-  body: MidiClockSourceStartRequest
-): Promise<MidiClockSourceStartResponse> {
-  return requestJson<MidiClockSourceStartResponse>(
-    fetchImpl,
-    baseUrl,
-    path,
-    {
-      body: JSON.stringify(body),
-      headers: {
-        "content-type": "application/json"
-      },
-      method: "POST"
-    },
-    isMidiClockSourceStartResponse
-  );
-}
-
-async function postMidiClockSourceStopResponse(
-  fetchImpl: FetchLike,
-  baseUrl: string,
-  path: string,
-  body: MidiClockSourceStopRequest
-): Promise<MidiClockSourceStopResponse> {
-  return requestJson<MidiClockSourceStopResponse>(
-    fetchImpl,
-    baseUrl,
-    path,
-    {
-      body: JSON.stringify(body),
-      headers: {
-        "content-type": "application/json"
-      },
-      method: "POST"
-    },
-    isMidiClockSourceStopResponse
-  );
-}
-
 async function requestJson<T>(
   fetchImpl: FetchLike,
   baseUrl: string,
@@ -508,6 +443,35 @@ function isRuntimeInfo(value: unknown): value is RuntimeInfo {
   );
 }
 
+function isRuntimeLogSnapshotResponse(value: unknown): value is RuntimeLogSnapshotResponse {
+  return (
+    isRecord(value) &&
+    value.schema === "skenion.runtime.logs" &&
+    typeof value.schemaVersion === "string" &&
+    typeof value.ok === "boolean" &&
+    Array.isArray(value.events) &&
+    value.events.every(isRuntimeLogEvent) &&
+    isRecord(value.retention) &&
+    typeof value.retention.replayLimit === "number" &&
+    Array.isArray(value.retention.replayLevels) &&
+    value.retention.replayLevels.every(isRuntimeDiagnosticSeverity) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic)
+  );
+}
+
+export function isRuntimeLogEvent(value: unknown): value is RuntimeLogEvent {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.timestamp === "string" &&
+    value.source === "runtime" &&
+    isRuntimeDiagnosticSeverity(value.level) &&
+    (value.code === null || typeof value.code === "string") &&
+    typeof value.message === "string"
+  );
+}
+
 function isRuntimeApiResponse(value: unknown): value is RuntimeApiResponse {
   return (
     isRecord(value) &&
@@ -523,6 +487,7 @@ function isRuntimeProjectPayload(value: unknown): value is RuntimeProjectPayload
   return (
     isRecord(value) &&
     validateGraphDocument(value.graph).ok &&
+    validateViewState(value.viewState).ok &&
     Array.isArray(value.nodes) &&
     value.nodes.every((node) => isRecord(node) && typeof node.id === "string")
   );
@@ -532,27 +497,37 @@ function isRuntimeSessionResponse(value: unknown): value is RuntimeSessionRespon
   return (
     isRecord(value) &&
     typeof value.ok === "boolean" &&
-    typeof value.loaded === "boolean" &&
-    (typeof value.graphId === "string" || value.graphId === null) &&
-    (typeof value.graphRevision === "string" || value.graphRevision === null) &&
-    typeof value.sessionRevision === "number" &&
-    typeof value.controlRevision === "number" &&
+    !("loaded" in value) &&
+    !("graphId" in value) &&
+    !("graphRevision" in value) &&
+    !("viewState" in value) &&
+    isRuntimeSessionSnapshot(value.snapshot) &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic) &&
-    (value.plan === null || isRecord(value.plan)) &&
     (value.report === null || isRecord(value.report))
   );
 }
 
-function isRuntimeSessionProjectResponse(value: unknown): value is RuntimeSessionProjectResponse {
+function isRuntimeSessionSnapshot(value: unknown): value is RuntimeSessionSnapshot {
   return (
     isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    typeof value.loaded === "boolean" &&
-    (value.project === null || isRuntimeProjectPayload(value.project)) &&
-    isRuntimeSessionResponse(value.session) &&
+    typeof value.sessionRevision === "number" &&
+    typeof value.viewRevision === "number" &&
+    typeof value.controlRevision === "number" &&
+    (value.project === null || isRuntimeProjectSnapshot(value.project)) &&
     Array.isArray(value.diagnostics) &&
-    value.diagnostics.every(isRuntimeDiagnostic)
+    value.diagnostics.every(isRuntimeDiagnostic) &&
+    (value.plan === null || isRecord(value.plan))
+  );
+}
+
+function isRuntimeProjectSnapshot(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    validateGraphDocument(value.graph).ok &&
+    validateViewState(value.viewState).ok &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every((node) => isRecord(node) && typeof node.id === "string")
   );
 }
 
@@ -562,12 +537,46 @@ function isRuntimePatchResponse(value: unknown): value is RuntimePatchResponse {
     typeof value.ok === "boolean" &&
     typeof value.applied === "boolean" &&
     typeof value.conflict === "boolean" &&
-    (value.graph === null || validateGraphDocument(value.graph).ok) &&
-    isRuntimeSessionResponse(value.session) &&
-    (value.event === null || validateGraphPatchEvent(value.event).ok) &&
-    isGraphPatchHistory(value.history) &&
+    !("graph" in value) &&
+    !("viewState" in value) &&
+    !("session" in value) &&
+    !("event" in value) &&
+    isRuntimeSessionSnapshot(value.snapshot) &&
+    isRuntimeHistory(value.history) &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isRuntimeDiagnostic)
+  );
+}
+
+export function isRuntimeSessionEvent(value: unknown): value is RuntimeSessionEvent {
+  return (
+    isRecord(value) &&
+    value.schema === "skenion.runtime.session.event" &&
+    typeof value.schemaVersion === "string" &&
+    typeof value.id === "string" &&
+    typeof value.sequence === "number" &&
+    isRuntimeSessionEventKind(value.kind) &&
+    isRuntimeSessionSnapshot(value.snapshot) &&
+    !("session" in value) &&
+    !("graph" in value) &&
+    !("viewState" in value) &&
+    !("graphEvent" in value) &&
+    isRuntimeHistory(value.history) &&
+    (value.mutation === undefined || isRuntimeHistoryEntry(value.mutation)) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isRuntimeDiagnostic) &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function isRuntimeSessionEventKind(value: unknown): boolean {
+  return (
+    value === "snapshot" ||
+    value === "load" ||
+    value === "clear" ||
+    value === "mutate" ||
+    value === "undo" ||
+    value === "redo"
   );
 }
 
@@ -749,164 +758,49 @@ function isRuntimeAssetGetResponse(value: unknown): value is RuntimeAssetGetResp
   );
 }
 
-function isClockSourceListResponse(value: unknown): value is ClockSourceListResponse {
+function isRuntimeIoDeviceListResponse(value: unknown): value is RuntimeIoDeviceListResponse {
   return (
     isRecord(value) &&
     typeof value.ok === "boolean" &&
-    Array.isArray(value.sources) &&
-    value.sources.every(isClockSourceSnapshot) &&
-    isRuntimeClockDiagnostics(value.diagnostics)
+    Array.isArray(value.devices) &&
+    value.devices.every(isRuntimeIoDeviceDescriptor) &&
+    isRuntimeIoDiagnostics(value.diagnostics)
   );
 }
 
-function isClockSourceSnapshotResponse(value: unknown): value is ClockSourceSnapshotResponse {
+function isRuntimeIoDeviceDescriptor(value: unknown): boolean {
   return (
     isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    (value.source === null || isClockSourceSnapshot(value.source)) &&
-    isRuntimeClockDiagnostics(value.diagnostics)
-  );
-}
-
-function isMidiInputListResponse(value: unknown): value is MidiInputListResponse {
-  return (
-    isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    Array.isArray(value.inputs) &&
-    value.inputs.every(isMidiInputDescriptor) &&
-    isRuntimeClockDiagnostics(value.diagnostics)
-  );
-}
-
-function isMidiClockSourceStartResponse(value: unknown): value is MidiClockSourceStartResponse {
-  return (
-    isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    (value.source === null || isClockSourceSnapshot(value.source)) &&
-    isRuntimeClockDiagnostics(value.diagnostics)
-  );
-}
-
-function isMidiClockSourceStopResponse(value: unknown): value is MidiClockSourceStopResponse {
-  return (
-    isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    (value.source === null || isClockSourceSnapshot(value.source)) &&
-    isRuntimeClockDiagnostics(value.diagnostics)
-  );
-}
-
-function isClockSourceSnapshot(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.sourceId === "string" &&
-    typeof value.sourceKind === "string" &&
-    isRuntimeClockSourceStatus(value.status) &&
-    (value.latestSnapshot === null || isClockState(value.latestSnapshot)) &&
-    isRuntimeClockDiagnostics(value.diagnostics)
-  );
-}
-
-function isClockState(value: unknown): value is ClockStateV01 {
-  return (
-    isRecord(value) &&
-    typeof value.sourceId === "string" &&
-    typeof value.sourceKind === "string" &&
-    Array.isArray(value.capabilities) &&
-    value.capabilities.every((capability) => typeof capability === "string") &&
-    isOptionalClockField(value.running, isBooleanValue) &&
-    isOptionalClockField(value.tempoBpm, isFiniteNumberValue) &&
-    isOptionalClockField(value.phase01, isFiniteNumberValue) &&
-    isOptionalClockField(value.tickIndex, isFiniteNumberValue) &&
-    isOptionalClockField(value.ppqPosition, isFiniteNumberValue) &&
-    isOptionalClockField(value.songPositionSixteenth, isFiniteNumberValue) &&
-    isOptionalClockField(value.bar, isFiniteNumberValue) &&
-    isOptionalClockField(value.beat, isFiniteNumberValue) &&
-    isOptionalClockField(value.division, isFiniteNumberValue) &&
-    isOptionalClockField(value.tickInDivision, isFiniteNumberValue) &&
-    isOptionalClockField(value.timeSignature, isClockTimeSignature) &&
-    isOptionalClockField(value.timeSeconds, isFiniteNumberValue) &&
-    isOptionalClockField(value.timecode, isStringValue) &&
-    isOptionalClockField(value.sampleRate, isFiniteNumberValue) &&
-    isOptionalClockField(value.sampleFrame, isFiniteNumberValue) &&
-    isOptionalClockField(value.latencySeconds, isFiniteNumberValue) &&
-    (typeof value.lastUpdateHostTimeNs === "number" || value.lastUpdateHostTimeNs === undefined)
-  );
-}
-
-function isOptionalClockField<T>(
-  value: unknown,
-  valueGuard: (fieldValue: unknown) => fieldValue is T
-): value is ClockFieldV01<T> | undefined {
-  return value === undefined || isClockField(value, valueGuard);
-}
-
-function isClockField<T>(
-  value: unknown,
-  valueGuard: (fieldValue: unknown) => fieldValue is T
-): value is ClockFieldV01<T> {
-  return (
-    isRecord(value) &&
-    (value.value === null || valueGuard(value.value)) &&
-    isClockAuthority(value.authority) &&
-    typeof value.source === "string" &&
-    (typeof value.confidence === "number" || value.confidence === undefined)
-  );
-}
-
-function isClockTimeSignature(value: unknown): value is ClockTimeSignatureV01 {
-  return (
-    isRecord(value) &&
-    typeof value.numerator === "number" &&
-    Number.isInteger(value.numerator) &&
-    typeof value.denominator === "number" &&
-    Number.isInteger(value.denominator)
-  );
-}
-
-function isMidiInputDescriptor(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.index === "number" &&
-    Number.isInteger(value.index) &&
+    typeof value.id === "string" &&
     typeof value.name === "string" &&
-    value.backend === "midir" &&
-    (typeof value.id === "string" || value.id === null) &&
-    value.stable === false
+    isRuntimeIoTransportKind(value.transportKind) &&
+    Array.isArray(value.directions) &&
+    value.directions.every(isRuntimeIoDirection) &&
+    typeof value.backend === "string" &&
+    (value.index === undefined || (typeof value.index === "number" && Number.isInteger(value.index) && value.index >= 0)) &&
+    typeof value.stable === "boolean"
   );
 }
 
-function isRuntimeClockDiagnostics(value: unknown): boolean {
-  return Array.isArray(value) && value.every(isRuntimeClockDiagnostic);
+function isRuntimeIoTransportKind(value: unknown): boolean {
+  return value === "midi" || value === "hid" || value === "serial" || value === "inline";
 }
 
-function isRuntimeClockDiagnostic(value: unknown): boolean {
+function isRuntimeIoDirection(value: unknown): boolean {
+  return value === "input" || value === "output";
+}
+
+function isRuntimeIoDiagnostics(value: unknown): boolean {
+  return Array.isArray(value) && value.every(isRuntimeIoDiagnostic);
+}
+
+function isRuntimeIoDiagnostic(value: unknown): boolean {
   return (
     isRecord(value) &&
     (value.severity === "error" || value.severity === "warning") &&
     typeof value.code === "string" &&
     typeof value.message === "string"
   );
-}
-
-function isRuntimeClockSourceStatus(value: unknown): boolean {
-  return value === "running" || value === "stopped" || value === "error";
-}
-
-function isClockAuthority(value: unknown): boolean {
-  return value === "authoritative" || value === "derived" || value === "estimated" || value === "unavailable";
-}
-
-function isBooleanValue(value: unknown): value is boolean {
-  return typeof value === "boolean";
-}
-
-function isFiniteNumberValue(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function isStringValue(value: unknown): value is string {
-  return typeof value === "string";
 }
 
 function isRuntimeTelemetrySnapshot(value: unknown): value is RuntimeTelemetrySnapshot {
@@ -1007,16 +901,90 @@ function isRuntimePreviewState(value: unknown): boolean {
   return value === "stopped" || value === "starting" || value === "running" || value === "exited" || value === "error";
 }
 
-function isGraphPatchHistory(value: unknown): value is GraphPatchHistoryV01 {
-  return validateGraphPatchHistory(value).ok;
+function isRuntimeHistory(value: unknown): value is RuntimeHistory {
+  return (
+    isRecord(value) &&
+    value.schema === "skenion.runtime.history" &&
+    typeof value.schemaVersion === "string" &&
+    Array.isArray(value.entries) &&
+    value.entries.every(isRuntimeHistoryEntry) &&
+    typeof value.canUndo === "boolean" &&
+    typeof value.canRedo === "boolean" &&
+    typeof value.undoDepth === "number" &&
+    typeof value.redoDepth === "number"
+  );
+}
+
+function isRuntimeHistoryEntry(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.sequence === "number" &&
+    (value.kind === "apply" || value.kind === "undo" || value.kind === "redo") &&
+    isRuntimeMutationRequest(value.mutation) &&
+    isRuntimeMutationRequest(value.inverseMutation) &&
+    (value.subjectEventId === undefined || typeof value.subjectEventId === "string") &&
+    (value.clientId === undefined || typeof value.clientId === "string") &&
+    (value.description === undefined || typeof value.description === "string") &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function isRuntimeMutationRequest(value: unknown): value is RuntimeMutationRequest {
+  return (
+    isRecord(value) &&
+    (value.graphPatch === undefined || validateGraphPatch(value.graphPatch).ok) &&
+    (value.viewPatch === undefined || isRuntimeViewPatch(value.viewPatch)) &&
+    (value.clientId === undefined || typeof value.clientId === "string") &&
+    (value.description === undefined || typeof value.description === "string")
+  );
+}
+
+function isRuntimeViewPatch(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.baseViewRevision === "number" &&
+    Array.isArray(value.ops) &&
+    value.ops.every(isRuntimeViewPatchOperation)
+  );
+}
+
+function isRuntimeViewPatchOperation(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.nodeId !== "string") {
+    return false;
+  }
+  if (value.op === "setNodeView") {
+    return isCanvasNodeView(value.view);
+  }
+  if (value.op === "moveNodeView") {
+    return (value.from === undefined || isCanvasNodeView(value.from)) && isCanvasNodeView(value.to);
+  }
+  return false;
+}
+
+function isCanvasNodeView(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.x === "number" &&
+    Number.isFinite(value.x) &&
+    typeof value.y === "number" &&
+    Number.isFinite(value.y) &&
+    (value.width === undefined || (typeof value.width === "number" && Number.isFinite(value.width))) &&
+    (value.height === undefined || (typeof value.height === "number" && Number.isFinite(value.height))) &&
+    (value.collapsed === undefined || typeof value.collapsed === "boolean")
+  );
 }
 
 function isRuntimeDiagnostic(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.message === "string" &&
-    (value.severity === "error" || value.severity === "warning" || value.severity === "info")
+    isRuntimeDiagnosticSeverity(value.severity)
   );
+}
+
+function isRuntimeDiagnosticSeverity(value: unknown): value is RuntimeDiagnosticSeverity {
+  return value === "error" || value === "warning" || value === "info";
 }
 
 function isShaderDiagnostic(value: unknown): boolean {

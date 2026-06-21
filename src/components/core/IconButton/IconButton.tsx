@@ -1,12 +1,13 @@
 import { forwardRef, type ReactNode } from "react";
 import { ActionIcon, createPolymorphicComponent, type ActionIconProps } from "@mantine/core";
+import styles from "./IconButton.module.css";
 
 export type IconButtonAccessibleName =
   | { label: string; "aria-label"?: never; "aria-labelledby"?: never }
   | { label?: never; "aria-label": string; "aria-labelledby"?: never }
   | { label?: never; "aria-label"?: never; "aria-labelledby": string };
 
-export type IconButtonProps = Omit<ActionIconProps, "aria-label" | "aria-labelledby" | "children"> &
+export type IconButtonProps = Omit<ActionIconProps, "aria-label" | "aria-labelledby" | "children" | "radius"> &
   IconButtonAccessibleName & {
     icon: ReactNode;
     selected?: boolean;
@@ -20,7 +21,6 @@ function IconButtonInner(
     label,
     "aria-label": ariaLabel,
     "aria-labelledby": ariaLabelledBy,
-    radius = "sm",
     selected = false,
     size = "lg",
     variant = "subtle",
@@ -32,11 +32,10 @@ function IconButtonInner(
     <ActionIcon
       aria-label={ariaLabel ?? label}
       aria-labelledby={ariaLabelledBy}
-      className={className}
+      className={[styles.iconButton, className].filter(Boolean).join(" ")}
       color={color ?? "gray"}
       data-skenion-core-button="icon"
       data-selected={selected || undefined}
-      radius={radius}
       ref={ref}
       size={size}
       variant={variant}

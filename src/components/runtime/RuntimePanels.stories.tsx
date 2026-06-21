@@ -1,31 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Divider, Stack } from "@mantine/core";
-import type {
-  ClockSourceListResponse,
-  ClockSourceSnapshot,
-  ClockSourceSnapshotResponse,
-  ClockStateV01,
-  MidiClockSourceStartRequest,
-  MidiClockSourceStartResponse,
-  MidiClockSourceStopRequest,
-  MidiClockSourceStopResponse,
-  MidiInputListResponse
-} from "../../runtime/types";
-import { RuntimePanel } from "../RuntimePanel";
-import { ClockSourcesPanel } from "./ClockSourcesPanel";
+import type { ClockStateV01 } from "../../runtime/types";
+import { RuntimeLogsPanel, RuntimeSettingsPanel } from "../RuntimePanel";
+import { sampleGraph } from "../../data/sampleGraph";
 import { ClockStateDisplay } from "./ClockStateDisplay";
 import { RuntimeConnectionPanel } from "./RuntimeConnectionPanel";
-import { RuntimeHistoryPanel } from "./RuntimeHistoryPanel";
 import { RuntimePreviewPanel } from "./RuntimePreviewPanel";
 import { RuntimeSessionPanel } from "./RuntimeSessionPanel";
 import { RuntimeTelemetryPanel } from "./RuntimeTelemetryPanel";
 import {
-  latestHistoryEvents,
-  runtimeHistoryActionAvailability
-} from "../../runtime/historySync";
-import {
   noop,
-  runtimeHistory,
   runtimeInfo,
   runtimePreviewStatus,
   runtimeSession,
@@ -114,52 +98,21 @@ export const TelemetryRenderError: Story = {
   render: () => <RuntimeTelemetryPanel telemetry={runtimeTelemetryWithRenderError} />
 };
 
-export const HistoryControls: Story = {
+export const RuntimeSettings: Story = {
   render: () => (
-    <RuntimeHistoryPanel
-      busyAction={null}
-      connected
-      history={runtimeHistory}
-      historyAvailability={runtimeHistoryActionAvailability({
-        connected: true,
-        sessionLoaded: true,
-        sessionSynced: true,
-        pendingPatchOps: 0,
-        history: runtimeHistory
-      })}
-      latestEvents={latestHistoryEvents(runtimeHistory, 3)}
-      onRedoPatch={noop}
-      onRefreshHistory={noop}
-      onUndoPatch={noop}
-      sessionLoaded
-    />
-  )
-};
-
-export const FullRuntimePanel: Story = {
-  render: () => (
-    <RuntimePanel
+    <RuntimeSettingsPanel
       busyAction={null}
       error={null}
-      history={runtimeHistory}
       info={runtimeInfo}
-      onGetClockSource={clockApiHandlers.onGetClockSource}
-      onListClockSources={clockApiHandlers.onListClockSources}
-      onListMidiInputs={clockApiHandlers.onListMidiInputs}
       onClearSession={noop}
       onConnect={noop}
       onPlanSession={noop}
-      onRedoPatch={noop}
-      onRefreshHistory={noop}
       onRefreshPreview={noop}
       onRefreshSession={noop}
       onRestartPreview={noop}
       onRunSession={noop}
-      onStartMidiClockSource={clockApiHandlers.onStartMidiClockSource}
       onStartPreview={noop}
-      onStopMidiClockSource={clockApiHandlers.onStopMidiClockSource}
       onStopPreview={noop}
-      onUndoPatch={noop}
       onUrlChange={noop}
       onValidateSession={noop}
       previewStatus={runtimePreviewStatus}
@@ -167,56 +120,25 @@ export const FullRuntimePanel: Story = {
       session={runtimeSession}
       sessionSynced={false}
       status="connected"
-      telemetry={runtimeTelemetry}
       url="http://localhost:3761"
     />
   )
 };
 
-export const ClockSourcesNoDevices: Story = {
+export const RuntimeLogs: Story = {
   render: () => (
-    <ClockSourcesPanel
-      connected
-      initialInputs={[]}
-      initialSources={[]}
-      {...clockApiHandlers}
-    />
-  )
-};
-
-export const ClockSourcesRunning: Story = {
-  render: () => (
-    <ClockSourcesPanel
-      connected
-      initialInputs={[
-        {
-          backend: "midir",
-          id: null,
-          index: 0,
-          name: "USB MIDI Interface",
-          stable: false
-        }
-      ]}
-      initialSources={[runningMidiSource()]}
-      {...clockApiHandlers}
-    />
-  )
-};
-
-export const ClockSourcesInvalidPortDiagnostic: Story = {
-  render: () => (
-    <ClockSourcesPanel
-      connected
-      initialDiagnostics={[
-        {
-          code: "invalid-midi-input-port",
-          message: "MIDI input port index is not available.",
-          severity: "error"
-        }
-      ]}
-      initialInputs={[]}
-      initialSources={[]}
-      {...clockApiHandlers}
+    <RuntimeLogsPanel
+      clientLines={[]}
+      error={null}
+      info={runtimeInfo}
+      previewStatus={runtimePreviewStatus}
+      result={null}
+      runtimeLines={[]}
+      semanticDiagnostics={[]}
+      session={runtimeSession}
+      status="connected"
+      telemetry={runtimeTelemetry}
+      validation={{ ok: true, value: sampleGraph }}
     />
   )
 };
@@ -230,61 +152,16 @@ export const ClockStateBarUnavailable: Story = {
     <ClockStateDisplay
       state={{
         ...clockState(),
-        bar: { authority: "unavailable", source: "midi-clock-main", value: null },
-        beat: { authority: "unavailable", source: "midi-clock-main", value: null },
-        division: { authority: "unavailable", source: "midi-clock-main", value: null },
-        timeSignature: { authority: "unavailable", source: "midi-clock-main", value: null }
+        bar: { authority: "unavailable", source: "clock-node-main", value: null },
+        beat: { authority: "unavailable", source: "clock-node-main", value: null },
+        division: { authority: "unavailable", source: "clock-node-main", value: null },
+        timeSignature: { authority: "unavailable", source: "clock-node-main", value: null }
       }}
     />
   )
 };
 
-const clockApiHandlers = {
-  onGetClockSource: async (sourceId: string): Promise<ClockSourceSnapshotResponse> => ({
-    diagnostics: [],
-    ok: true,
-    source: runningMidiSource(sourceId)
-  }),
-  onListClockSources: async (): Promise<ClockSourceListResponse> => ({
-    diagnostics: [],
-    ok: true,
-    sources: [runningMidiSource()]
-  }),
-  onListMidiInputs: async (): Promise<MidiInputListResponse> => ({
-    diagnostics: [],
-    inputs: [],
-    ok: true
-  }),
-  onStartMidiClockSource: async (
-    request: MidiClockSourceStartRequest
-  ): Promise<MidiClockSourceStartResponse> => ({
-    diagnostics: [],
-    ok: true,
-    source: runningMidiSource(request.sourceId)
-  }),
-  onStopMidiClockSource: async (
-    request: MidiClockSourceStopRequest
-  ): Promise<MidiClockSourceStopResponse> => ({
-    diagnostics: [],
-    ok: true,
-    source: {
-      ...runningMidiSource(request.sourceId),
-      status: "stopped"
-    }
-  })
-};
-
-function runningMidiSource(sourceId = "midi-clock-main"): ClockSourceSnapshot {
-  return {
-    diagnostics: [],
-    latestSnapshot: clockState(sourceId),
-    sourceId,
-    sourceKind: "midi-clock",
-    status: "running"
-  };
-}
-
-function clockState(sourceId = "midi-clock-main"): ClockStateV01 {
+function clockState(sourceId = "clock-node-main"): ClockStateV01 {
   return {
     bar: { authority: "derived", source: sourceId, value: 37 },
     beat: { authority: "derived", source: sourceId, value: 2 },

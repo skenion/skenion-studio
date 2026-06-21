@@ -18,8 +18,7 @@ export function NodeHelp({
       gap={6}
       p="xs"
       style={{
-        border: "1px solid var(--mantine-color-default-border)",
-        borderRadius: 6
+        border: "1px solid var(--mantine-color-default-border)"
       }}
     >
       <Text fw={800} size="sm">
@@ -31,7 +30,7 @@ export function NodeHelp({
       {help.tags.length > 0 ? (
         <Group gap={4}>
           {help.tags.map((tag) => (
-            <Badge key={tag} radius="sm" size="xs" variant="light">
+            <Badge key={tag} size="xs" variant="light">
               {tag}
             </Badge>
           ))}
@@ -86,7 +85,6 @@ export function NodeHelp({
               <Button
                 leftSection={<ExternalLink size={14} />}
                 onClick={onOpenAsNewGraph}
-                radius="sm"
                 size="compact-xs"
                 variant="light"
               >

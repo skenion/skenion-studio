@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MantineProvider } from "@mantine/core";
 import { describe, expect, it } from "vitest";
+import { theme } from "../../theme";
 import { NodeCard } from "./NodeCard";
 import { NodePortHandle } from "./NodePortHandle";
 import { multiPortCard, shaderUniformCard, zeroPortCard } from "../../stories/storyFixtures";
@@ -36,7 +37,7 @@ function renderNodeCard(card: Parameters<typeof NodeCard>[0]): string {
   return renderToStaticMarkup(
     createElement(
       MantineProvider,
-      null,
+      { theme },
       createElement(NodeCard, {
         ...card,
         renderInputHandle: renderHandle,

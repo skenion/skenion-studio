@@ -1,19 +1,28 @@
-import { Badge, FileButton, Group, Menu, Text, Tooltip } from "@mantine/core";
+import {
+  Badge,
+  FileButton,
+  Group,
+  Menu,
+  Text,
+  Tooltip,
+  useComputedColorScheme,
+  useMantineColorScheme
+} from "@mantine/core";
 import {
   Cable,
   Download,
   FolderOpen,
-  Gauge,
   Library,
-  Lock,
   MonitorPlay,
+  Moon,
   Palette,
   PanelRightClose,
   PanelRightOpen,
   RefreshCcw,
   Save,
+  Settings,
   SlidersHorizontal,
-  Unlock,
+  Sun,
   Upload
 } from "lucide-react";
 import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
@@ -22,7 +31,6 @@ import { IconButton } from "./core/IconButton/IconButton";
 interface StudioToolbarProps {
   graph: GraphDocumentV01;
   runtimeGraphAvailable: boolean;
-  graphLocked: boolean;
   summary: string;
   validation: ValidationResult<GraphDocumentV01>;
   onExport: () => void;
@@ -35,8 +43,7 @@ interface StudioToolbarProps {
   onLoadShaderUniformSample: () => void;
   onLoadPortDemoSample: () => void;
   onReset: () => void;
-  onToggleGraphLock: () => void;
-  onOpenRuntimeControl: () => void;
+  onOpenSettings: () => void;
   onToggleInspector: () => void;
   inspectorOpen: boolean;
 }
@@ -44,7 +51,6 @@ interface StudioToolbarProps {
 export function StudioToolbar({
   graph,
   runtimeGraphAvailable,
-  graphLocked,
   summary,
   validation,
   onExport,
@@ -57,12 +63,15 @@ export function StudioToolbar({
   onLoadShaderMultiUniformSample,
   onLoadShaderUniformSample,
   onReset,
-  onToggleGraphLock,
-  onOpenRuntimeControl,
+  onOpenSettings,
   onToggleInspector,
   inspectorOpen
 }: StudioToolbarProps) {
   const graphActionDisabled = !runtimeGraphAvailable;
+  const { setColorScheme } = useMantineColorScheme();
+  const computedColorScheme = useComputedColorScheme("light", { getInitialValueInEffect: false });
+  const nextColorScheme = computedColorScheme === "dark" ? "light" : "dark";
+  const colorSchemeLabel = nextColorScheme === "dark" ? "Dark Mode" : "Light Mode";
 
   return (
     <Group className="studio-toolbar" justify="space-between" wrap="nowrap">
@@ -73,7 +82,7 @@ export function StudioToolbar({
             <Text fw={800} size="sm">
               Skenion Studio
             </Text>
-            <Badge color={validation.ok ? "green" : "red"} radius="sm" variant="light">
+            <Badge color={validation.ok ? "green" : "red"} variant="light">
               {validation.ok ? "valid" : "invalid"}
             </Badge>
           </Group>
@@ -132,14 +141,6 @@ export function StudioToolbar({
             onClick={onReset}
           />
         </Tooltip>
-        <Tooltip label={graphLocked ? "Unlock graph layout editing" : "Lock graph layout editing"}>
-          <IconButton
-            disabled={graphActionDisabled}
-            icon={graphLocked ? <Lock size={18} /> : <Unlock size={18} />}
-            label={graphLocked ? "Unlock graph" : "Lock graph"}
-            onClick={onToggleGraphLock}
-          />
-        </Tooltip>
         <Menu position="bottom-end" shadow="md" width={220} withinPortal>
           <Menu.Target>
             <IconButton
@@ -168,12 +169,20 @@ export function StudioToolbar({
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
-        <Tooltip label="Open Runtime Control">
+        <Tooltip label="Open Settings">
           <IconButton
             color="blue"
-            icon={<Gauge size={18} />}
-            label="Open Runtime Control"
-            onClick={onOpenRuntimeControl}
+            icon={<Settings size={18} />}
+            label="Open Settings"
+            onClick={onOpenSettings}
+          />
+        </Tooltip>
+        <Tooltip label={colorSchemeLabel}>
+          <IconButton
+            color="blue"
+            icon={nextColorScheme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
+            label={colorSchemeLabel}
+            onClick={() => setColorScheme(nextColorScheme)}
           />
         </Tooltip>
         <Tooltip label={inspectorOpen ? "Hide inspector" : "Show inspector"}>

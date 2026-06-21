@@ -1,5 +1,6 @@
-import { NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Select, Stack, Text } from "@mantine/core";
 import { UINT_REPRESENTATIONS, type UIntRepresentation } from "../../graph/uintValue";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 
 export interface UnsignedIntegerValueControlsProps {
   representation: UIntRepresentation;
@@ -31,16 +32,12 @@ export function UnsignedIntegerValueControls({
         size="xs"
         value={representation}
       />
-      <NumberInput
+      <DeferredNumberInput
         allowDecimal={false}
         label="Value"
         min={0}
-        onChange={(nextValue) => {
-          if (typeof nextValue !== "number" || !Number.isFinite(nextValue)) {
-            return;
-          }
-          onChange(Math.max(0, Math.trunc(nextValue)));
-        }}
+        normalize={(nextValue) => Math.max(0, Math.trunc(nextValue))}
+        onCommit={onChange}
         size="xs"
         step={1}
         value={value}

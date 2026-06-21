@@ -1,5 +1,6 @@
-import { NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Select, Stack, Text } from "@mantine/core";
 import { INT_REPRESENTATIONS, type IntRepresentation } from "../../graph/intValue";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 
 export interface IntegerValueControlsProps {
   representation: IntRepresentation;
@@ -31,15 +32,11 @@ export function IntegerValueControls({
         size="xs"
         value={representation}
       />
-      <NumberInput
+      <DeferredNumberInput
         allowDecimal={false}
         label="Value"
-        onChange={(nextValue) => {
-          if (typeof nextValue !== "number" || !Number.isFinite(nextValue)) {
-            return;
-          }
-          onChange(Math.trunc(nextValue));
-        }}
+        normalize={Math.trunc}
+        onCommit={onChange}
         size="xs"
         step={1}
         value={value}

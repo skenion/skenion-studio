@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { NumberInput } from "@mantine/core";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 import { FloatValueControls } from "./FloatValueControls";
 
 describe("FloatValueControls", () => {
-  it("emits finite numeric value changes only", () => {
+  it("commits numeric graph param edits through deferred input", () => {
     const changes: number[] = [];
     const element = FloatValueControls({
       representation: "f32",
@@ -12,15 +12,13 @@ describe("FloatValueControls", () => {
       onChange: (value) => changes.push(value),
       onRepresentationChange: () => undefined
     });
-    const input = findElementByType(element, NumberInput);
-    if (!input?.props.onChange) {
-      throw new Error("expected FloatValueControls to render a NumberInput");
+    const input = findElementByType(element, DeferredNumberInput);
+    if (!input?.props.onCommit) {
+      throw new Error("expected FloatValueControls to render a DeferredNumberInput");
     }
 
     expect(input.props.value).toBe(0.2);
-    input.props.onChange(0.8);
-    input.props.onChange("0.9");
-    input.props.onChange(Number.NaN);
+    input.props.onCommit(0.8);
 
     expect(changes).toEqual([0.8]);
   });
@@ -29,13 +27,13 @@ describe("FloatValueControls", () => {
 function findElementByType(
   node: ReactNode,
   type: unknown
-): ReactElement<{ children?: ReactNode; onChange?: (value: unknown) => void; value?: unknown }> | null {
+): ReactElement<{ children?: ReactNode; onCommit?: (value: number) => void; value?: unknown }> | null {
   if (!isValidElement(node)) {
     return null;
   }
 
   if (node.type === type) {
-    return node as ReactElement<{ children?: ReactNode; onChange?: (value: unknown) => void; value?: unknown }>;
+    return node as ReactElement<{ children?: ReactNode; onCommit?: (value: number) => void; value?: unknown }>;
   }
 
   const children = (node.props as { children?: ReactNode }).children;

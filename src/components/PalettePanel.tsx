@@ -1,9 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Badge, Divider, Group, ScrollArea, Stack, Text, TextInput, Tooltip } from "@mantine/core";
 import { HelpCircle, Plus } from "lucide-react";
-import { parseObjectTextV01, type NodeDefinitionManifestV01 } from "@skenion/contracts";
+import { type NodeDefinitionManifestV01 } from "@skenion/contracts";
+import { paletteDirectDefinitions } from "../data/palette";
 import { flowColor, flowName } from "../graph/reactFlowAdapter";
-import { objectTextRegistryDiagnostic } from "../graph/objectTextNode";
+import { createGraphNodeFromObjectText, isUnresolvedObjectNode } from "../graph/objectTextNode";
 import { Button } from "./core/Button/Button";
 import { IconButton } from "./core/IconButton/IconButton";
 
@@ -23,20 +24,22 @@ export function PalettePanel({
   onShowHelp
 }: PalettePanelProps) {
   const [objectText, setObjectText] = useState("");
-  const categories = Array.from(new Set(registry.map((definition) => definition.category)));
+  const directDefinitions = useMemo(() => paletteDirectDefinitions(registry), [registry]);
+  const categories = Array.from(new Set(directDefinitions.map((definition) => definition.category)));
   const objectTextInput = objectText.trim();
   const objectTextAnalysis = useMemo(
-    () => (objectTextInput ? parseObjectTextV01(objectTextInput) : null),
-    [objectTextInput]
+    () => (objectTextInput ? createGraphNodeFromObjectText(objectTextInput, [], registry) : null),
+    [objectTextInput, registry]
   );
-  const objectTextRegistryError = objectTextAnalysis
-    ? objectTextRegistryDiagnostic(objectTextAnalysis, registry)
-    : null;
   const objectTextDiagnostic = objectTextAnalysis?.diagnostics.find((diagnostic) => diagnostic.severity === "error") ??
-    objectTextRegistryError ??
     objectTextAnalysis?.diagnostics[0] ??
     null;
-  const objectTextCanCreate = Boolean(objectTextAnalysis?.ok) && !objectTextRegistryError && !addDisabled;
+  const objectTextCanCreate = objectTextInput.length > 0 && !addDisabled;
+  const objectTextBadge = objectTextAnalysis?.node
+    ? isUnresolvedObjectNode(objectTextAnalysis.node)
+      ? "unresolved"
+      : objectTextAnalysis.node.kind
+    : null;
 
   function submitObjectText(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,10 +54,10 @@ export function PalettePanel({
     <Stack className="panel-shell" gap="md">
       <div>
         <Text fw={800} size="sm">
-          Node Registry
+          Objects
         </Text>
         <Text c="dimmed" size="xs">
-          {registry.length} definitions
+          {directDefinitions.length} direct · {registry.length - directDefinitions.length} text-only
         </Text>
       </div>
 
@@ -64,9 +67,9 @@ export function PalettePanel({
             <Text c="dimmed" fw={700} size="xs" tt="uppercase">
               Object Box
             </Text>
-            {objectTextAnalysis?.ok ? (
-              <Badge radius="sm" size="xs" variant="light">
-                {objectTextAnalysis.resolvedKind}
+            {objectTextBadge ? (
+              <Badge size="xs" variant="light">
+                {objectTextBadge}
               </Badge>
             ) : null}
           </Group>
@@ -100,11 +103,11 @@ export function PalettePanel({
                 <Text c="dimmed" fw={700} size="xs" tt="uppercase">
                   {category}
                 </Text>
-                <Badge radius="sm" size="xs" variant="light">
-                  {registry.filter((definition) => definition.category === category).length}
+                <Badge size="xs" variant="light">
+                  {directDefinitions.filter((definition) => definition.category === category).length}
                 </Badge>
               </Group>
-              {registry
+              {directDefinitions
                 .filter((definition) => definition.category === category)
                 .map((definition) => {
                   const primaryPort = definition.ports.find((port) => port.direction === "output") ?? definition.ports[0];

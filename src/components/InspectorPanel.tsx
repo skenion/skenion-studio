@@ -1,11 +1,10 @@
-import { Divider, Stack, Text } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
-import type { GraphDocumentV01, GraphNodeV01, ShaderDiagnosticV01, ValidationResult } from "@skenion/contracts";
+import type { GraphDocumentV01, GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
 import { ConnectionDiagnosticsPanel } from "./inspector/ConnectionDiagnosticsPanel";
 import { EdgeInspector } from "./inspector/EdgeInspector";
 import { FeedbackPolicyDialog } from "./inspector/FeedbackPolicyDialog";
-import { GraphDiagnosticsPanel } from "./inspector/GraphDiagnosticsPanel";
 import { InspectorShell } from "./inspector/InspectorShell";
 import { NodeInspector } from "./inspector/NodeInspector";
 import { NodeHelp } from "./inspector/NodeHelp";
@@ -14,7 +13,7 @@ import type {
   GraphSemanticDiagnostic
 } from "../graph/portSemantics";
 import type { ConnectionCheck } from "../graph/skenionGraph";
-import type { RuntimeControlEventRequest, RuntimeGeneratedShaderResponse } from "../runtime/types";
+import type { RuntimeGeneratedShaderResponse } from "../runtime/types";
 
 interface InspectorPanelProps {
   connectionCheck: ConnectionCheck | null;
@@ -24,7 +23,6 @@ interface InspectorPanelProps {
   node: GraphNodeV01 | null;
   helpNodeId: string | null;
   semanticDiagnostics: GraphSemanticDiagnostic[];
-  validation: ValidationResult<GraphDocumentV01>;
   generatedShader: RuntimeGeneratedShaderResponse | null;
   generatedShaderBusy: boolean;
   runtimeAssetImportBusy: boolean;
@@ -34,11 +32,8 @@ interface InspectorPanelProps {
   onLoadGeneratedShader?: () => void;
   onOpenHelpGraph?: (nodeKind: string) => void;
   onRemoveNode: (node: GraphNodeV01) => void;
-  onSendRuntimeControl: (request: RuntimeControlEventRequest) => void;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
   onSyncShaderInputs: (nodeId: string, source: string) => void;
-  runtimeControlBusy: boolean;
-  runtimeControlEnabled: boolean;
 }
 
 export function InspectorPanel({
@@ -54,16 +49,12 @@ export function InspectorPanel({
   onLoadGeneratedShader,
   onOpenHelpGraph,
   onRemoveNode,
-  onSendRuntimeControl,
   onSetNodeParam,
   onSyncShaderInputs,
-  runtimeControlBusy,
-  runtimeControlEnabled,
   runtimeAssetImportBusy,
   runtimeAssetImportEnabled,
   runtimeShaderDiagnostics,
-  semanticDiagnostics,
-  validation
+  semanticDiagnostics
 }: InspectorPanelProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const selectedEdgeDiagnostics = edge
@@ -80,9 +71,7 @@ export function InspectorPanel({
         opened={feedbackDialogOpen}
       />
       <Stack gap="md">
-        <GraphDiagnosticsPanel semanticDiagnostics={semanticDiagnostics} validation={validation} />
         <ConnectionDiagnosticsPanel connectionCheck={connectionCheck} />
-        <Divider />
 
         {edge ? (
           <EdgeInspector
@@ -100,11 +89,8 @@ export function InspectorPanel({
             onImportAsset={onImportAsset}
             onOpenHelpGraph={onOpenHelpGraph}
             onRemoveNode={onRemoveNode}
-            onSendRuntimeControl={onSendRuntimeControl}
             onSetNodeParam={onSetNodeParam}
             onSyncShaderInputs={onSyncShaderInputs}
-            runtimeControlBusy={runtimeControlBusy}
-            runtimeControlEnabled={runtimeControlEnabled}
             runtimeAssetImportBusy={runtimeAssetImportBusy}
             runtimeAssetImportEnabled={runtimeAssetImportEnabled}
             runtimeShaderDiagnostics={runtimeShaderDiagnostics}

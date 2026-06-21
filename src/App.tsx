@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, AppShell, Badge, Group, Modal, ScrollArea, Stack, Text } from "@mantine/core";
-import { CircleAlert } from "lucide-react";
+import { Alert, AppShell, Badge, Group, ScrollArea, Stack, Text } from "@mantine/core";
+import { CircleAlert, X } from "lucide-react";
 import {
   getBuiltinNodeHelpGraph,
   type GraphDocumentV01,
   type GraphNodeV01,
-  type GraphPatchHistoryV01,
-  type GraphPatchOperationV01
+  type GraphPatchOperationV01,
+  type ViewStateV01
 } from "@skenion/contracts";
 import { GraphCanvas } from "./components/GraphCanvas";
+import { DiagnosticsFooter } from "./components/DiagnosticsFooter";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { PalettePanel } from "./components/PalettePanel";
-import { RuntimePanel } from "./components/RuntimePanel";
+import { RuntimeLogsPanel, RuntimeSettingsPanel } from "./components/RuntimePanel";
 import { StudioToolbar } from "./components/StudioToolbar";
+import { Dialog } from "./components/core/Dialog/Dialog";
+import { IconButton } from "./components/core/IconButton/IconButton";
+import { clientLogLine, runtimeLogLineFromEvent, type LogLevel, type LogLine } from "./components/log/LogConsole";
 import { nodeRegistry } from "./data/registry";
 import {
   portDemoSampleGraph,
@@ -42,6 +46,7 @@ import {
   parseProjectDocument,
   reconcileViewStateWithGraph
 } from "./graph/projectDocument";
+import { videoAssetSizeForSource } from "./graph/videoAsset";
 import {
   analyzeGraphPortSemantics,
   findEdgeInspectorModel
@@ -54,6 +59,10 @@ import { createReplaceShaderInterfacePatch } from "./graph/fullscreenShader";
 import {
   createRuntimeClient,
   DEFAULT_RUNTIME_URL,
+  isRuntimeSessionEvent,
+  isRuntimeLogEvent,
+  runtimeLogStreamUrl,
+  runtimeSessionEventsStreamUrl,
   RuntimeClientError,
   type RuntimeClient
 } from "./runtime/client";
@@ -72,13 +81,18 @@ import type {
   RuntimeControlStateResponse,
   RuntimeControlValue,
   RuntimeGeneratedShaderResponse,
+  RuntimeHistory,
   RuntimeInfo,
-  RuntimeResultKind,
   RuntimePatchResponse,
+  RuntimeResultKind,
   RuntimePreviewStatus,
+  RuntimeSessionEvent,
   RuntimeSessionResponse,
-  RuntimeTelemetrySnapshot
+  RuntimeTelemetrySnapshot,
+  RuntimeViewPatchOperation
 } from "./runtime/types";
+import { runtimeHistoryActionAvailability } from "./runtime/historySync";
+import { runtimeHistoryShortcutAction, type RuntimeHistoryShortcutAction } from "./runtime/historyShortcuts";
 
 export default function App() {
   const [graph, setGraph] = useState<GraphDocumentV01>(sampleGraph);
@@ -87,7 +101,11 @@ export default function App() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [activeHelpNodeId, setActiveHelpNodeId] = useState<string | null>(null);
   const [sidePanelOpen, setSidePanelOpen] = useState(true);
-  const [runtimeControlOpen, setRuntimeControlOpen] = useState(false);
+  const [inspectorEdgeHovered, setInspectorEdgeHovered] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [clientLogLines, setClientLogLines] = useState<LogLine[]>([]);
+  const [runtimeStreamLogLines, setRuntimeStreamLogLines] = useState<LogLine[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [graphLocked, setGraphLocked] = useState(true);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -102,7 +120,7 @@ export default function App() {
   const [runtimeControlState, setRuntimeControlState] = useState<RuntimeControlStateResponse | null>(null);
   const [runtimeControlPulses, setRuntimeControlPulses] = useState<Record<string, number>>({});
   const runtimeControlPulseCounterRef = useRef(0);
-  const [runtimeHistory, setRuntimeHistory] = useState<GraphPatchHistoryV01 | null>(null);
+  const [runtimeHistory, setRuntimeHistory] = useState<RuntimeHistory | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] = useState<RuntimePreviewStatus | null>(null);
   const [runtimeTelemetry, setRuntimeTelemetry] = useState<RuntimeTelemetrySnapshot | null>(null);
   const [generatedShader, setGeneratedShader] = useState<RuntimeGeneratedShaderResponse | null>(null);
@@ -121,13 +139,13 @@ export default function App() {
   const runtimeControlInteractionEnabled =
     runtimeStatus === "connected" &&
     runtimeSessionSynced &&
-    Boolean(runtimeSession?.loaded) &&
+    runtimeSessionLoaded(runtimeSession) &&
     runtimeSupportsControl(runtimeInfo) &&
     runtimeSupportsControlState(runtimeInfo);
   const runtimeGraphAvailable =
     runtimeStatus === "connected" &&
     runtimeSessionSynced &&
-    Boolean(runtimeSession?.loaded);
+    runtimeSessionLoaded(runtimeSession);
   const selectedNode = useMemo(
     () => graph.nodes.find((node) => node.id === selectedNodeId) ?? null,
     [graph.nodes, selectedNodeId]
@@ -150,7 +168,7 @@ export default function App() {
   }>({ inFlight: false, latestSequence: 0, nextSequence: 0, request: null });
   const runtimeLiveStateRef = useRef({
     info: runtimeInfo,
-    sessionLoaded: Boolean(runtimeSession?.loaded),
+    sessionLoaded: runtimeSessionLoaded(runtimeSession),
     sessionSynced: runtimeSessionSynced,
     status: runtimeStatus,
     url: runtimeUrl
@@ -159,15 +177,257 @@ export default function App() {
   useEffect(() => {
     runtimeLiveStateRef.current = {
       info: runtimeInfo,
-      sessionLoaded: Boolean(runtimeSession?.loaded),
+      sessionLoaded: runtimeSessionLoaded(runtimeSession),
       sessionSynced: runtimeSessionSynced,
       status: runtimeStatus,
       url: runtimeUrl
     };
-  }, [runtimeInfo, runtimeSession?.loaded, runtimeSessionSynced, runtimeStatus, runtimeUrl]);
+  }, [runtimeInfo, runtimeSession?.snapshot.project, runtimeSessionSynced, runtimeStatus, runtimeUrl]);
+
+  useEffect(() => {
+    const appendClientError = (message: string) => {
+      const timestamp = new Date().toISOString();
+      setClientLogLines((current) =>
+        [
+          ...current,
+          clientLogLine(`browser-${timestamp}-${current.length}`, "error", message, timestamp)
+        ].slice(-200)
+      );
+    };
+    const handleError = (event: ErrorEvent) => {
+      appendClientError(event.message || "Browser client error.");
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      appendClientError(reason instanceof Error ? reason.message : String(reason ?? "Unhandled promise rejection."));
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+    window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (runtimeStatus !== "connected" || !runtimeSupportsLogStream(runtimeInfo)) {
+      setRuntimeStreamLogLines([]);
+      return undefined;
+    }
+
+    let reportedStreamError = false;
+    const source = new EventSource(runtimeLogStreamUrl(runtimeUrl));
+    const handleRuntimeLog = (event: MessageEvent) => {
+      let value: unknown;
+      try {
+        value = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!isRuntimeLogEvent(value)) {
+        return;
+      }
+      const line = runtimeLogLineFromEvent(value);
+      setRuntimeStreamLogLines((current) => upsertBoundedLogLine(current, line));
+    };
+    const handleLogGap = () => {
+      const timestamp = new Date().toISOString();
+      setRuntimeStreamLogLines((current) =>
+        upsertBoundedLogLine(current, {
+          id: `runtime:stream-gap-${timestamp}`,
+          level: "warning",
+          message: "runtime log stream receiver lagged; some events may be missing",
+          source: "runtime",
+          timestamp
+        })
+      );
+    };
+    const handleStreamError = () => {
+      if (reportedStreamError) {
+        return;
+      }
+      reportedStreamError = true;
+      const timestamp = new Date().toISOString();
+      setClientLogLines((current) =>
+        [
+          ...current,
+          clientLogLine(
+            `runtime-log-stream-${timestamp}-${current.length}`,
+            "warning",
+            "Runtime log stream disconnected.",
+            timestamp
+          )
+        ].slice(-200)
+      );
+    };
+
+    source.addEventListener("log", handleRuntimeLog);
+    source.addEventListener("log-gap", handleLogGap);
+    source.addEventListener("error", handleStreamError);
+
+    return () => {
+      source.removeEventListener("log", handleRuntimeLog);
+      source.removeEventListener("log-gap", handleLogGap);
+      source.removeEventListener("error", handleStreamError);
+      source.close();
+    };
+  }, [runtimeInfo, runtimeStatus, runtimeUrl]);
+
+  useEffect(() => {
+    if (runtimeStatus !== "connected" || !runtimeSupportsSessionEvents(runtimeInfo)) {
+      return undefined;
+    }
+
+    let reportedStreamError = false;
+    const source = new EventSource(runtimeSessionEventsStreamUrl(runtimeUrl));
+    const handleSessionEvent = (event: MessageEvent) => {
+      let value: unknown;
+      try {
+        value = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!isRuntimeSessionEvent(value)) {
+        return;
+      }
+
+      const eventSession = runtimeSessionFromEvent(value);
+      setRuntimeSession(eventSession);
+      setRuntimeHistory(value.history);
+      setRuntimeStatus("connected");
+      const project = value.snapshot.project;
+      if (project) {
+        acceptRuntimeGraph(project.graph, project.viewState);
+        setLastLoadedGraphFingerprint(runtimeSessionFingerprint(eventSession));
+        if (runtimeSupportsControlState(runtimeInfo)) {
+          void refreshRuntimeControlState(createRuntimeClient({ baseUrl: runtimeUrl }), runtimeInfo);
+        }
+        return;
+      }
+      setRuntimeControlState(null);
+      setGeneratedShader(null);
+      setLastLoadedGraphFingerprint(null);
+      clearPendingPatch();
+    };
+    const handleSessionGap = () => {
+      const timestamp = new Date().toISOString();
+      setClientLogLines((current) =>
+        [
+          ...current,
+          clientLogLine(
+            `runtime-session-gap-${timestamp}-${current.length}`,
+            "warning",
+            "Runtime session stream receiver lagged; refreshing session.",
+            timestamp
+          )
+        ].slice(-200)
+      );
+      void refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+    };
+    const handleStreamError = () => {
+      if (reportedStreamError) {
+        return;
+      }
+      reportedStreamError = true;
+      const timestamp = new Date().toISOString();
+      setClientLogLines((current) =>
+        [
+          ...current,
+          clientLogLine(
+            `runtime-session-stream-${timestamp}-${current.length}`,
+            "warning",
+            "Runtime session stream disconnected.",
+            timestamp
+          )
+        ].slice(-200)
+      );
+    };
+
+    source.addEventListener("session", handleSessionEvent);
+    source.addEventListener("session-gap", handleSessionGap);
+    source.addEventListener("error", handleStreamError);
+
+    return () => {
+      source.removeEventListener("session", handleSessionEvent);
+      source.removeEventListener("session-gap", handleSessionGap);
+      source.removeEventListener("error", handleStreamError);
+      source.close();
+    };
+  }, [runtimeInfo, runtimeStatus, runtimeUrl]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const action = runtimeHistoryShortcutAction(event);
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+
+      const availability = runtimeHistoryActionAvailability({
+        connected: runtimeStatus === "connected",
+        graphLocked,
+        sessionLoaded: runtimeSessionLoaded(runtimeSession),
+        sessionSynced: runtimeSessionSynced,
+        pendingPatchOps: pendingPatchOps.length,
+        history: runtimeHistory
+      });
+      if (runtimeBusyAction || (action === "undo" ? !availability.canUndo : !availability.canRedo)) {
+        return;
+      }
+
+      void runRuntimeHistoryShortcut(action);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [
+    pendingPatchOps.length,
+    graphLocked,
+    runtimeBusyAction,
+    runtimeHistory,
+    runtimeInfo,
+    runtimeSession?.snapshot.project,
+    runtimeSessionSynced,
+    runtimeStatus,
+    runtimeUrl
+  ]);
 
   function openInspectSidePanel() {
+    setLogsOpen(false);
     setSidePanelOpen(true);
+  }
+
+  function openLogsSidePanel() {
+    setLogsOpen(true);
+    setSidePanelOpen(true);
+  }
+
+  function appendClientLog(level: LogLevel, message: string) {
+    const timestamp = new Date().toISOString();
+    setClientLogLines((current) =>
+      [
+        ...current,
+        clientLogLine(`studio-${timestamp}-${current.length}`, level, message, timestamp)
+      ].slice(-200)
+    );
+  }
+
+  function appendObjectTextDiagnostics(
+    action: string,
+    diagnostics: Array<{ severity: LogLevel; code: string; message: string }>
+  ) {
+    for (const diagnostic of diagnostics) {
+      appendClientLog(diagnostic.severity, `${action}: ${diagnostic.code}: ${diagnostic.message}`);
+    }
+  }
+
+  function toggleInspectSidePanel() {
+    setSidePanelOpen((open) => {
+      setLogsOpen(false);
+      return !open;
+    });
   }
 
   function addNode(definitionId: string, paramsOverride: Record<string, unknown> = {}) {
@@ -254,15 +514,12 @@ export default function App() {
     }
 
     const result = createGraphNodeFromObjectText(objectText, graph.nodes, nodeRegistry);
-    if (!result.ok || !result.node) {
+    if (!result.node) {
       setRuntimeError(result.diagnostics[0]?.message ?? "Object text could not be resolved.");
       return;
     }
+    appendObjectTextDiagnostics("object box create", result.diagnostics);
     const node = result.node;
-    if (!nodeRegistry.some((definition) => definition.id === node.kind)) {
-      setRuntimeError(`${node.kind} is not available in the local node registry.`);
-      return;
-    }
 
     const patch = { type: "addNode", node } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
@@ -291,6 +548,42 @@ export default function App() {
     setRuntimeResult(null);
   }
 
+  function replaceObjectTextNode(nodeId: string, objectText: string) {
+    if (graphLocked) {
+      setRuntimeError("Unlock the graph before editing object boxes.");
+      return;
+    }
+    const existing = graph.nodes.find((node) => node.id === nodeId);
+    if (!existing) {
+      setRuntimeError(`${nodeId} no longer exists.`);
+      return;
+    }
+
+    const result = createGraphNodeFromObjectText(
+      objectText,
+      graph.nodes.filter((node) => node.id !== nodeId),
+      nodeRegistry,
+      { nodeId }
+    );
+    if (!result.node) {
+      return;
+    }
+    appendObjectTextDiagnostics("object box edit", result.diagnostics);
+
+    const patch = {
+      type: "replaceNode",
+      nodeId,
+      node: result.node,
+      edgePolicy: "removeInvalidEdges"
+    } satisfies GraphPatch;
+    const nextGraph = applyPatch(graph, patch);
+    updateGraph(nextGraph, [patch]);
+    setSelectedNodeId(nodeId);
+    setActiveHelpNodeId(null);
+    setSelectedEdgeId(null);
+    openInspectSidePanel();
+  }
+
   function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
     setGraph(nextGraph);
     setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
@@ -304,7 +597,7 @@ export default function App() {
       return;
     }
 
-    const runtimeGraphRevision = runtimeSession?.graphRevision ?? null;
+    const runtimeGraphRevision = runtimeSession?.snapshot.project?.graph.revision ?? null;
     if (runtimeStatus !== "connected" || !runtimeSessionSynced || !runtimeGraphRevision) {
       setRuntimeError("Runtime session is required before graph edits can be applied.");
       return;
@@ -313,6 +606,75 @@ export default function App() {
     const operations = patches.map(graphPatchFromStudioAction);
     setPatchConflict(null);
     void applyRuntimePatchOperations(operations, runtimeGraphRevision);
+  }
+
+  function updateViewStateFromCanvas(nextViewState: ViewStateV01) {
+    setViewState(nextViewState);
+    if (!nodeViewStateChanged(viewState, nextViewState)) {
+      return;
+    }
+    void applyRuntimeViewStatePatch(nextViewState);
+  }
+
+  async function applyRuntimeViewStatePatch(nextViewState: ViewStateV01) {
+    const baseViewRevision = runtimeSession?.snapshot.viewRevision ?? null;
+    if (runtimeStatus !== "connected" || !runtimeSessionSynced || baseViewRevision === null) {
+      setRuntimeError("Runtime session is required before object positions can be applied.");
+      return;
+    }
+    const ops = changedNodeViewOperations(graph, viewState, nextViewState);
+    if (ops.length === 0) {
+      return;
+    }
+
+    setRuntimeBusyAction("mutateSession");
+    setRuntimeError(null);
+    setPatchConflict(null);
+    try {
+      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const response = await client.mutateSession({
+        clientId: "studio-local",
+        description: "move object",
+        viewPatch: {
+          baseViewRevision,
+          ops
+        }
+      });
+      const nextSession = runtimeSessionFromMutation(response);
+      setRuntimeSession(nextSession);
+      setRuntimeHistory(response.history);
+      setRuntimeResult({
+        kind: "mutateSession",
+        response,
+        receivedAt: new Date().toISOString()
+      });
+      setRuntimeStatus("connected");
+
+      if (response.ok && response.applied) {
+        const project = response.snapshot.project;
+        setViewState(project ? reconcileViewStateWithGraph(project.graph, project.viewState) : nextViewState);
+        clearPendingPatch();
+        return;
+      }
+
+      if (response.conflict) {
+        const message =
+          response.diagnostics[0]?.message ?? "Runtime rejected view patch; Studio was restored from Runtime session.";
+        setPatchConflict(message);
+        setRuntimeError(message);
+        await refreshRuntimeProjectFromRuntime(client);
+      }
+    } catch (error) {
+      setRuntimeStatus("error");
+      setRuntimeError(error instanceof Error ? error.message : "Runtime view patch failed.");
+      try {
+        await refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+      } catch {
+        // Keep the original runtime error visible.
+      }
+    } finally {
+      setRuntimeBusyAction(null);
+    }
   }
 
   function clearPendingPatch() {
@@ -329,7 +691,7 @@ export default function App() {
       return;
     }
 
-    setRuntimeBusyAction("applyPatch");
+    setRuntimeBusyAction("mutateSession");
     setRuntimeError(null);
     setPatchConflict(null);
     setPendingPatchOps(operations);
@@ -340,20 +702,25 @@ export default function App() {
         id: `patch_${Date.now()}`,
         clientId: "studio-local"
       });
-      const response = await client.applySessionPatch(patch);
-      setRuntimeSession(response.session);
+      const response = await client.mutateSession({
+        graphPatch: patch,
+        clientId: "studio-local"
+      });
+      const nextSession = runtimeSessionFromMutation(response);
+      setRuntimeSession(nextSession);
       setRuntimeHistory(response.history);
       setRuntimeResult({
-        kind: "applyPatch",
+        kind: "mutateSession",
         response,
         receivedAt: new Date().toISOString()
       });
       setRuntimeStatus("connected");
 
-      if (response.ok && response.applied && response.graph) {
-        acceptRuntimeGraph(response.graph);
+      const project = response.snapshot.project;
+      if (response.ok && response.applied && project) {
+        acceptRuntimeGraph(project.graph, project.viewState);
         clearPendingPatch();
-        if (response.session.loaded && runtimeSupportsControlState(runtimeInfo)) {
+        if (runtimeSupportsControlState(runtimeInfo)) {
           await refreshRuntimeControlState(client);
         } else {
           setRuntimeControlState(null);
@@ -381,9 +748,11 @@ export default function App() {
     }
   }
 
-  function acceptRuntimeGraph(nextGraph: GraphDocumentV01) {
+  function acceptRuntimeGraph(nextGraph: GraphDocumentV01, nextViewState?: ViewStateV01 | null) {
     setGraph(nextGraph);
-    setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
+    setViewState((currentViewState) =>
+      reconcileViewStateWithGraph(nextGraph, nextViewState ?? currentViewState)
+    );
     setSelectedNodeId((current) =>
       current && nextGraph.nodes.some((node) => node.id === current) ? current : nextGraph.nodes[0]?.id ?? null
     );
@@ -407,7 +776,8 @@ export default function App() {
     try {
       const client = createRuntimeClient({ baseUrl: runtimeUrl });
       const response = await client.loadSession(project);
-      if (!response.ok || !response.loaded) {
+      const loadedProject = response.snapshot.project;
+      if (!response.ok || !loadedProject) {
         throw new RuntimeClientError(response.diagnostics[0]?.message ?? "Runtime rejected project load.");
       }
 
@@ -418,13 +788,10 @@ export default function App() {
         receivedAt: new Date().toISOString()
       });
       setRuntimeStatus("connected");
-      acceptRuntimeGraph(project.graph);
-      setViewState(reconcileViewStateWithGraph(project.graph, nextViewState));
+      acceptRuntimeGraph(loadedProject.graph, loadedProject.viewState ?? project.viewState ?? nextViewState);
       clearPendingPatch();
       setRuntimeControlState(runtimeSupportsControlState(runtimeInfo) ? await client.getControlState() : null);
-      if (runtimeSupportsHistory(runtimeInfo)) {
-        await refreshRuntimeHistory(client);
-      }
+      await refreshRuntimeHistory(client);
       await refreshRuntimePreview(client);
       await refreshRuntimeTelemetry(client);
       setGeneratedShader(null);
@@ -441,28 +808,19 @@ export default function App() {
     info: RuntimeInfo,
     session: RuntimeSessionResponse
   ): Promise<RuntimeSessionResponse> {
-    if (!session.loaded) {
+    if (!session.snapshot.project) {
       const seedProject = createRuntimeProjectPayload(sampleGraph, nodeRegistry);
       const loaded = await client.loadSession(seedProject);
-      if (!loaded.ok || !loaded.loaded) {
+      const loadedProject = loaded.snapshot.project;
+      if (!loaded.ok || !loadedProject) {
         throw new RuntimeClientError(loaded.diagnostics[0]?.message ?? "Runtime rejected initial project load.");
       }
-      acceptRuntimeGraph(seedProject.graph);
-      setViewState(createViewStateFromPositions(seedProject.graph, {}));
+      acceptRuntimeGraph(loadedProject.graph, loadedProject.viewState);
       return loaded;
     }
 
-    if (!runtimeSupportsSessionProject(info)) {
-      throw new RuntimeClientError("Runtime does not expose the canonical session project.");
-    }
-
-    const projectResponse = await client.getSessionProject();
-    if (!projectResponse.ok || !projectResponse.loaded || !projectResponse.project) {
-      throw new RuntimeClientError(projectResponse.diagnostics[0]?.message ?? "Runtime session project is unavailable.");
-    }
-
-    acceptRuntimeGraph(projectResponse.project.graph);
-    return projectResponse.session;
+    acceptRuntimeGraph(session.snapshot.project.graph, session.snapshot.project.viewState);
+    return session;
   }
 
   async function importGraph(file: File | null) {
@@ -480,7 +838,7 @@ export default function App() {
 
       const normalizedGraph = normalizeLegacyGraphTypes(result.value);
       await loadProjectIntoRuntime(
-        createRuntimeProjectPayload(normalizedGraph, nodeRegistry),
+        createRuntimeProjectPayload(normalizedGraph, nodeRegistry, createViewStateFromPositions(normalizedGraph, {})),
         createViewStateFromPositions(normalizedGraph, {})
       );
       setSelectedNodeId(normalizedGraph.nodes[0]?.id ?? null);
@@ -501,7 +859,7 @@ export default function App() {
     try {
       const project = parseProjectDocument(JSON.parse(await file.text()) as unknown);
       await loadProjectIntoRuntime(
-        createRuntimeProjectPayload(project.graph, nodeRegistry),
+        createRuntimeProjectPayload(project.graph, nodeRegistry, project.viewState),
         project.viewState
       );
       setSelectedNodeId(project.graph.nodes[0]?.id ?? null);
@@ -524,7 +882,7 @@ export default function App() {
 
   function resetSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(sampleGraph, nodeRegistry),
+      createRuntimeProjectPayload(sampleGraph, nodeRegistry, createViewStateFromPositions(sampleGraph, {})),
       createViewStateFromPositions(sampleGraph, {})
     );
     setSelectedNodeId(sampleGraph.nodes[0]?.id ?? null);
@@ -537,7 +895,7 @@ export default function App() {
 
   function loadRenderSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(renderSampleGraph, nodeRegistry),
+      createRuntimeProjectPayload(renderSampleGraph, nodeRegistry, createViewStateFromPositions(renderSampleGraph, {})),
       createViewStateFromPositions(renderSampleGraph, {})
     );
     setSelectedNodeId(renderSampleGraph.nodes[0]?.id ?? null);
@@ -550,7 +908,7 @@ export default function App() {
 
   function loadShaderUniformSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(shaderUniformSampleGraph, nodeRegistry),
+      createRuntimeProjectPayload(shaderUniformSampleGraph, nodeRegistry, shaderUniformSampleViewState),
       shaderUniformSampleViewState
     );
     setSelectedNodeId(shaderUniformSampleGraph.nodes[0]?.id ?? null);
@@ -563,7 +921,7 @@ export default function App() {
 
   function loadShaderMultiUniformSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(shaderMultiUniformSampleGraph, nodeRegistry),
+      createRuntimeProjectPayload(shaderMultiUniformSampleGraph, nodeRegistry, shaderMultiUniformSampleViewState),
       shaderMultiUniformSampleViewState
     );
     setSelectedNodeId(shaderMultiUniformSampleGraph.nodes[0]?.id ?? null);
@@ -576,7 +934,7 @@ export default function App() {
 
   function loadPortDemoSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(portDemoSampleGraph, nodeRegistry),
+      createRuntimeProjectPayload(portDemoSampleGraph, nodeRegistry, portDemoSampleViewState),
       portDemoSampleViewState
     );
     setSelectedNodeId(portDemoSampleGraph.nodes[0]?.id ?? null);
@@ -589,7 +947,7 @@ export default function App() {
 
   function loadObjectRoutingPanelSample() {
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(objectRoutingPanelSampleGraph, nodeRegistry),
+      createRuntimeProjectPayload(objectRoutingPanelSampleGraph, nodeRegistry, objectRoutingPanelSampleViewState),
       objectRoutingPanelSampleViewState
     );
     setSelectedNodeId(objectRoutingPanelSampleGraph.nodes[0]?.id ?? null);
@@ -675,7 +1033,7 @@ export default function App() {
       revision: "1"
     };
     void loadProjectIntoRuntime(
-      createRuntimeProjectPayload(editableGraph, nodeRegistry),
+      createRuntimeProjectPayload(editableGraph, nodeRegistry, createViewStateFromPositions(editableGraph, {})),
       createViewStateFromPositions(editableGraph, {})
     );
     setSelectedNodeId(null);
@@ -704,7 +1062,7 @@ export default function App() {
       const previewStatus = runtimeSupportsPreview(info) ? await client.getPreviewStatus() : null;
       const telemetry = runtimeSupportsTelemetry(info) ? await client.getTelemetry() : null;
       const controlState =
-        session.loaded && runtimeSupportsControlState(info) ? await client.getControlState() : null;
+        runtimeSessionLoaded(session) && runtimeSupportsControlState(info) ? await client.getControlState() : null;
       setRuntimeInfo(info);
       setRuntimeSession(session);
       setRuntimeControlState(controlState);
@@ -756,15 +1114,13 @@ export default function App() {
       if (kind === "clearSession") {
         setGeneratedShader(null);
       }
-      if ((kind === "session" || kind === "clearSession") && runtimeSupportsHistory(runtimeInfo)) {
-        await refreshRuntimeHistory(client);
-      }
       if (kind === "session" || kind === "clearSession") {
+        await refreshRuntimeHistory(client);
         await refreshRuntimePreview(client);
       }
-      if (response.loaded && runtimeSupportsControlState(runtimeInfo)) {
+      if (runtimeSessionLoaded(response) && runtimeSupportsControlState(runtimeInfo)) {
         await refreshRuntimeControlState(client);
-      } else if (!response.loaded) {
+      } else if (!runtimeSessionLoaded(response)) {
         setRuntimeControlState(null);
       }
       await refreshRuntimeTelemetry(client);
@@ -781,7 +1137,8 @@ export default function App() {
     info: RuntimeInfo | null = runtimeInfo
   ) {
     const session = await client.getSession();
-    if (!info || !session.loaded) {
+    const project = session.snapshot.project;
+    if (!info || !project) {
       setRuntimeSession(session);
       setRuntimeControlState(null);
       setRuntimeHistory(null);
@@ -793,28 +1150,25 @@ export default function App() {
       return session;
     }
 
-    if (!runtimeSupportsSessionProject(info)) {
-      throw new RuntimeClientError("Runtime does not expose the canonical session project.");
-    }
-
-    const project = await client.getSessionProject();
-    if (!project.ok || !project.loaded || !project.project) {
-      throw new RuntimeClientError(project.diagnostics[0]?.message ?? "Runtime session project is unavailable.");
-    }
-
-    acceptRuntimeGraph(project.project.graph);
-    setRuntimeSession(project.session);
-    setRuntimeControlState(project.session.loaded && runtimeSupportsControlState(info) ? await client.getControlState() : null);
-    if (runtimeSupportsHistory(info)) {
-      await refreshRuntimeHistory(client);
-    }
+    acceptRuntimeGraph(project.graph, project.viewState);
+    setRuntimeSession(session);
+    setRuntimeControlState(runtimeSupportsControlState(info) ? await client.getControlState() : null);
+    await refreshRuntimeHistory(client, info);
     await refreshRuntimePreview(client);
     await refreshRuntimeTelemetry(client);
     clearPendingPatch();
-    return project.session;
+    return session;
   }
 
-  async function refreshRuntimeHistory(client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl })) {
+  async function refreshRuntimeHistory(
+    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    info: RuntimeInfo | null = runtimeInfo
+  ) {
+    if (!runtimeSupportsHistory(info)) {
+      setRuntimeHistory(null);
+      return null;
+    }
+
     const history = await client.getSessionHistory();
     setRuntimeHistory(history);
     return history;
@@ -902,29 +1256,17 @@ export default function App() {
       if (!response.ok || !response.asset) {
         throw new RuntimeClientError(response.diagnostics[0]?.message ?? "Runtime asset import failed.");
       }
+      const localMetadata = await readLocalVideoAssetMetadata(file).catch(() => ({}));
       setNodeParams(node.id, {
         assetRef: response.asset.runtimeUri,
         name: response.asset.name,
-        mimeType: response.asset.mimeType
+        mimeType: response.asset.mimeType,
+        ...localMetadata
       });
       setRuntimeStatus("connected");
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime asset import failed.");
-    } finally {
-      setRuntimeBusyAction(null);
-    }
-  }
-
-  async function refreshRuntimeHistoryFromPanel() {
-    setRuntimeBusyAction("refreshHistory");
-    setRuntimeError(null);
-    try {
-      await refreshRuntimeHistory();
-      setRuntimeStatus("connected");
-    } catch (error) {
-      setRuntimeStatus("error");
-      setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
     } finally {
       setRuntimeBusyAction(null);
     }
@@ -985,45 +1327,67 @@ export default function App() {
     }
   }
 
-  async function runRuntimePatchHistoryAction(
-    kind: "undoPatch" | "redoPatch",
-    action: () => Promise<RuntimePatchResponse>
-  ) {
-    if (pendingPatchOps.length > 0) {
+  async function runRuntimeHistoryShortcut(action: RuntimeHistoryShortcutAction) {
+    if (runtimeBusyAction) {
       return;
     }
 
+    const availability = runtimeHistoryActionAvailability({
+      connected: runtimeStatus === "connected",
+      graphLocked,
+      sessionLoaded: runtimeSessionLoaded(runtimeSession),
+      sessionSynced: runtimeSessionSynced,
+      pendingPatchOps: pendingPatchOps.length,
+      history: runtimeHistory
+    });
+    if (action === "undo" ? !availability.canUndo : !availability.canRedo) {
+      return;
+    }
+
+    const kind = action === "undo" ? "undoPatch" : "redoPatch";
     setRuntimeBusyAction(kind);
     setRuntimeError(null);
     setPatchConflict(null);
     try {
-      const response = await action();
       const client = createRuntimeClient({ baseUrl: runtimeUrl });
-      setRuntimeSession(response.session);
-      setRuntimeHistory(response.history);
-      if (response.session.loaded && runtimeSupportsControlState(runtimeInfo)) {
-        await refreshRuntimeControlState(client);
-      } else {
-        setRuntimeControlState(null);
-      }
-      await refreshRuntimePreview(client);
-      await refreshRuntimeTelemetry(client);
-      setRuntimeResult({
-        kind,
-        response,
-        receivedAt: new Date().toISOString()
-      });
-      setRuntimeStatus("connected");
-      if (response.ok && response.applied && response.graph) {
-        acceptRuntimeGraph(response.graph);
-        clearPendingPatch();
-      }
+      const response = action === "undo" ? await client.undoSessionPatch() : await client.redoSessionPatch();
+      await applyRuntimeHistoryShortcutResponse(kind, response, client);
     } catch (error) {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime request failed.");
     } finally {
       setRuntimeBusyAction(null);
     }
+  }
+
+  async function applyRuntimeHistoryShortcutResponse(
+    kind: "undoPatch" | "redoPatch",
+    response: RuntimePatchResponse,
+    client: RuntimeClient
+  ) {
+    const nextSession = runtimeSessionFromMutation(response);
+    setRuntimeSession(nextSession);
+    setRuntimeHistory(response.history);
+    setRuntimeResult({
+      kind,
+      response,
+      receivedAt: new Date().toISOString()
+    });
+    setRuntimeStatus("connected");
+
+    const project = response.snapshot.project;
+    if (response.ok && response.applied && project) {
+      acceptRuntimeGraph(project.graph, project.viewState);
+      clearPendingPatch();
+    }
+
+    if (runtimeSessionLoaded(nextSession) && runtimeSupportsControlState(runtimeInfo)) {
+      await refreshRuntimeControlState(client);
+    } else {
+      setRuntimeControlState(null);
+    }
+    await refreshRuntimePreview(client);
+    await refreshRuntimeTelemetry(client);
   }
 
   async function sendRuntimeControlEvent(request: RuntimeControlEventRequest) {
@@ -1046,7 +1410,15 @@ export default function App() {
       applyRuntimeControlEventResponse(response);
       if (response.controlRevision !== null) {
         setRuntimeSession((current) =>
-          current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
+          current
+            ? {
+                ...current,
+                snapshot: {
+                  ...current.snapshot,
+                  controlRevision: response.controlRevision ?? current.snapshot.controlRevision
+                }
+              }
+            : current
         );
         setRuntimePreviewStatus((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
@@ -1161,7 +1533,15 @@ export default function App() {
       if (response.controlRevision !== null) {
         applyRuntimeControlEventResponse(response, { applyValues: isCurrentLiveResponse });
         setRuntimeSession((current) =>
-          current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
+          current
+            ? {
+                ...current,
+                snapshot: {
+                  ...current.snapshot,
+                  controlRevision: response.controlRevision ?? current.snapshot.controlRevision
+                }
+              }
+            : current
         );
         setRuntimePreviewStatus((current) =>
           current ? { ...current, controlRevision: response.controlRevision ?? current.controlRevision } : current
@@ -1181,10 +1561,6 @@ export default function App() {
         void flushRuntimeLiveControlQueue();
       }
     }
-  }
-
-  function runtimeSupportsHistory(info: RuntimeInfo | null): boolean {
-    return info?.capabilities.includes("session.history") ?? false;
   }
 
   function recordRuntimeControlPulses(response: RuntimeControlEventResponse) {
@@ -1248,8 +1624,8 @@ export default function App() {
     return true;
   }
 
-  function runtimeSupportsSessionProject(info: RuntimeInfo | null): boolean {
-    return info?.capabilities.includes("session.project") ?? false;
+  function runtimeSupportsSessionEvents(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.events.stream") ?? false;
   }
 
   function runtimeSupportsPreview(info: RuntimeInfo | null): boolean {
@@ -1258,6 +1634,14 @@ export default function App() {
 
   function runtimeSupportsTelemetry(info: RuntimeInfo | null): boolean {
     return info?.capabilities.includes("session.telemetry") ?? false;
+  }
+
+  function runtimeSupportsLogStream(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("runtime.logs.stream") ?? false;
+  }
+
+  function runtimeSupportsHistory(info: RuntimeInfo | null): boolean {
+    return info?.capabilities.includes("session.history") ?? false;
   }
 
   function runtimeSupportsControl(info: RuntimeInfo | null): boolean {
@@ -1314,17 +1698,15 @@ export default function App() {
     };
   }, [runtimeInfo, runtimeStatus, runtimeUrl]);
 
-  const runtimeControlPanel = (
-    <RuntimePanel
+  const runtimeSettingsPanel = (
+    <RuntimeSettingsPanel
       busyAction={runtimeBusyAction}
       error={runtimeError}
       info={runtimeInfo}
       result={runtimeResult}
-      history={runtimeHistory}
       previewStatus={runtimePreviewStatus}
       session={runtimeSession}
       sessionSynced={runtimeSessionSynced}
-      telemetry={runtimeTelemetry}
       status={runtimeStatus}
       url={runtimeUrl}
       onClearSession={() =>
@@ -1333,15 +1715,6 @@ export default function App() {
         )
       }
       onConnect={connectRuntime}
-      onGetClockSource={(sourceId) =>
-        createRuntimeClient({ baseUrl: runtimeUrl }).getClockSource(sourceId)
-      }
-      onListClockSources={() =>
-        createRuntimeClient({ baseUrl: runtimeUrl }).listClockSources()
-      }
-      onListMidiInputs={() =>
-        createRuntimeClient({ baseUrl: runtimeUrl }).listMidiInputs()
-      }
       onPlanSession={() =>
         runRuntimeSessionAction("planSession", () =>
           createRuntimeClient({ baseUrl: runtimeUrl }).planSession()
@@ -1352,9 +1725,6 @@ export default function App() {
         runRuntimeSessionAction("runSession", () =>
           createRuntimeClient({ baseUrl: runtimeUrl }).runSession(runtimeFrames)
         )
-      }
-      onStartMidiClockSource={(request) =>
-        createRuntimeClient({ baseUrl: runtimeUrl }).startMidiClockSource(request)
       }
       onUrlChange={(nextUrl) => {
         setRuntimeUrl(nextUrl);
@@ -1370,15 +1740,6 @@ export default function App() {
         clearPendingPatch();
         setRuntimeError(null);
       }}
-      onStopMidiClockSource={(request) =>
-        createRuntimeClient({ baseUrl: runtimeUrl }).stopMidiClockSource(request)
-      }
-      onRedoPatch={() =>
-        runRuntimePatchHistoryAction("redoPatch", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).redoSessionPatch()
-        )
-      }
-      onRefreshHistory={refreshRuntimeHistoryFromPanel}
       onRefreshPreview={refreshRuntimePreviewFromPanel}
       onRestartPreview={() =>
         runRuntimePreviewAction("restartPreview", () =>
@@ -1395,11 +1756,6 @@ export default function App() {
           createRuntimeClient({ baseUrl: runtimeUrl }).stopPreview()
         )
       }
-      onUndoPatch={() =>
-        runRuntimePatchHistoryAction("undoPatch", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).undoSessionPatch()
-        )
-      }
       onValidateSession={() =>
         runRuntimeSessionAction("validateSession", () =>
           createRuntimeClient({ baseUrl: runtimeUrl }).validateSession()
@@ -1408,29 +1764,43 @@ export default function App() {
     />
   );
 
+  const runtimeLogsPanel = (
+    <RuntimeLogsPanel
+      clientLines={clientLogLines}
+      error={runtimeError}
+      info={runtimeInfo}
+      previewStatus={runtimePreviewStatus}
+      result={runtimeResult}
+      runtimeLines={runtimeStreamLogLines}
+      semanticDiagnostics={semanticDiagnostics}
+      session={runtimeSession}
+      status={runtimeStatus}
+      telemetry={runtimeTelemetry}
+      validation={validation}
+    />
+  );
+
   return (
     <AppShell
       header={{ height: 58 }}
+      footer={{ height: 30 }}
       navbar={{ width: 292, breakpoint: "sm" }}
       aside={sidePanelOpen ? { width: 356, breakpoint: "md" } : undefined}
       padding={0}
     >
-      <Modal
+      <Dialog
         centered
-        onClose={() => setRuntimeControlOpen(false)}
-        opened={runtimeControlOpen}
+        onClose={() => setSettingsOpen(false)}
+        opened={settingsOpen}
         size="xl"
-        title="Runtime Control"
+        title="Settings"
       >
-        <ScrollArea.Autosize mah="78vh" offsetScrollbars>
-          {runtimeControlPanel}
-        </ScrollArea.Autosize>
-      </Modal>
+        {runtimeSettingsPanel}
+      </Dialog>
 
       <AppShell.Header>
         <StudioToolbar
           graph={graph}
-          graphLocked={graphLocked}
           runtimeGraphAvailable={runtimeGraphAvailable}
           summary={graphSummary(graph)}
           validation={validation}
@@ -1444,12 +1814,22 @@ export default function App() {
           onLoadShaderMultiUniformSample={loadShaderMultiUniformSample}
           onLoadShaderUniformSample={loadShaderUniformSample}
           onReset={resetSample}
-          onToggleGraphLock={() => setGraphLocked((locked) => !locked)}
-          onOpenRuntimeControl={() => setRuntimeControlOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
           inspectorOpen={sidePanelOpen}
-          onToggleInspector={() => setSidePanelOpen((open) => !open)}
+          onToggleInspector={toggleInspectSidePanel}
         />
       </AppShell.Header>
+
+      <AppShell.Footer>
+        <DiagnosticsFooter
+          graphLockDisabled={!runtimeGraphAvailable}
+          graphLocked={graphLocked}
+          onOpenLogs={openLogsSidePanel}
+          onToggleGraphLock={() => setGraphLocked((locked) => !locked)}
+          semanticDiagnostics={semanticDiagnostics}
+          validation={validation}
+        />
+      </AppShell.Footer>
 
       <AppShell.Navbar p="md">
         {runtimeGraphAvailable ? (
@@ -1472,12 +1852,18 @@ export default function App() {
               className="studio-alert"
               color="red"
               icon={<CircleAlert size={18} />}
-              onClose={() => setImportError(null)}
-              withCloseButton
             >
-              <Group gap="xs">
-                <Text fw={700}>Import failed</Text>
-                <Text>{importError}</Text>
+              <Group gap="xs" justify="space-between" wrap="nowrap">
+                <Group gap="xs">
+                  <Text fw={700}>Import failed</Text>
+                  <Text>{importError}</Text>
+                </Group>
+                <IconButton
+                  icon={<X size={14} />}
+                  label="Dismiss import error"
+                  onClick={() => setImportError(null)}
+                  size="sm"
+                />
               </Group>
             </Alert>
           ) : null}
@@ -1489,6 +1875,7 @@ export default function App() {
               onAddNodeAtPosition={addNodeAtPosition}
               onConnectionCheck={setConnectionCheck}
               onGraphChange={updateGraph}
+              onImportAsset={importRuntimeAsset}
               onObjectControl={(nodeId, portId, message) => {
                 void sendRuntimeControlEvent({
                   nodeId,
@@ -1504,10 +1891,11 @@ export default function App() {
                 });
               }}
               onObjectParamChange={setNodeParam}
+              onObjectTextCommit={replaceObjectTextNode}
               runtimeControlEnabled={runtimeControlInteractionEnabled}
               runtimeControlPulses={runtimeControlPulses}
               runtimeControlValues={runtimeSessionSynced ? runtimeControlState?.values ?? {} : {}}
-              onViewStateChange={setViewState}
+              onViewStateChange={updateViewStateFromCanvas}
               onSelectedEdgeChange={(edgeId) => {
                 setSelectedEdgeId(edgeId);
                 if (edgeId) {
@@ -1533,9 +1921,30 @@ export default function App() {
       </AppShell.Main>
 
       {sidePanelOpen ? (
-        <AppShell.Aside p="md">
+        <AppShell.Aside
+          onClickCapture={(event) => {
+            const leftEdge = event.currentTarget.getBoundingClientRect().left;
+            if (event.clientX - leftEdge <= 6) {
+              event.preventDefault();
+              event.stopPropagation();
+              setInspectorEdgeHovered(false);
+              setLogsOpen(false);
+              setSidePanelOpen(false);
+            }
+          }}
+          onMouseLeave={() => setInspectorEdgeHovered(false)}
+          onMouseMoveCapture={(event) => {
+            const leftEdge = event.currentTarget.getBoundingClientRect().left;
+            const edgeHovered = event.clientX - leftEdge <= 6;
+            setInspectorEdgeHovered((current) => current === edgeHovered ? current : edgeHovered);
+          }}
+          p="md"
+          style={{ cursor: inspectorEdgeHovered ? "pointer" : undefined }}
+        >
           <ScrollArea className="aside-scroll" offsetScrollbars>
-            {runtimeGraphAvailable ? (
+            {logsOpen ? (
+              runtimeLogsPanel
+            ) : runtimeGraphAvailable ? (
               <InspectorPanel
                 connectionCheck={connectionCheck}
                 generatedShader={generatedShader}
@@ -1549,22 +1958,12 @@ export default function App() {
                 onLoadGeneratedShader={runtimeSupportsGeneratedShader(runtimeInfo) ? loadGeneratedShader : undefined}
                 onOpenHelpGraph={openHelpGraphAsNewGraph}
                 onRemoveNode={removeNode}
-                onSendRuntimeControl={(request) => {
-                  void sendRuntimeControlEvent(request);
-                }}
                 onSetNodeParam={setNodeParam}
                 onSyncShaderInputs={syncShaderInputs}
-                runtimeControlBusy={runtimeBusyAction === "controlEvent"}
-                runtimeControlEnabled={
-                  runtimeStatus === "connected" &&
-                  Boolean(runtimeSession?.loaded) &&
-                  runtimeSupportsControl(runtimeInfo)
-                }
                 runtimeAssetImportBusy={runtimeBusyAction === "assetImport"}
                 runtimeAssetImportEnabled={runtimeStatus === "connected" && runtimeSupportsAssetImport(runtimeInfo)}
                 runtimeShaderDiagnostics={selectedRuntimeShaderDiagnostics}
                 semanticDiagnostics={semanticDiagnostics}
-                validation={validation}
               />
             ) : (
               <RuntimeRequiredPanel status={runtimeStatus} />
@@ -1580,6 +1979,126 @@ function cloneGraph(graph: GraphDocumentV01): GraphDocumentV01 {
   return JSON.parse(JSON.stringify(graph)) as GraphDocumentV01;
 }
 
+function nodeViewStateChanged(before: ViewStateV01, after: ViewStateV01): boolean {
+  return JSON.stringify(before.canvas.nodes) !== JSON.stringify(after.canvas.nodes);
+}
+
+function changedNodeViewOperations(
+  graph: GraphDocumentV01,
+  before: ViewStateV01,
+  after: ViewStateV01
+): RuntimeViewPatchOperation[] {
+  const beforeView = reconcileViewStateWithGraph(graph, before);
+  const afterView = reconcileViewStateWithGraph(graph, after);
+  return Object.entries(afterView.canvas.nodes)
+    .filter(([nodeId, nodeView]) => JSON.stringify(beforeView.canvas.nodes[nodeId]) !== JSON.stringify(nodeView))
+    .map(([nodeId, to]) => ({
+      op: "moveNodeView",
+      nodeId,
+      from: beforeView.canvas.nodes[nodeId],
+      to
+    }));
+}
+
+async function readLocalVideoAssetMetadata(file: File): Promise<Record<string, unknown>> {
+  const objectUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "metadata";
+  video.src = objectUrl;
+
+  try {
+    await waitForMediaEvent(video, "loadedmetadata");
+    const sourceWidth = video.videoWidth;
+    const sourceHeight = video.videoHeight;
+    const displaySize = videoAssetSizeForSource(sourceWidth, sourceHeight);
+
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await waitForMediaEvent(video, "loadeddata");
+    }
+
+    const seekTime = Number.isFinite(video.duration) && video.duration > 0
+      ? Math.min(0.12, video.duration * 0.02)
+      : 0;
+    if (seekTime > 0) {
+      video.currentTime = seekTime;
+      await waitForMediaEvent(video, "seeked");
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = displaySize.width;
+    canvas.height = displaySize.height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return {
+        ...displaySize,
+        sourceHeight,
+        sourceWidth
+      };
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    return {
+      ...displaySize,
+      sourceHeight,
+      sourceWidth,
+      thumbnailDataUrl: canvas.toDataURL("image/jpeg", 0.82)
+    };
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function runtimeSessionLoaded(session: RuntimeSessionResponse | null): boolean {
+  return Boolean(session?.snapshot.project);
+}
+
+function runtimeSessionFromMutation(response: RuntimePatchResponse): RuntimeSessionResponse {
+  return {
+    ok: response.ok,
+    snapshot: response.snapshot,
+    diagnostics: response.diagnostics,
+    report: null
+  };
+}
+
+function runtimeSessionFromEvent(event: RuntimeSessionEvent): RuntimeSessionResponse {
+  return {
+    ok: true,
+    snapshot: event.snapshot,
+    diagnostics: event.diagnostics,
+    report: null
+  };
+}
+
+function waitForMediaEvent(video: HTMLVideoElement, eventName: keyof HTMLMediaElementEventMap): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${eventName}.`));
+    }, 6000);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener(eventName, handleEvent);
+      video.removeEventListener("error", handleError);
+    };
+    const handleEvent = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error("Video metadata could not be loaded."));
+    };
+
+    video.addEventListener(eventName, handleEvent, { once: true });
+    video.addEventListener("error", handleError, { once: true });
+  });
+}
+
 function RuntimeRequiredPanel({ status }: { status: RuntimeConnectionStatus }) {
   return (
     <Stack className="panel-shell" gap="sm">
@@ -1589,7 +2108,7 @@ function RuntimeRequiredPanel({ status }: { status: RuntimeConnectionStatus }) {
       <Text c="dimmed" size="xs">
         Connect to Runtime before adding or editing graph objects.
       </Text>
-      <Badge color={status === "error" ? "red" : "gray"} radius="sm" variant="light">
+      <Badge color={status === "error" ? "red" : "gray"} variant="light">
         {status}
       </Badge>
     </Stack>
@@ -1599,7 +2118,7 @@ function RuntimeRequiredPanel({ status }: { status: RuntimeConnectionStatus }) {
 function RuntimeRequiredCanvas({ status }: { status: RuntimeConnectionStatus }) {
   return (
     <div style={{ display: "grid", height: "100%", padding: 24, placeItems: "center" }}>
-      <Alert color={status === "error" ? "red" : "gray"} radius="sm" variant="light">
+      <Alert color={status === "error" ? "red" : "gray"} variant="light">
         <Text fw={800}>Runtime session required</Text>
         <Text c="dimmed" size="sm">
           Studio displays the graph owned by Runtime. Connect to Runtime to initialize or restore the current session graph.
@@ -1607,6 +2126,10 @@ function RuntimeRequiredCanvas({ status }: { status: RuntimeConnectionStatus }) 
       </Alert>
     </div>
   );
+}
+
+function upsertBoundedLogLine(lines: LogLine[], line: LogLine): LogLine[] {
+  return [...lines.filter((current) => current.id !== line.id), line].slice(-200);
 }
 
 function downloadJson(jsonDocument: unknown, filename: string) {

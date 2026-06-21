@@ -1,18 +1,8 @@
 import { Alert, Divider, Stack, Text } from "@mantine/core";
 import { Activity } from "lucide-react";
-import type { GraphPatchHistoryV01 } from "@skenion/contracts";
-import {
-  latestHistoryEvents,
-  runtimeHistoryActionAvailability
-} from "../runtime/historySync";
+import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type { GraphSemanticDiagnostic } from "../graph/portSemantics";
 import type {
-  ClockSourceListResponse,
-  ClockSourceSnapshotResponse,
-  MidiClockSourceStartRequest,
-  MidiClockSourceStartResponse,
-  MidiClockSourceStopRequest,
-  MidiClockSourceStopResponse,
-  MidiInputListResponse,
   RuntimeActionResult,
   RuntimeConnectionStatus,
   RuntimeInfo,
@@ -20,89 +10,73 @@ import type {
   RuntimeSessionResponse,
   RuntimeTelemetrySnapshot
 } from "../runtime/types";
-import { ClockSourcesPanel } from "./runtime/ClockSourcesPanel";
 import { RuntimeConnectionPanel } from "./runtime/RuntimeConnectionPanel";
-import { RuntimeHistoryPanel } from "./runtime/RuntimeHistoryPanel";
+import { LogConsole, logLinesFromRuntimeState, mergeLogLines, type LogLine } from "./log/LogConsole";
 import { RuntimePreviewPanel } from "./runtime/RuntimePreviewPanel";
 import { RuntimeResultSummary } from "./runtime/RuntimeResultSummary";
 import { RuntimeSessionPanel } from "./runtime/RuntimeSessionPanel";
-import { RuntimeTelemetryPanel } from "./runtime/RuntimeTelemetryPanel";
 
-interface RuntimePanelProps {
+interface RuntimeSettingsPanelProps {
   busyAction: string | null;
   error: string | null;
   info: RuntimeInfo | null;
   result: RuntimeActionResult | null;
-  history: GraphPatchHistoryV01 | null;
   previewStatus: RuntimePreviewStatus | null;
   session: RuntimeSessionResponse | null;
   sessionSynced: boolean;
-  telemetry: RuntimeTelemetrySnapshot | null;
   status: RuntimeConnectionStatus;
   url: string;
   onClearSession: () => void;
   onConnect: () => void;
-  onGetClockSource: (sourceId: string) => Promise<ClockSourceSnapshotResponse>;
-  onListClockSources: () => Promise<ClockSourceListResponse>;
-  onListMidiInputs: () => Promise<MidiInputListResponse>;
   onPlanSession: () => void;
   onRefreshPreview: () => void;
-  onRedoPatch: () => void;
   onRestartPreview: () => void;
-  onRefreshHistory: () => void;
   onRefreshSession: () => void;
   onRunSession: () => void;
-  onStartMidiClockSource: (request: MidiClockSourceStartRequest) => Promise<MidiClockSourceStartResponse>;
   onStartPreview: () => void;
-  onStopMidiClockSource: (request: MidiClockSourceStopRequest) => Promise<MidiClockSourceStopResponse>;
   onStopPreview: () => void;
-  onUndoPatch: () => void;
   onUrlChange: (url: string) => void;
   onValidateSession: () => void;
 }
 
-export function RuntimePanel({
+interface RuntimeLogsPanelProps {
+  clientLines: LogLine[];
+  error: string | null;
+  info: RuntimeInfo | null;
+  previewStatus: RuntimePreviewStatus | null;
+  result: RuntimeActionResult | null;
+  runtimeLines: LogLine[];
+  semanticDiagnostics: GraphSemanticDiagnostic[];
+  session: RuntimeSessionResponse | null;
+  status: RuntimeConnectionStatus;
+  telemetry: RuntimeTelemetrySnapshot | null;
+  validation: ValidationResult<GraphDocumentV01>;
+}
+
+export function RuntimeSettingsPanel({
   busyAction,
   error,
   info,
   result,
-  history,
   previewStatus,
   session,
   sessionSynced,
-  telemetry,
   status,
   url,
   onClearSession,
   onConnect,
-  onGetClockSource,
-  onListClockSources,
-  onListMidiInputs,
   onPlanSession,
   onRefreshPreview,
-  onRedoPatch,
   onRestartPreview,
-  onRefreshHistory,
   onRefreshSession,
   onRunSession,
-  onStartMidiClockSource,
   onStartPreview,
-  onStopMidiClockSource,
   onStopPreview,
-  onUndoPatch,
   onUrlChange,
   onValidateSession
-}: RuntimePanelProps) {
+}: RuntimeSettingsPanelProps) {
   const connected = status === "connected";
-  const sessionLoaded = session?.loaded ?? false;
-  const historyAvailability = runtimeHistoryActionAvailability({
-    connected,
-    sessionLoaded,
-    sessionSynced,
-    pendingPatchOps: 0,
-    history
-  });
-  const latestEvents = latestHistoryEvents(history, 3);
+  const sessionLoaded = Boolean(session?.snapshot.project);
 
   return (
     <Stack className="runtime-panel" gap="sm">
@@ -114,17 +88,6 @@ export function RuntimePanel({
         onUrlChange={onUrlChange}
         status={status}
         url={url}
-      />
-
-      <Divider />
-
-      <ClockSourcesPanel
-        connected={connected}
-        onGetClockSource={onGetClockSource}
-        onListClockSources={onListClockSources}
-        onListMidiInputs={onListMidiInputs}
-        onStartMidiClockSource={onStartMidiClockSource}
-        onStopMidiClockSource={onStopMidiClockSource}
       />
 
       <Divider />
@@ -154,24 +117,8 @@ export function RuntimePanel({
         sessionLoaded={sessionLoaded}
       />
 
-      <RuntimeTelemetryPanel telemetry={telemetry} />
-
-      <Divider />
-
-      <RuntimeHistoryPanel
-        busyAction={busyAction}
-        connected={connected}
-        history={history}
-        historyAvailability={historyAvailability}
-        latestEvents={latestEvents}
-        onRedoPatch={onRedoPatch}
-        onRefreshHistory={onRefreshHistory}
-        onUndoPatch={onUndoPatch}
-        sessionLoaded={sessionLoaded}
-      />
-
       {info ? (
-        <Alert color="blue" icon={<Activity size={16} />} radius="sm" variant="light">
+        <Alert color="blue" icon={<Activity size={16} />} variant="light">
           <Text fw={700} size="sm">
             {info.name} {info.version}
           </Text>
@@ -182,12 +129,49 @@ export function RuntimePanel({
       ) : null}
 
       {error ? (
-        <Alert color="red" radius="sm" variant="light">
+        <Alert color="red" variant="light">
           {error}
         </Alert>
       ) : null}
 
       {result ? <RuntimeResultSummary result={result} /> : null}
+    </Stack>
+  );
+}
+
+export function RuntimeLogsPanel({
+  clientLines,
+  error,
+  info,
+  previewStatus,
+  result,
+  runtimeLines,
+  semanticDiagnostics,
+  session,
+  status,
+  telemetry,
+  validation
+}: RuntimeLogsPanelProps) {
+  const lines = mergeLogLines([
+    ...clientLines,
+    ...runtimeLines,
+    ...logLinesFromRuntimeState({
+      error,
+      info,
+      observedAt: new Date().toISOString(),
+      previewStatus,
+      result,
+      semanticDiagnostics,
+      session,
+      status,
+      telemetry,
+      validation
+    })
+  ]);
+
+  return (
+    <Stack className="runtime-panel" gap="sm">
+      <LogConsole lines={lines} />
     </Stack>
   );
 }

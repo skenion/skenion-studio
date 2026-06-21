@@ -14,12 +14,16 @@ describe("runtime payload", () => {
     expect(payload.nodes.length).toBeGreaterThan(0);
     expect(payload.graph.schema).toBe("skenion.graph");
     expect(payload.graph.schemaVersion).toBe("0.1.0");
+    expect(payload.viewState.schema).toBe("skenion.view-state");
     expect(payload.nodes.every((node) => node.schema === "skenion.node.definition")).toBe(true);
     expect(payload.nodes.every((node) => node.schemaVersion === "0.1.0")).toBe(true);
   });
 
   it("accepts the examples minimal project payload shape and runtime response envelope", () => {
-    const payload = minimalValueProject as RuntimeProjectPayload;
+    const payload = createRuntimeProjectPayload(
+      minimalValueProject.graph as RuntimeProjectPayload["graph"],
+      minimalValueProject.nodes as RuntimeProjectPayload["nodes"]
+    );
     const response = {
       ok: true,
       diagnostics: [],

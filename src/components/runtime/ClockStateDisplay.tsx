@@ -50,7 +50,7 @@ export function ClockStateDisplay({ state }: ClockStateDisplayProps) {
             {state.sourceKind}
           </Text>
         </div>
-        <Badge color="gray" radius="sm" variant="light">
+        <Badge color="gray" variant="light">
           {state.capabilities.length} capabilities
         </Badge>
       </Group>
@@ -94,7 +94,7 @@ export function ClockStateDisplay({ state }: ClockStateDisplayProps) {
 
 export function AuthorityBadge({ authority }: { authority: ClockAuthorityV01 }) {
   return (
-    <Badge color={authorityColor(authority)} radius="sm" size="xs" variant="light">
+    <Badge color={authorityColor(authority)} size="xs" variant="light">
       {authority}
     </Badge>
   );
