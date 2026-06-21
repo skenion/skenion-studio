@@ -3,9 +3,11 @@ import type { GraphPatchV01 } from "@skenion/contracts";
 import {
   createRuntimeClient,
   isRuntimeSessionEvent,
+  normalizeRuntimeSessionId,
   normalizeRuntimeUrl,
   RuntimeClientError,
   runtimeLogStreamUrl,
+  runtimeSessionPath,
   runtimeSessionEventsStreamUrl
 } from "./client";
 import type {
@@ -27,6 +29,7 @@ import type {
   RuntimePatchResponse,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
+  RuntimeSessionInfoResponse,
   RuntimeSessionResponse,
   RuntimeSessionEvent,
   RuntimeSessionEventKind,
@@ -73,8 +76,15 @@ describe("runtime client", () => {
   it("normalizes runtime URLs", () => {
     expect(normalizeRuntimeUrl(" http://localhost:3761/ ")).toBe("http://localhost:3761");
     expect(() => normalizeRuntimeUrl(" ")).toThrow(RuntimeClientError);
+    expect(normalizeRuntimeSessionId(" alpha ")).toBe("alpha");
+    expect(normalizeRuntimeSessionId(" ")).toBeNull();
+    expect(runtimeSessionPath(null)).toBe("/v0/session");
+    expect(runtimeSessionPath("alpha/beta", "/events/stream")).toBe("/v0/sessions/alpha%2Fbeta/events/stream");
     expect(runtimeSessionEventsStreamUrl("http://localhost:3761/")).toBe(
       "http://localhost:3761/v0/session/events/stream"
+    );
+    expect(runtimeSessionEventsStreamUrl("http://localhost:3761/", "alpha")).toBe(
+      "http://localhost:3761/v0/sessions/alpha/events/stream"
     );
   });
 
@@ -227,6 +237,50 @@ describe("runtime client", () => {
     expect(calls[8]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
     expect(calls[9]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
     expect(calls[10]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+  });
+
+  it("targets explicit runtime session endpoints when a session id is provided", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => {
+      const input = String(_input);
+      if (input.endsWith("/info")) {
+        return jsonResponse(sessionInfoResponse({ sessionId: "alpha" }));
+      }
+      if (input.endsWith("/history")) {
+        return jsonResponse(historyResponse());
+      }
+      if (input.endsWith("/preview")) {
+        return jsonResponse(previewResponse());
+      }
+      if (input.endsWith("/render/generated-shader")) {
+        return jsonResponse(generatedShaderResponse());
+      }
+      return jsonResponse(sessionResponse());
+    });
+    const client = createRuntimeClient({
+      baseUrl: "http://runtime.local",
+      fetchImpl: fetchMock as typeof fetch,
+      sessionId: "alpha"
+    });
+
+    await client.getSessionInfo();
+    await client.getSession();
+    await client.loadSession(project);
+    await client.getSessionHistory();
+    await client.getPreviewStatus();
+    await client.getGeneratedShader();
+    await client.clearSession();
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls.map((call) => call[0])).toEqual([
+      "http://runtime.local/v0/sessions/alpha/info",
+      "http://runtime.local/v0/sessions/alpha",
+      "http://runtime.local/v0/sessions/alpha/load",
+      "http://runtime.local/v0/sessions/alpha/history",
+      "http://runtime.local/v0/sessions/alpha/preview",
+      "http://runtime.local/v0/sessions/alpha/render/generated-shader",
+      "http://runtime.local/v0/sessions/alpha"
+    ]);
+    expect(calls[6]?.[1]).toEqual({ method: "DELETE" });
   });
 
   it("posts paste operations to the runtime session.operation endpoint", async () => {
@@ -1551,6 +1605,49 @@ describe("runtime client", () => {
     await expect(client.getSession()).rejects.toThrow("unsupported response shape");
   });
 });
+
+function sessionInfoResponse(overrides: Partial<RuntimeSessionInfoResponse> = {}): RuntimeSessionInfoResponse {
+  return {
+    schema: "skenion.runtime.session.info",
+    schemaVersion: "0.1.0",
+    ok: true,
+    sessionId: "default",
+    lifecycle: "ready",
+    snapshot: sessionResponse().snapshot,
+    profile: {
+      displayName: "Skenion Runtime local-managed sidecar",
+      endpoint: {
+        canonicalUrl: "http://127.0.0.1:49152",
+        host: "127.0.0.1",
+        port: 49152,
+        protocol: "http",
+        tls: false,
+        url: "http://127.0.0.1:49152"
+      },
+      mode: "local-managed",
+      ownership: "owned-child",
+      process: null
+    },
+    capabilities: {
+      sessionAddressing: true,
+      defaultSessionAlias: true,
+      eventReplay: true,
+      multiWindow: true,
+      profiles: ["local-managed", "local-shared", "remote"],
+      authPolicy: "deferred"
+    },
+    eventReplay: {
+      cursorKind: "sequence",
+      currentCursor: "1",
+      earliestSequence: 1,
+      latestSequence: 1,
+      replayLimit: 256,
+      overflow: false
+    },
+    diagnostics: [],
+    ...overrides
+  };
+}
 
 function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): RuntimeSessionResponse {
   return {

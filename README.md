@@ -11,6 +11,7 @@ Early graph editor shell for the Skenion project. Implementation follows the pub
 The first scaffold includes:
 
 - Vite, React, TypeScript, Mantine, and `@xyflow/react`
+- Tauri desktop shell scaffolding with Runtime connection profiles
 - Skenion Graph v0.1 import/export
 - a node registry palette backed by v0.1 node definitions
 - explicit React Flow view-model conversion
@@ -32,6 +33,9 @@ pnpm run dev
 ```
 
 If `.deps/skenion-contracts` already exists, update it before installing dependencies.
+
+Desktop sidecar diagnostics and profile behavior are documented in
+[`docs/desktop-runtime-profiles.md`](docs/desktop-runtime-profiles.md).
 
 ## License And Credit
 

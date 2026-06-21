@@ -109,8 +109,48 @@ import {
   createVolatileHelpWorkingCopy,
   type VolatileHelpWorkingCopy
 } from "./components/help/HelpGraphViewer";
+import { readDesktopLaunchContext } from "./desktop/launchContext";
+import {
+  DEFAULT_RUNTIME_SESSION_ID,
+  activeRuntimeProfile,
+  applyRuntimeSidecarError,
+  applyRuntimeSidecarStarted,
+  applyRuntimeSidecarStopped,
+  createRuntimeProfileState,
+  planRuntimeConnect,
+  switchRuntimeProfile,
+  updateRuntimeProfileUrl,
+  type RuntimeProfileEffect,
+  type RuntimeProfileId
+} from "./desktop/runtimeProfiles";
+import {
+  createTauriDesktopBridge
+} from "./desktop/tauriBridge";
+import {
+  createIsolatedRuntimeScope,
+  createSharedRuntimeScope,
+  createStudioWindowId,
+  createWindowRegistry,
+  registerRuntimeWindow,
+  updateWindowLocalState,
+  updateWindowRuntimeScope,
+  windowsForRuntimeSession,
+  type StudioWindowMode,
+  type StudioWindowRegistry
+} from "./desktop/windowRegistry";
 
 export default function App() {
+  const [launchContext] = useState(() => readDesktopLaunchContext());
+  const [desktopBridge] = useState(() => createTauriDesktopBridge());
+  const [studioWindowId] = useState(() => launchContext.windowId ?? createStudioWindowId());
+  const [runtimeSessionId] = useState(() => launchContext.sessionId || DEFAULT_RUNTIME_SESSION_ID);
+  const [runtimeProfileState, setRuntimeProfileState] = useState(() =>
+    createRuntimeProfileState({
+      activeProfileId: launchContext.profileId,
+      defaultRuntimeUrl: launchContext.runtimeUrl,
+      remoteRuntimeUrl: launchContext.runtimeUrl
+    })
+  );
   const [graph, setGraph] = useState<GraphDocumentV01>(sampleGraph);
   const [viewState, setViewState] = useState(() => createViewStateFromPositions(sampleGraph, {}));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
@@ -134,7 +174,7 @@ export default function App() {
   const [graphLocked, setGraphLocked] = useState(true);
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [runtimeUrl, setRuntimeUrl] = useState(DEFAULT_RUNTIME_URL);
+  const [runtimeUrl, setRuntimeUrl] = useState(launchContext.runtimeUrl ?? DEFAULT_RUNTIME_URL);
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeConnectionStatus>("disconnected");
   const [runtimeBusyAction, setRuntimeBusyAction] = useState<string | null>(null);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -153,8 +193,36 @@ export default function App() {
   const [pendingPatchOps, setPendingPatchOps] = useState<GraphPatchOperationV01[]>([]);
   const [, setPendingPatchBaseRevision] = useState<string | null>(null);
   const [, setPatchConflict] = useState<string | null>(null);
+  const currentWindowMode = launchContext.windowMode;
+  const [windowRegistry, setWindowRegistry] = useState<StudioWindowRegistry>(() =>
+    createWindowRegistry({
+      scope: createRuntimeScope({
+        profileId: runtimeProfileState.activeProfileId,
+        runtimeUrl: launchContext.runtimeUrl,
+        sessionId: runtimeSessionId,
+        windowId: studioWindowId,
+        windowMode: currentWindowMode
+      }),
+      windowId: studioWindowId
+    })
+  );
   const validation = useMemo(() => validateGraph(graph), [graph]);
   const semanticDiagnostics = useMemo(() => analyzeGraphPortSemantics(graph), [graph]);
+  const currentRuntimeScope = useMemo(
+    () =>
+      createRuntimeScope({
+        profileId: runtimeProfileState.activeProfileId,
+        runtimeUrl,
+        sessionId: runtimeSessionId,
+        windowId: studioWindowId,
+        windowMode: currentWindowMode
+      }),
+    [currentWindowMode, runtimeProfileState.activeProfileId, runtimeSessionId, runtimeUrl, studioWindowId]
+  );
+  const currentRuntimeWindowCount = useMemo(
+    () => windowsForRuntimeSession(windowRegistry, currentRuntimeScope).length || 1,
+    [currentRuntimeScope, windowRegistry]
+  );
   const runtimeSessionSynced = runtimeSessionIsSynced(
     runtimeStatus,
     runtimeSession,
@@ -196,6 +264,7 @@ export default function App() {
     sessionLoaded: runtimeSessionLoaded(runtimeSession),
     sessionSynced: runtimeSessionSynced,
     status: runtimeStatus,
+    sessionId: runtimeSessionId,
     url: runtimeUrl
   });
 
@@ -205,9 +274,21 @@ export default function App() {
       sessionLoaded: runtimeSessionLoaded(runtimeSession),
       sessionSynced: runtimeSessionSynced,
       status: runtimeStatus,
+      sessionId: runtimeSessionId,
       url: runtimeUrl
     };
-  }, [runtimeInfo, runtimeSession?.snapshot.project, runtimeSessionSynced, runtimeStatus, runtimeUrl]);
+  }, [runtimeInfo, runtimeSession?.snapshot.project, runtimeSessionId, runtimeSessionSynced, runtimeStatus, runtimeUrl]);
+
+  useEffect(() => {
+    const scope = createRuntimeScope({
+      profileId: runtimeProfileState.activeProfileId,
+      runtimeUrl,
+      sessionId: runtimeSessionId,
+      windowId: studioWindowId,
+      windowMode: currentWindowMode
+    });
+    setWindowRegistry((current) => updateWindowRuntimeScope(current, studioWindowId, scope));
+  }, [currentWindowMode, runtimeProfileState.activeProfileId, runtimeSessionId, runtimeUrl, studioWindowId]);
 
   useEffect(() => {
     const appendClientError = (message: string) => {
@@ -297,7 +378,7 @@ export default function App() {
       source.removeEventListener("error", handleStreamError);
       source.close();
     };
-  }, [runtimeInfo, runtimeStatus, runtimeUrl]);
+  }, [runtimeInfo, runtimeSessionId, runtimeStatus, runtimeUrl]);
 
   useEffect(() => {
     if (runtimeStatus !== "connected" || !runtimeSupportsSessionEvents(runtimeInfo)) {
@@ -305,7 +386,7 @@ export default function App() {
     }
 
     let reportedStreamError = false;
-    const source = new EventSource(runtimeSessionEventsStreamUrl(runtimeUrl));
+    const source = new EventSource(runtimeSessionEventsStreamUrl(runtimeUrl, runtimeSessionId));
     const handleSessionEvent = (event: MessageEvent) => {
       let value: unknown;
       try {
@@ -326,7 +407,7 @@ export default function App() {
         acceptRuntimeGraph(project.graph, project.viewState);
         setLastLoadedGraphFingerprint(runtimeSessionFingerprint(eventSession));
         if (runtimeSupportsControlState(runtimeInfo)) {
-          void refreshRuntimeControlState(createRuntimeClient({ baseUrl: runtimeUrl }), runtimeInfo);
+          void refreshRuntimeControlState(createActiveRuntimeClient(), runtimeInfo);
         }
         return;
       }
@@ -348,7 +429,7 @@ export default function App() {
           )
         ].slice(-200)
       );
-      void refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+      void refreshRuntimeProjectFromRuntime(createActiveRuntimeClient());
     };
     const handleStreamError = () => {
       if (reportedStreamError) {
@@ -379,7 +460,7 @@ export default function App() {
       source.removeEventListener("error", handleStreamError);
       source.close();
     };
-  }, [runtimeInfo, runtimeStatus, runtimeUrl]);
+  }, [runtimeInfo, runtimeSessionId, runtimeStatus, runtimeUrl]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -493,6 +574,25 @@ export default function App() {
     }
   }
 
+  function createActiveRuntimeClient(baseUrl = runtimeUrl): RuntimeClient {
+    return createRuntimeClient({ baseUrl, sessionId: runtimeSessionId });
+  }
+
+  function resetRuntimeConnectionState() {
+    setRuntimeStatus("disconnected");
+    setRuntimeInfo(null);
+    setRuntimeResult(null);
+    setRuntimeSession(null);
+    setRuntimeControlState(null);
+    setRuntimeHistory(null);
+    setRuntimePreviewStatus(null);
+    setRuntimeTelemetry(null);
+    setGeneratedShader(null);
+    setLastLoadedGraphFingerprint(null);
+    clearPendingPatch();
+    setRuntimeError(null);
+  }
+
   async function copySelectedGraphFragment() {
     const result = createGraphFragmentFromSelection(graph, viewState, {
       edgeIds: selectedEdgeIds,
@@ -583,7 +683,7 @@ export default function App() {
     setRuntimeError(null);
     setPatchConflict(null);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       const response = await client.runSessionOperation(operation);
       setRuntimeResult({
         kind: "sessionOperation",
@@ -601,7 +701,7 @@ export default function App() {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime graph fragment paste failed.");
       try {
-        await refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+        await refreshRuntimeProjectFromRuntime(createActiveRuntimeClient());
       } catch {
         // Keep the original paste error visible.
       }
@@ -622,6 +722,12 @@ export default function App() {
     setSelectedNodeIds(nodeId ? [nodeId] : []);
     setSelectedEdgeId(null);
     setSelectedEdgeIds([]);
+    setWindowRegistry((current) =>
+      updateWindowLocalState(current, studioWindowId, {
+        selectedEdgeIds: [],
+        selectedNodeIds: nodeId ? [nodeId] : []
+      })
+    );
   }
 
   function addNode(definitionId: string, paramsOverride: Record<string, unknown> = {}) {
@@ -800,6 +906,11 @@ export default function App() {
 
   function updateViewStateFromCanvas(nextViewState: ViewStateV01) {
     setViewState(nextViewState);
+    setWindowRegistry((current) =>
+      updateWindowLocalState(current, studioWindowId, {
+        viewport: nextViewState.canvas.viewport ?? null
+      })
+    );
     if (!nodeViewStateChanged(viewState, nextViewState)) {
       return;
     }
@@ -821,7 +932,7 @@ export default function App() {
     setRuntimeError(null);
     setPatchConflict(null);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       const response = await client.mutateSession({
         clientId: "studio-local",
         description: "move object",
@@ -858,7 +969,7 @@ export default function App() {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime view patch failed.");
       try {
-        await refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+        await refreshRuntimeProjectFromRuntime(createActiveRuntimeClient());
       } catch {
         // Keep the original runtime error visible.
       }
@@ -887,7 +998,7 @@ export default function App() {
     setPendingPatchOps(operations);
     setPendingPatchBaseRevision(baseRevision);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       const patch = createGraphPatch(baseRevision, operations, {
         id: `patch_${Date.now()}`,
         clientId: "studio-local"
@@ -929,7 +1040,7 @@ export default function App() {
       setRuntimeStatus("error");
       setRuntimeError(error instanceof Error ? error.message : "Runtime patch failed.");
       try {
-        await refreshRuntimeProjectFromRuntime(createRuntimeClient({ baseUrl: runtimeUrl }));
+        await refreshRuntimeProjectFromRuntime(createActiveRuntimeClient());
       } catch {
         // Keep the original runtime error visible.
       }
@@ -968,7 +1079,7 @@ export default function App() {
     setRuntimeBusyAction(kind);
     setRuntimeError(null);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       const response = await client.loadSession(project);
       const loadedProject = response.snapshot.project;
       if (!response.ok || !loadedProject) {
@@ -1347,7 +1458,43 @@ export default function App() {
     setRuntimeStatus("connecting");
     setRuntimeError(null);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      let nextProfileState = runtimeProfileState;
+      const connectPlan = planRuntimeConnect(nextProfileState, {
+        isolated: currentWindowMode === "isolated-runtime",
+        ownerWindowId: studioWindowId
+      });
+      nextProfileState = connectPlan.state;
+      setRuntimeProfileState(nextProfileState);
+
+      const startEffect = connectPlan.effects.find(
+        (effect): effect is Extract<RuntimeProfileEffect, { type: "startManagedSidecar" }> =>
+          effect.type === "startManagedSidecar"
+      );
+      let connectUrl = connectPlan.connectUrl ?? runtimeUrl;
+      if (startEffect) {
+        if (!desktopBridge.available) {
+          const message = "Local-managed Runtime requires the Tauri desktop shell. Use local-shared for an existing Runtime.";
+          setRuntimeProfileState(applyRuntimeSidecarError(nextProfileState, [message]));
+          throw new RuntimeClientError(message);
+        }
+        try {
+          const startup = await desktopBridge.startManagedSidecar({
+            isolated: startEffect.isolated,
+            ownerWindowId: startEffect.ownerWindowId,
+            profileId: startEffect.profileId
+          });
+          nextProfileState = applyRuntimeSidecarStarted(nextProfileState, startEffect, startup);
+          setRuntimeProfileState(nextProfileState);
+          connectUrl = startup.endpoint.url;
+          setRuntimeUrl(connectUrl);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Runtime sidecar startup failed.";
+          setRuntimeProfileState(applyRuntimeSidecarError(nextProfileState, [message]));
+          throw new RuntimeClientError(message);
+        }
+      }
+
+      const client = createRuntimeClient({ baseUrl: connectUrl, sessionId: runtimeSessionId });
       const health = await client.getHealth();
       if (!health.ok) {
         throw new RuntimeClientError("Runtime health check returned not-ok.");
@@ -1387,6 +1534,84 @@ export default function App() {
     }
   }
 
+  function changeRuntimeUrl(nextUrl: string) {
+    setRuntimeUrl(nextUrl);
+    setRuntimeProfileState((current) => updateRuntimeProfileUrl(current, current.activeProfileId, nextUrl));
+    resetRuntimeConnectionState();
+  }
+
+  function changeRuntimeProfile(profileId: RuntimeProfileId) {
+    const transition = switchRuntimeProfile(runtimeProfileState, profileId);
+    setRuntimeProfileState(transition.state);
+    setRuntimeUrl(activeRuntimeProfile(transition.state).url);
+    resetRuntimeConnectionState();
+    for (const effect of transition.effects) {
+      if (effect.type === "stopManagedSidecar") {
+        void stopManagedSidecarForEffect(effect);
+      }
+    }
+  }
+
+  async function stopManagedSidecarForEffect(
+    effect: Extract<RuntimeProfileEffect, { type: "stopManagedSidecar" }>
+  ) {
+    if (!desktopBridge.available) {
+      setRuntimeProfileState((current) => applyRuntimeSidecarStopped(current));
+      return;
+    }
+    try {
+      const response = await desktopBridge.stopManagedSidecar({
+        ownerWindowId: studioWindowId,
+        profileId: effect.profileId,
+        reason: effect.reason
+      });
+      setRuntimeProfileState((current) => applyRuntimeSidecarStopped(current));
+      if (response.stopped) {
+        appendClientLog("info", `Stopped managed Runtime sidecar ${response.runtimeUrl ?? effect.profileId}.`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Runtime sidecar shutdown failed.";
+      setRuntimeProfileState((current) => applyRuntimeSidecarError(current, [message]));
+      appendClientLog("warning", message);
+    }
+  }
+
+  async function openDesktopRuntimeWindow(windowMode: Extract<StudioWindowMode, "shared-session" | "isolated-runtime">) {
+    if (!desktopBridge.available) {
+      appendClientLog("warning", "Desktop window actions require the Tauri shell.");
+      return;
+    }
+    const windowId = createStudioWindowId(windowMode === "isolated-runtime" ? "studio-isolated" : "studio");
+    const profileId = windowMode === "isolated-runtime" ? "local-managed" : runtimeProfileState.activeProfileId;
+    try {
+      await desktopBridge.openStudioWindow({
+        profileId,
+        runtimeUrl,
+        sessionId: runtimeSessionId,
+        windowId,
+        windowMode
+      });
+      setWindowRegistry((current) =>
+        registerRuntimeWindow(current, {
+          scope: createRuntimeScope({
+            profileId,
+            runtimeUrl,
+            sessionId: runtimeSessionId,
+            windowId,
+            windowMode
+          }),
+          windowId
+        })
+      );
+      appendClientLog(
+        "info",
+        `Opened ${windowMode === "isolated-runtime" ? "isolated" : "shared"} Studio window ${windowId}.`
+      );
+    } catch (error) {
+      appendClientLog("warning", error instanceof Error ? error.message : "Desktop window open failed.");
+    }
+  }
+
   async function runRuntimeSessionAction(
     kind: RuntimeResultKind,
     action: () => Promise<RuntimeSessionResponse>
@@ -1395,7 +1620,7 @@ export default function App() {
     setRuntimeError(null);
     try {
       const response = await action();
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       setRuntimeSession(response);
       setRuntimeResult({
         kind,
@@ -1430,7 +1655,7 @@ export default function App() {
   }
 
   async function refreshRuntimeProjectFromRuntime(
-    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    client: RuntimeClient = createActiveRuntimeClient(),
     info: RuntimeInfo | null = runtimeInfo
   ) {
     const session = await client.getSession();
@@ -1458,7 +1683,7 @@ export default function App() {
   }
 
   async function refreshRuntimeHistory(
-    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    client: RuntimeClient = createActiveRuntimeClient(),
     info: RuntimeInfo | null = runtimeInfo
   ) {
     if (!runtimeSupportsHistory(info)) {
@@ -1471,7 +1696,7 @@ export default function App() {
     return history;
   }
 
-  async function refreshRuntimePreview(client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl })) {
+  async function refreshRuntimePreview(client: RuntimeClient = createActiveRuntimeClient()) {
     if (!runtimeSupportsPreview(runtimeInfo)) {
       setRuntimePreviewStatus(null);
       return null;
@@ -1483,7 +1708,7 @@ export default function App() {
   }
 
   async function refreshRuntimeControlState(
-    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    client: RuntimeClient = createActiveRuntimeClient(),
     info: RuntimeInfo | null = runtimeInfo
   ) {
     if (!runtimeSupportsControlState(info)) {
@@ -1497,7 +1722,7 @@ export default function App() {
   }
 
   async function restoreRuntimeControlStateAfterControlFailure(
-    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    client: RuntimeClient = createActiveRuntimeClient(),
     info: RuntimeInfo | null = runtimeInfo
   ) {
     try {
@@ -1508,7 +1733,7 @@ export default function App() {
   }
 
   async function refreshRuntimeTelemetry(
-    client: RuntimeClient = createRuntimeClient({ baseUrl: runtimeUrl }),
+    client: RuntimeClient = createActiveRuntimeClient(),
     info: RuntimeInfo | null = runtimeInfo
   ) {
     if (!runtimeSupportsTelemetry(info)) {
@@ -1529,7 +1754,7 @@ export default function App() {
     setRuntimeBusyAction("generatedShader");
     setRuntimeError(null);
     try {
-      const response = await createRuntimeClient({ baseUrl: runtimeUrl }).getGeneratedShader();
+      const response = await createActiveRuntimeClient().getGeneratedShader();
       setGeneratedShader(response);
       setRuntimeStatus("connected");
     } catch (error) {
@@ -1549,7 +1774,7 @@ export default function App() {
     setRuntimeBusyAction("assetImport");
     setRuntimeError(null);
     try {
-      const response = await createRuntimeClient({ baseUrl: runtimeUrl }).importAsset(file, "video");
+      const response = await createActiveRuntimeClient().importAsset(file, "video");
       if (!response.ok || !response.asset) {
         throw new RuntimeClientError(response.diagnostics[0]?.message ?? "Runtime asset import failed.");
       }
@@ -1588,7 +1813,7 @@ export default function App() {
     setRuntimeBusyAction("session");
     setRuntimeError(null);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       const response = await refreshRuntimeProjectFromRuntime(client);
       setRuntimeResult({
         kind: "session",
@@ -1612,7 +1837,7 @@ export default function App() {
     setRuntimeError(null);
     try {
       const response = await action();
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       setRuntimePreviewStatus(response);
       await refreshRuntimeTelemetry(client);
       setRuntimeStatus("connected");
@@ -1646,7 +1871,7 @@ export default function App() {
     setRuntimeError(null);
     setPatchConflict(null);
     try {
-      const client = createRuntimeClient({ baseUrl: runtimeUrl });
+      const client = createActiveRuntimeClient();
       const response = action === "undo" ? await client.undoSessionPatch() : await client.redoSessionPatch();
       await applyRuntimeHistoryShortcutResponse(kind, response, client);
     } catch (error) {
@@ -1694,7 +1919,7 @@ export default function App() {
 
     setRuntimeError(null);
     applyOptimisticRuntimeControlEvent(request);
-    const client = createRuntimeClient({ baseUrl: runtimeUrl });
+    const client = createActiveRuntimeClient();
     try {
       const response = await client.sendControlEvent(request);
       recordRuntimeControlPulses(response);
@@ -1810,7 +2035,7 @@ export default function App() {
     }
 
     const pendingRequest = queue.request;
-    const { info, sessionLoaded, sessionSynced, status, url } = runtimeLiveStateRef.current;
+    const { info, sessionId, sessionLoaded, sessionSynced, status, url } = runtimeLiveStateRef.current;
     if (!pendingRequest || status !== "connected" || !sessionLoaded || !sessionSynced || !runtimeSupportsControl(info)) {
       return;
     }
@@ -1819,7 +2044,7 @@ export default function App() {
     queue.inFlight = true;
     const { request, sequence } = pendingRequest;
     try {
-      const client = createRuntimeClient({ baseUrl: url });
+      const client = createRuntimeClient({ baseUrl: url, sessionId });
       const response = await client.sendControlEvent(request);
       const isCurrentLiveResponse = sequence === queue.latestSequence;
       if (isCurrentLiveResponse) {
@@ -1850,7 +2075,7 @@ export default function App() {
       if (sequence === queue.latestSequence) {
         setRuntimeStatus("error");
         setRuntimeError(error instanceof Error ? error.message : "Runtime control event failed.");
-        await restoreRuntimeControlStateAfterControlFailure(createRuntimeClient({ baseUrl: url }), info);
+        await restoreRuntimeControlStateAfterControlFailure(createRuntimeClient({ baseUrl: url, sessionId }), info);
       }
     } finally {
       queue.inFlight = false;
@@ -1963,7 +2188,7 @@ export default function App() {
     }
 
     let cancelled = false;
-    const client = createRuntimeClient({ baseUrl: runtimeUrl });
+    const client = createActiveRuntimeClient();
     const refresh = async () => {
       try {
         const telemetry = await client.getTelemetry();
@@ -1998,64 +2223,60 @@ export default function App() {
   const runtimeSettingsPanel = (
     <RuntimeSettingsPanel
       busyAction={runtimeBusyAction}
+      desktopAvailable={desktopBridge.available}
       error={runtimeError}
       info={runtimeInfo}
+      profileState={runtimeProfileState}
       result={runtimeResult}
       previewStatus={runtimePreviewStatus}
       session={runtimeSession}
+      sessionId={runtimeSessionId}
       sessionSynced={runtimeSessionSynced}
+      sidecarStatus={runtimeProfileState.managedSidecar.status}
       status={runtimeStatus}
       url={runtimeUrl}
+      windowCount={currentRuntimeWindowCount}
+      windowMode={currentWindowMode}
       onClearSession={() =>
         runRuntimeSessionAction("clearSession", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).clearSession()
+          createActiveRuntimeClient().clearSession()
         )
       }
       onConnect={connectRuntime}
+      onOpenIsolatedWindow={() => void openDesktopRuntimeWindow("isolated-runtime")}
+      onOpenSharedWindow={() => void openDesktopRuntimeWindow("shared-session")}
       onPlanSession={() =>
         runRuntimeSessionAction("planSession", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).planSession()
+          createActiveRuntimeClient().planSession()
         )
       }
+      onProfileChange={changeRuntimeProfile}
       onRefreshSession={refreshRuntimeSessionFromPanel}
       onRunSession={() =>
         runRuntimeSessionAction("runSession", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).runSession(runtimeFrames)
+          createActiveRuntimeClient().runSession(runtimeFrames)
         )
       }
-      onUrlChange={(nextUrl) => {
-        setRuntimeUrl(nextUrl);
-        setRuntimeStatus("disconnected");
-        setRuntimeInfo(null);
-        setRuntimeResult(null);
-        setRuntimeSession(null);
-        setRuntimeHistory(null);
-        setRuntimePreviewStatus(null);
-        setRuntimeTelemetry(null);
-        setGeneratedShader(null);
-        setLastLoadedGraphFingerprint(null);
-        clearPendingPatch();
-        setRuntimeError(null);
-      }}
+      onUrlChange={changeRuntimeUrl}
       onRefreshPreview={refreshRuntimePreviewFromPanel}
       onRestartPreview={() =>
         runRuntimePreviewAction("restartPreview", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).restartPreview()
+          createActiveRuntimeClient().restartPreview()
         )
       }
       onStartPreview={() =>
         runRuntimePreviewAction("startPreview", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).startPreview()
+          createActiveRuntimeClient().startPreview()
         )
       }
       onStopPreview={() =>
         runRuntimePreviewAction("stopPreview", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).stopPreview()
+          createActiveRuntimeClient().stopPreview()
         )
       }
       onValidateSession={() =>
         runRuntimeSessionAction("validateSession", () =>
-          createRuntimeClient({ baseUrl: runtimeUrl }).validateSession()
+          createActiveRuntimeClient().validateSession()
         )
       }
     />
@@ -2200,7 +2421,14 @@ export default function App() {
                   openInspectSidePanel();
                 }
               }}
-              onSelectedEdgesChange={setSelectedEdgeIds}
+              onSelectedEdgesChange={(edgeIds) => {
+                setSelectedEdgeIds(edgeIds);
+                setWindowRegistry((current) =>
+                  updateWindowLocalState(current, studioWindowId, {
+                    selectedEdgeIds: edgeIds
+                  })
+                );
+              }}
               onSelectedNodeChange={(nodeId) => {
                 setSelectedNodeId(nodeId);
                 if (nodeId) {
@@ -2208,7 +2436,14 @@ export default function App() {
                   openInspectSidePanel();
                 }
               }}
-              onSelectedNodesChange={setSelectedNodeIds}
+              onSelectedNodesChange={(nodeIds) => {
+                setSelectedNodeIds(nodeIds);
+                setWindowRegistry((current) =>
+                  updateWindowLocalState(current, studioWindowId, {
+                    selectedNodeIds: nodeIds
+                  })
+                );
+              }}
               onShowNodeHelp={showNodeHelp}
               selectedEdgeId={selectedEdgeId}
               selectedEdgeIds={selectedEdgeIds}
@@ -2396,6 +2631,34 @@ function changedNodeViewOperations(
       from: beforeView.canvas.nodes[nodeId],
       to
     }));
+}
+
+function createRuntimeScope({
+  profileId,
+  runtimeUrl,
+  sessionId,
+  windowId,
+  windowMode
+}: {
+  profileId: RuntimeProfileId;
+  runtimeUrl: string;
+  sessionId: string;
+  windowId: string;
+  windowMode: StudioWindowMode;
+}) {
+  if (windowMode === "isolated-runtime") {
+    return createIsolatedRuntimeScope({
+      ownerWindowId: windowId,
+      profileId,
+      runtimeUrl,
+      sessionId
+    });
+  }
+  return createSharedRuntimeScope({
+    profileId,
+    runtimeUrl,
+    sessionId
+  });
 }
 
 async function readLocalVideoAssetMetadata(file: File): Promise<Record<string, unknown>> {

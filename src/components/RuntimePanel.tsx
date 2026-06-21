@@ -1,6 +1,12 @@
 import { Alert, Divider, Stack, Text } from "@mantine/core";
 import { Activity } from "lucide-react";
 import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type {
+  ManagedSidecarStatus,
+  RuntimeProfileId,
+  RuntimeProfileState
+} from "../desktop/runtimeProfiles";
+import type { StudioWindowMode } from "../desktop/windowRegistry";
 import type { GraphSemanticDiagnostic } from "../graph/portSemantics";
 import type {
   RuntimeActionResult,
@@ -18,17 +24,26 @@ import { RuntimeSessionPanel } from "./runtime/RuntimeSessionPanel";
 
 interface RuntimeSettingsPanelProps {
   busyAction: string | null;
+  desktopAvailable: boolean;
   error: string | null;
   info: RuntimeInfo | null;
+  profileState: RuntimeProfileState;
   result: RuntimeActionResult | null;
   previewStatus: RuntimePreviewStatus | null;
   session: RuntimeSessionResponse | null;
+  sessionId: string;
   sessionSynced: boolean;
+  sidecarStatus: ManagedSidecarStatus;
   status: RuntimeConnectionStatus;
   url: string;
+  windowCount: number;
+  windowMode: StudioWindowMode;
   onClearSession: () => void;
   onConnect: () => void;
+  onOpenIsolatedWindow: () => void;
+  onOpenSharedWindow: () => void;
   onPlanSession: () => void;
+  onProfileChange: (profileId: RuntimeProfileId) => void;
   onRefreshPreview: () => void;
   onRestartPreview: () => void;
   onRefreshSession: () => void;
@@ -55,17 +70,26 @@ interface RuntimeLogsPanelProps {
 
 export function RuntimeSettingsPanel({
   busyAction,
+  desktopAvailable,
   error,
   info,
+  profileState,
   result,
   previewStatus,
   session,
+  sessionId,
   sessionSynced,
+  sidecarStatus,
   status,
   url,
+  windowCount,
+  windowMode,
   onClearSession,
   onConnect,
+  onOpenIsolatedWindow,
+  onOpenSharedWindow,
   onPlanSession,
+  onProfileChange,
   onRefreshPreview,
   onRestartPreview,
   onRefreshSession,
@@ -83,11 +107,20 @@ export function RuntimeSettingsPanel({
       <RuntimeConnectionPanel
         busyAction={busyAction}
         connected={connected}
+        desktopAvailable={desktopAvailable}
         onConnect={onConnect}
+        onOpenIsolatedWindow={onOpenIsolatedWindow}
+        onOpenSharedWindow={onOpenSharedWindow}
+        onProfileChange={onProfileChange}
         onRefreshSession={onRefreshSession}
         onUrlChange={onUrlChange}
+        profileState={profileState}
+        sessionId={sessionId}
+        sidecarStatus={sidecarStatus}
         status={status}
         url={url}
+        windowCount={windowCount}
+        windowMode={windowMode}
       />
 
       <Divider />

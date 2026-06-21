@@ -16,6 +16,7 @@ import {
   isRuntimePatchResponse,
   isPasteGraphFragmentResponse,
   isRuntimePreviewStatus,
+  isRuntimeSessionInfoResponse,
   isRuntimeSessionResponse,
   isRuntimeTelemetrySnapshot
 } from "@skenion/contracts/runtime/http";
@@ -43,6 +44,7 @@ import type {
   RuntimePreviewStartRequest,
   RuntimePreviewStatus,
   RuntimeProjectPayload,
+  RuntimeSessionInfoResponse,
   RuntimeSessionResponse,
   RuntimeTelemetrySnapshot
 } from "./types";
@@ -62,6 +64,7 @@ export interface RuntimeClient {
   validateProject: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   buildPlan: (project: RuntimeProjectPayload) => Promise<RuntimeApiResponse>;
   runProject: (project: RuntimeProjectPayload, frames: number) => Promise<RuntimeApiResponse>;
+  getSessionInfo: () => Promise<RuntimeSessionInfoResponse>;
   getSession: () => Promise<RuntimeSessionResponse>;
   loadSession: (project: RuntimeProjectPayload) => Promise<RuntimeSessionResponse>;
   validateSession: () => Promise<RuntimeSessionResponse>;
@@ -91,6 +94,7 @@ export interface RuntimeClient {
 export interface RuntimeClientOptions {
   baseUrl?: string;
   fetchImpl?: FetchLike;
+  sessionId?: string | null;
 }
 
 export class RuntimeClientError extends Error {
@@ -103,6 +107,8 @@ export class RuntimeClientError extends Error {
 export function createRuntimeClient(options: RuntimeClientOptions = {}): RuntimeClient {
   const baseUrl = normalizeRuntimeUrl(options.baseUrl ?? DEFAULT_RUNTIME_URL);
   const fetchImpl = options.fetchImpl ?? fetch;
+  const sessionId = normalizeRuntimeSessionId(options.sessionId);
+  const sessionPath = (suffix = "") => runtimeSessionPath(sessionId, suffix);
 
   return {
     getHealth: () => requestJson<RuntimeHealth>(fetchImpl, baseUrl, "/health", { method: "GET" }, isRuntimeHealth),
@@ -131,14 +137,22 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         ...project,
         frames
       }),
+    getSessionInfo: () =>
+      requestJson<RuntimeSessionInfoResponse>(
+        fetchImpl,
+        baseUrl,
+        sessionPath("/info"),
+        { method: "GET" },
+        isRuntimeSessionInfoResponse
+      ),
     getSession: () =>
-      requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "GET" }, isRuntimeSessionResponse),
-    loadSession: (project) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/load", project),
+      requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, sessionPath(), { method: "GET" }, isRuntimeSessionResponse),
+    loadSession: (project) => postRuntimeSessionResponse(fetchImpl, baseUrl, sessionPath("/load"), project),
     validateSession: () =>
       requestJson<RuntimeSessionResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/validate",
+        sessionPath("/validate"),
         { method: "POST" },
         isRuntimeSessionResponse
       ),
@@ -146,19 +160,19 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimeSessionResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/plan",
+        sessionPath("/plan"),
         { method: "POST" },
         isRuntimeSessionResponse
-    ),
-    runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, "/v0/session/run", { frames }),
-    mutateSession: (mutation) => postRuntimePatchResponse(fetchImpl, baseUrl, "/v0/session/mutate", mutation),
+      ),
+    runSession: (frames) => postRuntimeSessionResponse(fetchImpl, baseUrl, sessionPath("/run"), { frames }),
+    mutateSession: (mutation) => postRuntimePatchResponse(fetchImpl, baseUrl, sessionPath("/mutate"), mutation),
     runSessionOperation: (operation) =>
-      postRuntimeOperationResponse(fetchImpl, baseUrl, "/v0/session/operation", operation),
+      postRuntimeOperationResponse(fetchImpl, baseUrl, sessionPath("/operation"), operation),
     getSessionHistory: () =>
       requestJson<RuntimeHistory>(
         fetchImpl,
         baseUrl,
-        "/v0/session/history",
+        sessionPath("/history"),
         { method: "GET" },
         isRuntimeHistory
       ),
@@ -166,7 +180,7 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimePatchResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/undo",
+        sessionPath("/undo"),
         { method: "POST" },
         isRuntimePatchResponse
       ),
@@ -174,17 +188,17 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimePatchResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/redo",
+        sessionPath("/redo"),
         { method: "POST" },
         isRuntimePatchResponse
       ),
     sendControlEvent: (request) =>
-      postRuntimeControlEventResponse(fetchImpl, baseUrl, "/v0/session/control/event", request),
+      postRuntimeControlEventResponse(fetchImpl, baseUrl, sessionPath("/control/event"), request),
     getControlState: () =>
       requestJson<RuntimeControlStateResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/control/state",
+        sessionPath("/control/state"),
         { method: "GET" },
         isRuntimeControlStateResponse
       ),
@@ -192,7 +206,7 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimeControlReadResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/control/read",
+        sessionPath("/control/read"),
         {
           body: JSON.stringify(request),
           headers: {
@@ -206,19 +220,19 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimePreviewStatus>(
         fetchImpl,
         baseUrl,
-        "/v0/session/preview",
+        sessionPath("/preview"),
         { method: "GET" },
         isRuntimePreviewStatus
       ),
     startPreview: (options = {}) =>
-      postRuntimePreviewStatus(fetchImpl, baseUrl, "/v0/session/preview/start", {
+      postRuntimePreviewStatus(fetchImpl, baseUrl, sessionPath("/preview/start"), {
         restart: options.restart ?? false
       }),
     stopPreview: () =>
       requestJson<RuntimePreviewStatus>(
         fetchImpl,
         baseUrl,
-        "/v0/session/preview/stop",
+        sessionPath("/preview/stop"),
         { method: "POST" },
         isRuntimePreviewStatus
       ),
@@ -226,7 +240,7 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimePreviewStatus>(
         fetchImpl,
         baseUrl,
-        "/v0/session/preview/restart",
+        sessionPath("/preview/restart"),
         { method: "POST" },
         isRuntimePreviewStatus
       ),
@@ -265,7 +279,7 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimeGeneratedShaderResponse>(
         fetchImpl,
         baseUrl,
-        "/v0/session/render/generated-shader",
+        sessionPath("/render/generated-shader"),
         { method: "GET" },
         isRuntimeGeneratedShaderResponse
       ),
@@ -273,7 +287,7 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
       requestJson<RuntimeTelemetrySnapshot>(
         fetchImpl,
         baseUrl,
-        "/v0/session/telemetry",
+        sessionPath("/telemetry"),
         { method: "GET" },
         isRuntimeTelemetrySnapshot
       ),
@@ -286,7 +300,7 @@ export function createRuntimeClient(options: RuntimeClientOptions = {}): Runtime
         isRuntimeIoDeviceListResponse
       ),
     clearSession: () =>
-      requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, "/v0/session", { method: "DELETE" }, isRuntimeSessionResponse)
+      requestJson<RuntimeSessionResponse>(fetchImpl, baseUrl, sessionPath(), { method: "DELETE" }, isRuntimeSessionResponse)
   };
 }
 
@@ -299,12 +313,28 @@ export function normalizeRuntimeUrl(url: string): string {
   return trimmed.replace(/\/+$/, "");
 }
 
+export function normalizeRuntimeSessionId(sessionId?: string | null): string | null {
+  const trimmed = sessionId?.trim() ?? "";
+  return trimmed ? trimmed : null;
+}
+
+export function runtimeSessionPath(sessionId?: string | null, suffix = ""): string {
+  const normalizedSessionId = normalizeRuntimeSessionId(sessionId);
+  if (!normalizedSessionId) {
+    return `/v0/session${suffix}`;
+  }
+  return `/v0/sessions/${encodeURIComponent(normalizedSessionId)}${suffix}`;
+}
+
 export function runtimeLogStreamUrl(url: string = DEFAULT_RUNTIME_URL): string {
   return `${normalizeRuntimeUrl(url)}/v0/runtime/logs/stream`;
 }
 
-export function runtimeSessionEventsStreamUrl(url: string = DEFAULT_RUNTIME_URL): string {
-  return `${normalizeRuntimeUrl(url)}/v0/session/events/stream`;
+export function runtimeSessionEventsStreamUrl(
+  url: string = DEFAULT_RUNTIME_URL,
+  sessionId?: string | null
+): string {
+  return `${normalizeRuntimeUrl(url)}${runtimeSessionPath(sessionId, "/events/stream")}`;
 }
 
 async function postRuntimeResponse(
