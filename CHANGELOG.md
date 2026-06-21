@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.29.0...skenion-studio-v0.30.0) (2026-06-21)
+
+
+### Features
+
+* **studio:** add Tauri shell and runtime session profiles ([#91](https://github.com/echovisionlab/skenion-studio/issues/91)) ([67c2951](https://github.com/echovisionlab/skenion-studio/commit/67c2951fcac3088318f03148ab1782559a901b63))
+
 ## [0.29.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.28.0...skenion-studio-v0.29.0) (2026-06-21)
 
 
