@@ -8,8 +8,8 @@
 .portHandle {
   width: 10px;
   height: 7px;
-  border: 1px solid rgb(17 24 39 / 72%);
-  border-radius: 1px;
+  border: 1px solid color-mix(in srgb, var(--sk-border-strong) 72%, transparent);
+  border-radius: 0 !important;
   background: var(--port-color);
   box-shadow: none;
   transition:

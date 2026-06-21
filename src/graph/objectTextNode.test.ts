@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { ObjectTextPortV01, PortV01 } from "@skenion/contracts";
+import type { GraphNodeV01, NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { nodeRegistry } from "../data/registry";
 import {
   createGraphNodeFromObjectText,
+  UNRESOLVED_OBJECT_NODE_KIND,
   objectTextRegistryDiagnostic,
   objectTextPortToGraphPort,
   objectTextTypeToGraphType
 } from "./objectTextNode";
+import { genericObjectTextForNode } from "./objectTextDisplay";
 
 describe("object text graph node adapter", () => {
   it("creates a canonical control operator node from object text", () => {
@@ -71,15 +73,12 @@ describe("object text graph node adapter", () => {
     ]);
   });
 
-  it("blocks object text interfaces that the current registry cannot accept", () => {
+  it("allows object text instance ports to specialize a registry object class", () => {
     const result = createGraphNodeFromObjectText("*~ 0.5", [], nodeRegistry);
 
-    expect(result.ok).toBe(false);
-    expect(result.node).toBeNull();
-    expect(result.diagnostics.at(-1)).toMatchObject({
-      severity: "error",
-      code: "unsupported-object-interface"
-    });
+    expect(result.ok).toBe(true);
+    expect(result.node?.kind).toBe("audio.operator.mul");
+    expect(result.node?.ports.map((port) => port.id)).toEqual(["in", "right", "out"]);
   });
 
   it("allows registry-compatible object text interfaces", () => {
@@ -92,15 +91,124 @@ describe("object text graph node adapter", () => {
     expect(oscillator.node?.kind).toBe("audio.osc");
   });
 
-  it("does not create graph nodes for invalid or deferred object text", () => {
+  it("preserves invalid or deferred object text as unresolved nodes", () => {
     const invalid = createGraphNodeFromObjectText("sin~", []);
     const empty = createGraphNodeFromObjectText("", []);
 
     expect(invalid.ok).toBe(false);
-    expect(invalid.node).toBeNull();
+    expect(invalid.node).toMatchObject({
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      params: {
+        objectText: "sin~",
+        requestedKind: "sin~"
+      },
+      ports: []
+    });
     expect(invalid.diagnostics[0]?.code).toBe("deferred-object");
     expect(empty.ok).toBe(false);
     expect(empty.node).toBeNull();
+  });
+
+  it("resolves lowercase native aliases through the local registry", () => {
+    const decode = createGraphNodeFromObjectText("decode", [], nodeRegistry);
+    const upload = createGraphNodeFromObjectText("upload", [], nodeRegistry);
+    const preview = createGraphNodeFromObjectText("preview", [], nodeRegistry);
+
+    expect(decode).toMatchObject({ ok: true, node: { kind: "core.video-decode" } });
+    expect(upload).toMatchObject({ ok: true, node: { kind: "core.gpu-upload" } });
+    expect(preview).toMatchObject({ ok: true, node: { kind: "core.preview" } });
+    expect(genericObjectTextForNode(decode.node!)).toBe("decode");
+    expect(genericObjectTextForNode(upload.node!)).toBe("upload");
+    expect(genericObjectTextForNode(preview.node!)).toBe("preview");
+  });
+
+  it("normalizes bracketed native aliases and reports missing native definitions", () => {
+    const missingDecode = createGraphNodeFromObjectText(
+      "[decode]",
+      [],
+      nodeRegistry.filter((definition) => definition.id !== "core.video-decode")
+    );
+
+    expect(missingDecode.ok).toBe(false);
+    expect(missingDecode.node).toMatchObject({
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      params: {
+        objectText: "decode",
+        requestedKind: "core.video-decode"
+      }
+    });
+    expect(missingDecode.diagnostics[0]).toMatchObject({
+      code: "unavailable-object-kind"
+    });
+  });
+
+  it("mirrors native alias port activation and defaults into parse results", () => {
+    const registryWithDefault = nodeRegistry.map((definition): NodeDefinitionManifestV01 => {
+      if (definition.id !== "core.video-decode") {
+        return definition;
+      }
+      return {
+        ...definition,
+        ports: definition.ports.map((port, index) =>
+          index === 0
+            ? {
+                ...port,
+                activation: "latched",
+                default: "fixture"
+              }
+            : port
+        )
+      };
+    });
+
+    const result = createGraphNodeFromObjectText("[decode]", [], registryWithDefault);
+
+    expect(result.ok).toBe(true);
+    expect(result.parseResult.displayText).toBe("decode");
+    expect(result.parseResult.instancePorts[0]).toMatchObject({
+      activation: "latched",
+      defaultValue: "fixture"
+    });
+  });
+
+  it("falls back from blank object text to label and kind display text", () => {
+    const node: GraphNodeV01 = {
+      id: "sensor_1",
+      kind: "user.sensor",
+      kindVersion: "0.1.0",
+      params: {},
+      ports: []
+    };
+
+    expect(genericObjectTextForNode({ ...node, params: { objectText: "  ", label: "Temperature" } })).toBe("Temperature");
+    expect(genericObjectTextForNode({ ...node, params: { objectText: "  ", label: " " } })).toBe("user.sensor");
+  });
+
+  it("keeps namespaced extension candidates and warns namespace-less unknown classes", () => {
+    const extension = createGraphNodeFromObjectText("user.manipulator", [], nodeRegistry);
+    const unknown = createGraphNodeFromObjectText("manipulator", [], nodeRegistry);
+
+    expect(extension.ok).toBe(false);
+    expect(extension.node).toMatchObject({
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      params: {
+        objectText: "user.manipulator",
+        requestedKind: "user.manipulator"
+      }
+    });
+    expect(extension.diagnostics[0]).toMatchObject({
+      code: "unavailable-object-kind"
+    });
+    expect(unknown.node).toMatchObject({
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      params: {
+        objectText: "manipulator",
+        requestedKind: "manipulator"
+      }
+    });
+    expect(unknown.diagnostics[0]).toMatchObject({
+      code: "extension-namespace-required"
+    });
   });
 
   it("creates unique ids when object text adds repeated operator nodes", () => {
@@ -126,6 +234,11 @@ describe("object text graph node adapter", () => {
 
   it("reports unavailable object kinds when registry lookup fails", () => {
     const parseResult = createGraphNodeFromObjectText("+ 1", []).parseResult;
+    const missingKindResult = createGraphNodeFromObjectText(
+      "+ 1",
+      [],
+      nodeRegistry.filter((definition) => definition.id !== "core.operator.add")
+    );
 
     expect(objectTextRegistryDiagnostic(parseResult, [])).toBeNull();
     expect(objectTextRegistryDiagnostic({ ...parseResult, ok: false }, nodeRegistry)).toBeNull();
@@ -134,98 +247,26 @@ describe("object text graph node adapter", () => {
     expect(objectTextRegistryDiagnostic(parseResult, nodeRegistry.filter((definition) => definition.id !== "core.operator.add"))).toMatchObject({
       code: "unavailable-object-kind"
     });
+    expect(missingKindResult).toMatchObject({
+      ok: false,
+      node: {
+        kind: UNRESOLVED_OBJECT_NODE_KIND,
+        params: {
+          objectText: "+ 1",
+          requestedKind: "core.operator.add"
+        }
+      }
+    });
+    expect(missingKindResult.diagnostics.at(-1)).toMatchObject({
+      code: "unavailable-object-kind"
+    });
   });
 
-  it("describes each registry port mismatch class", () => {
+  it("does not reject parser-owned dynamic ports against static registry ports", () => {
     const parseResult = createGraphNodeFromObjectText("+ 1", []).parseResult;
     const definition = nodeRegistry.find((candidate) => candidate.id === "core.operator.add")!;
 
-    expect(objectTextRegistryDiagnostic(parseResult, [{ ...definition, ports: definition.ports.slice(0, 2) }])?.message).toContain(
-      "parser produced 3 ports"
-    );
-    expect(
-      objectTextRegistryDiagnostic(parseResult, [
-        { ...definition, ports: [{ ...definition.ports[0]!, direction: "output" }, ...definition.ports.slice(1)] }
-      ])?.message
-    ).toContain("expected output");
-    expect(
-      objectTextRegistryDiagnostic(parseResult, [
-        {
-          ...definition,
-          ports: [
-            definition.ports[0]!,
-            { ...definition.ports[1]!, type: { ...definition.ports[1]!.type, dataKind: "number.int" } },
-            definition.ports[2]!
-          ]
-        }
-      ])?.message
-    ).toContain("expected value<number.int>");
-    expect(
-      objectTextRegistryDiagnostic(parseResult, [
-        {
-          ...definition,
-          ports: [
-            definition.ports[0]!,
-            { ...definition.ports[1]!, type: { ...definition.ports[1]!.type, format: "f64" } },
-            definition.ports[2]!
-          ]
-        }
-      ])?.message
-    ).toContain("expected f64");
-    expect(
-      objectTextRegistryDiagnostic(parseResult, [
-        {
-          ...definition,
-          ports: [
-            definition.ports[0]!,
-            { ...definition.ports[1]!, type: { flow: "value", dataKind: "number.float" } },
-            definition.ports[2]!
-          ]
-        }
-      ])?.message
-    ).toContain("expected none");
-    expect(
-      objectTextRegistryDiagnostic(parseResult, [
-        {
-          ...definition,
-          ports: [{ ...definition.ports[0]!, activation: "latched" }, ...definition.ports.slice(1)]
-        }
-      ])?.message
-    ).toContain("expected latched");
-
-    const syntheticParseResult = {
-      ...parseResult,
-      resolvedKind: "synthetic.object",
-      instancePorts: [{ id: "p", direction: "input", type: "boolean", activation: "trigger" }] satisfies ObjectTextPortV01[]
-    };
-    const syntheticDefinition = {
-      ...definition,
-      id: "synthetic.object",
-      ports: [
-        {
-          id: "p",
-          direction: "input",
-          label: "P",
-          type: { flow: "value", dataKind: "boolean", format: "bool8" },
-          required: false,
-          activation: "trigger"
-        }
-      ] satisfies PortV01[]
-    };
-
-    expect(objectTextRegistryDiagnostic(syntheticParseResult, [syntheticDefinition])?.message).toContain("uses format none");
-    expect(
-      objectTextRegistryDiagnostic(
-        { ...syntheticParseResult, instancePorts: [{ id: "p", direction: "input", type: "boolean", activation: "passive" }] },
-        [{ ...syntheticDefinition, ports: [{ ...syntheticDefinition.ports[0], type: { flow: "value", dataKind: "boolean" } }] }]
-      )?.message
-    ).toContain("uses activation none");
-    expect(
-      objectTextRegistryDiagnostic(
-        syntheticParseResult,
-        [{ ...syntheticDefinition, ports: [{ ...syntheticDefinition.ports[0], type: { flow: "value", dataKind: "boolean" }, activation: undefined }] }]
-      )?.message
-    ).toContain("expected none");
+    expect(objectTextRegistryDiagnostic(parseResult, [{ ...definition, ports: definition.ports.slice(0, 2) }])).toBeNull();
   });
 
   it("keeps only graph-supported activation values", () => {

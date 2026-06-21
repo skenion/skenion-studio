@@ -11,6 +11,16 @@ import type {
   PortV01
 } from "@skenion/contracts";
 
+export const UNRESOLVED_OBJECT_NODE_KIND = "core.unresolved-object";
+
+const OBJECT_TEXT_SCHEMA = "skenion.object-text.parse-result" as const;
+const OBJECT_TEXT_SCHEMA_VERSION = "0.1.0" as const;
+const NATIVE_OBJECT_ALIASES = new Map<string, string>([
+  ["decode", "core.video-decode"],
+  ["upload", "core.gpu-upload"],
+  ["preview", "core.preview"]
+]);
+
 export interface ObjectTextNodeBuildResult {
   ok: boolean;
   node: GraphNodeV01 | null;
@@ -18,14 +28,19 @@ export interface ObjectTextNodeBuildResult {
   diagnostics: ObjectTextDiagnosticV01[];
 }
 
+export interface ObjectTextNodeBuildOptions {
+  nodeId?: string;
+}
+
 export function createGraphNodeFromObjectText(
   input: string,
   existingNodes: GraphNodeV01[],
-  registry: NodeDefinitionManifestV01[] = []
+  registry: NodeDefinitionManifestV01[] = [],
+  options: ObjectTextNodeBuildOptions = {}
 ): ObjectTextNodeBuildResult {
+  const displayText = normalizeObjectTextDisplay(input);
   const parseResult = parseObjectTextV01(input);
-
-  if (!parseResult.ok || !parseResult.resolvedKind || !parseResult.resolvedKindVersion) {
+  if (displayText.length === 0) {
     return {
       ok: false,
       node: null,
@@ -34,18 +49,55 @@ export function createGraphNodeFromObjectText(
     };
   }
 
-  const registryDiagnostic = objectTextRegistryDiagnostic(parseResult, registry);
-  if (registryDiagnostic) {
+  const nativeAliasKind = nativeObjectKindForText(displayText);
+  if (nativeAliasKind) {
+    const definition = registry.find((candidate) => candidate.id === nativeAliasKind);
+    if (!definition) {
+      const diagnostic = unavailableObjectKindDiagnostic(nativeAliasKind);
+      return unresolvedObjectResult(input, displayText, nativeAliasKind, parseResult, [diagnostic], existingNodes, options.nodeId);
+    }
+
+    const aliasParseResult = parseResultForNativeAlias(input, displayText, definition);
     return {
-      ok: false,
-      node: null,
-      parseResult,
-      diagnostics: [...parseResult.diagnostics, registryDiagnostic]
+      ok: true,
+      node: graphNodeFromDefinition(definition, existingNodes, {
+        label: displayText,
+        objectText: displayText
+      }, options.nodeId),
+      parseResult: aliasParseResult,
+      diagnostics: []
     };
   }
 
+  if (!parseResult.ok || !parseResult.resolvedKind || !parseResult.resolvedKindVersion) {
+    const diagnostics = diagnosticsForUnresolvedParse(parseResult);
+    return unresolvedObjectResult(
+      input,
+      parseResult.displayText,
+      requestedKindForParseResult(parseResult),
+      parseResult,
+      diagnostics,
+      existingNodes,
+      options.nodeId
+    );
+  }
+
+  const registryDiagnostic = objectTextRegistryDiagnostic(parseResult, registry);
+  if (registryDiagnostic) {
+    const diagnostics = [...parseResult.diagnostics, registryDiagnostic];
+    return unresolvedObjectResult(
+      input,
+      parseResult.displayText,
+      parseResult.resolvedKind,
+      parseResult,
+      diagnostics,
+      existingNodes,
+      options.nodeId
+    );
+  }
+
   const node: GraphNodeV01 = {
-    id: uniqueObjectNodeId(parseResult.resolvedKind, existingNodes),
+    id: options.nodeId ?? uniqueObjectNodeId(parseResult.resolvedKind, existingNodes),
     kind: parseResult.resolvedKind,
     kindVersion: parseResult.resolvedKindVersion,
     params: {
@@ -64,6 +116,19 @@ export function createGraphNodeFromObjectText(
   };
 }
 
+export function isUnresolvedObjectNode(node: GraphNodeV01): boolean {
+  return node.kind === UNRESOLVED_OBJECT_NODE_KIND;
+}
+
+export function nativeAliasForObjectKind(kind: string): string | null {
+  for (const [alias, nativeKind] of NATIVE_OBJECT_ALIASES) {
+    if (nativeKind === kind) {
+      return alias;
+    }
+  }
+  return null;
+}
+
 export function objectTextRegistryDiagnostic(
   parseResult: ObjectTextParseResultV01,
   registry: NodeDefinitionManifestV01[]
@@ -78,21 +143,7 @@ export function objectTextRegistryDiagnostic(
       (!parseResult.resolvedKindVersion || candidate.version === parseResult.resolvedKindVersion)
   );
   if (!definition) {
-    return {
-      severity: "error",
-      code: "unavailable-object-kind",
-      message: `${parseResult.resolvedKind} is not available in the local runtime registry.`
-    };
-  }
-
-  const ports = parseResult.instancePorts.map(objectTextPortToGraphPort);
-  const mismatch = firstPortMismatch(definition.ports, ports);
-  if (mismatch) {
-    return {
-      severity: "error",
-      code: "unsupported-object-interface",
-      message: `${parseResult.displayText} resolves to ${parseResult.resolvedKind}, but ${mismatch}`
-    };
+    return unavailableObjectKindDiagnostic(parseResult.resolvedKind);
   }
 
   return null;
@@ -147,6 +198,150 @@ function uniqueObjectNodeId(kind: string, existingNodes: GraphNodeV01[]): string
   return id;
 }
 
+function normalizeObjectTextDisplay(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function nativeObjectKindForText(displayText: string): string | null {
+  const [classSymbol, ...rest] = displayText.split(/\s+/u).filter(Boolean);
+  if (!classSymbol || rest.length > 0) {
+    return null;
+  }
+  return NATIVE_OBJECT_ALIASES.get(classSymbol) ?? null;
+}
+
+function graphNodeFromDefinition(
+  definition: NodeDefinitionManifestV01,
+  existingNodes: GraphNodeV01[],
+  paramsOverride: Record<string, unknown>,
+  nodeId?: string
+): GraphNodeV01 {
+  return {
+    id: nodeId ?? uniqueObjectNodeId(definition.id, existingNodes),
+    kind: definition.id,
+    kindVersion: definition.version,
+    params: paramsOverride,
+    ports: definition.ports.map(clonePort)
+  };
+}
+
+function clonePort(port: PortV01): PortV01 {
+  return JSON.parse(JSON.stringify(port)) as PortV01;
+}
+
+function unresolvedObjectResult(
+  input: string,
+  displayText: string,
+  requestedKind: string,
+  parseResult: ObjectTextParseResultV01,
+  diagnostics: ObjectTextDiagnosticV01[],
+  existingNodes: GraphNodeV01[],
+  nodeId?: string
+): ObjectTextNodeBuildResult {
+  const diagnosticMessage = diagnostics[0].message;
+  return {
+    ok: false,
+    node: {
+      id: nodeId ?? uniqueObjectNodeId(UNRESOLVED_OBJECT_NODE_KIND, existingNodes),
+      kind: UNRESOLVED_OBJECT_NODE_KIND,
+      kindVersion: OBJECT_TEXT_SCHEMA_VERSION,
+      params: {
+        objectText: displayText,
+        diagnosticMessage,
+        requestedKind
+      },
+      ports: []
+    },
+    parseResult: {
+      ...parseResult,
+      input,
+      displayText,
+      ok: false,
+      resolvedKind: null,
+      resolvedKindVersion: null,
+      instancePorts: [],
+      diagnostics
+    },
+    diagnostics
+  };
+}
+
+function diagnosticsForUnresolvedParse(
+  parseResult: ObjectTextParseResultV01
+): ObjectTextDiagnosticV01[] {
+  const classSymbol = parseResult.classSymbol;
+  const firstDiagnostic = parseResult.diagnostics[0];
+  if (firstDiagnostic?.code === "unsupported-class") {
+    if (!classSymbol.includes(".")) {
+      return [
+        {
+          severity: "error",
+          code: "extension-namespace-required",
+          message: `Extension object "${classSymbol}" must include a namespace such as "user.${classSymbol}".`
+        }
+      ];
+    }
+    return [
+      {
+        severity: "error",
+        code: "unavailable-object-kind",
+        message: `${classSymbol} is not available in the local runtime registry.`
+      }
+    ];
+  }
+  return parseResult.diagnostics;
+}
+
+function requestedKindForParseResult(parseResult: ObjectTextParseResultV01): string {
+  return parseResult.resolvedKind ?? parseResult.classSymbol!;
+}
+
+function unavailableObjectKindDiagnostic(kind: string): ObjectTextDiagnosticV01 {
+  return {
+    severity: "error",
+    code: "unavailable-object-kind",
+    message: `${kind} is not available in the local runtime registry.`
+  };
+}
+
+function parseResultForNativeAlias(
+  input: string,
+  displayText: string,
+  definition: NodeDefinitionManifestV01
+): ObjectTextParseResultV01 {
+  return {
+    schema: OBJECT_TEXT_SCHEMA,
+    schemaVersion: OBJECT_TEXT_SCHEMA_VERSION,
+    input,
+    ok: true,
+    classSymbol: displayText,
+    creationArgs: [],
+    resolvedKind: definition.id,
+    resolvedKindVersion: definition.version,
+    params: {},
+    instancePorts: definition.ports.map((port) => {
+      const objectPort: ObjectTextPortV01 = {
+        id: port.id,
+        direction: port.direction,
+        type: port.type.dataKind
+      };
+      if ("activation" in port) {
+        objectPort.activation = port.activation;
+      }
+      if ("default" in port) {
+        objectPort.defaultValue = port.default;
+      }
+      return objectPort;
+    }),
+    displayText,
+    diagnostics: []
+  };
+}
+
 function graphActivation(activation: ObjectTextPortV01["activation"]): PortActivation | undefined {
   return activation === "trigger" || activation === "latched" ? activation : undefined;
 }
@@ -189,39 +384,4 @@ function labelForObjectTextPort(id: string): string {
     .filter(Boolean)
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
-}
-
-function firstPortMismatch(expected: PortV01[], actual: PortV01[]): string | null {
-  if (expected.length !== actual.length) {
-    return `the parser produced ${actual.length} ports while the registry expects ${expected.length}.`;
-  }
-
-  for (const expectedPort of expected) {
-    const actualPort = actual.find((port) => port.id === expectedPort.id);
-    if (!actualPort) {
-      return `the parser did not produce registry port '${expectedPort.id}'.`;
-    }
-
-    if (expectedPort.direction !== actualPort.direction) {
-      return `${expectedPort.id} is ${actualPort.direction}, expected ${expectedPort.direction}.`;
-    }
-
-    if (expectedPort.type.flow !== actualPort.type.flow || expectedPort.type.dataKind !== actualPort.type.dataKind) {
-      return `${expectedPort.id} is ${typeDescription(actualPort.type)}, expected ${typeDescription(expectedPort.type)}.`;
-    }
-
-    if ((expectedPort.type.format ?? null) !== (actualPort.type.format ?? null)) {
-      return `${expectedPort.id} uses format ${String(actualPort.type.format ?? "none")}, expected ${String(expectedPort.type.format ?? "none")}.`;
-    }
-
-    if ((expectedPort.activation ?? null) !== (actualPort.activation ?? null)) {
-      return `${expectedPort.id} uses activation ${String(actualPort.activation ?? "none")}, expected ${String(expectedPort.activation ?? "none")}.`;
-    }
-  }
-
-  return null;
-}
-
-function typeDescription(type: DataTypeV01): string {
-  return `${type.flow}<${type.dataKind}>`;
 }

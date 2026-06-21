@@ -5,11 +5,12 @@ export function runtimeGraphFingerprint(graphId: string, graphRevision: string):
 }
 
 export function runtimeSessionFingerprint(session: RuntimeSessionResponse | null): string | null {
-  if (!session?.loaded || !session.graphId || !session.graphRevision) {
+  const graph = session?.snapshot.project?.graph;
+  if (!graph) {
     return null;
   }
 
-  return runtimeGraphFingerprint(session.graphId, session.graphRevision);
+  return runtimeGraphFingerprint(graph.id, graph.revision);
 }
 
 export function runtimeSessionIsSynced(
@@ -30,5 +31,5 @@ export function nextLoadedGraphFingerprint(
   response: RuntimeSessionResponse,
   graphFingerprint: string
 ): string | null {
-  return response.ok && response.loaded ? graphFingerprint : currentLoadedGraphFingerprint;
+  return response.ok && response.snapshot.project ? graphFingerprint : currentLoadedGraphFingerprint;
 }

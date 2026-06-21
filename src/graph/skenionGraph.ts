@@ -19,6 +19,12 @@ export type GraphPatch =
   | { type: "addEdge"; edge: EdgeV01 }
   | { type: "removeEdge"; edge: EdgeV01 }
   | { type: "removeNode"; nodeId: string }
+  | {
+      type: "replaceNode";
+      nodeId: string;
+      node: GraphNodeV01;
+      edgePolicy: "removeInvalidEdges";
+    }
   | { type: "setNodeParam"; nodeId: string; key: string; value: unknown }
   | {
       type: "replaceNodeInterface";
@@ -171,6 +177,20 @@ export function applyPatch(graph: GraphDocumentV01, patch: GraphPatch): GraphDoc
     };
   }
 
+  if (patch.type === "replaceNode") {
+    const nodes = graph.nodes.map((node) => (node.id === patch.nodeId ? cloneGraphNode(patch.node) : node));
+    const nextGraph = {
+      ...graph,
+      nodes
+    };
+
+    return {
+      ...nextGraph,
+      revision: bumpRevision(graph.revision),
+      edges: graph.edges.filter((edge) => edgeRemainsValidAfterNodeReplace(nextGraph, patch.nodeId, edge))
+    };
+  }
+
   if (patch.type === "replaceNodeInterface") {
     const nodes = graph.nodes.map((node) =>
       node.id === patch.nodeId
@@ -264,6 +284,41 @@ function bumpRevision(revision: string): string {
 
 function clonePort(port: PortV01): PortV01 {
   return JSON.parse(JSON.stringify(port)) as PortV01;
+}
+
+function cloneGraphNode(node: GraphNodeV01): GraphNodeV01 {
+  return JSON.parse(JSON.stringify(node)) as GraphNodeV01;
+}
+
+function edgeEquals(left: EdgeV01, right: EdgeV01): boolean {
+  return (
+    left.from.node === right.from.node &&
+    left.from.port === right.from.port &&
+    left.to.node === right.to.node &&
+    left.to.port === right.to.port
+  );
+}
+
+function edgeRemainsValidAfterNodeReplace(
+  graph: GraphDocumentV01,
+  replacedNodeId: string,
+  edge: EdgeV01
+): boolean {
+  if (edge.from.node !== replacedNodeId && edge.to.node !== replacedNodeId) {
+    return true;
+  }
+
+  const source = findPort(graph, edge.from.node, edge.from.port);
+  const target = findPort(graph, edge.to.node, edge.to.port);
+  if (source?.direction !== "output" || target?.direction !== "input") {
+    return false;
+  }
+
+  const graphWithoutEdge = {
+    ...graph,
+    edges: graph.edges.filter((candidate) => !edgeEquals(candidate, edge))
+  };
+  return connectionSemanticCheck(graphWithoutEdge, { type: "addEdge", edge }) === null;
 }
 
 function edgeRemainsValidAfterInterfaceReplace(

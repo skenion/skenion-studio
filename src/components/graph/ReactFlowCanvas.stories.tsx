@@ -154,7 +154,6 @@ function GraphCanvasStory({
           style={{
             background: "#ffffff",
             border: `1px solid ${connectionCheck.ok ? "#0ca678" : "#fa5252"}`,
-            borderRadius: 8,
             boxShadow: "0 10px 24px rgb(31 41 51 / 14%)",
             color: "#1f2933",
             fontSize: 12,

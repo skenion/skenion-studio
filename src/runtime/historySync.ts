@@ -1,11 +1,12 @@
-import type { GraphPatchEventV01, GraphPatchHistoryV01 } from "@skenion/contracts";
+import type { RuntimeHistory, RuntimeHistoryEntry } from "./types";
 
 export interface RuntimeHistoryActionState {
   connected: boolean;
+  graphLocked: boolean;
   sessionLoaded: boolean;
   sessionSynced: boolean;
   pendingPatchOps: number;
-  history: GraphPatchHistoryV01 | null;
+  history: RuntimeHistory | null;
 }
 
 export interface RuntimeHistoryActionAvailability {
@@ -26,14 +27,14 @@ export function runtimeHistoryActionAvailability(
 }
 
 export function latestHistoryEvents(
-  history: GraphPatchHistoryV01 | null,
+  history: RuntimeHistory | null,
   limit: number
-): GraphPatchEventV01[] {
+): RuntimeHistoryEntry[] {
   if (!history || limit <= 0) {
     return [];
   }
 
-  return history.events.slice(-limit).reverse();
+  return history.entries.slice(-limit).reverse();
 }
 
 function runtimeHistoryUnavailableReason(state: RuntimeHistoryActionState): string | null {
@@ -42,6 +43,9 @@ function runtimeHistoryUnavailableReason(state: RuntimeHistoryActionState): stri
   }
   if (!state.sessionLoaded) {
     return "No loaded runtime session";
+  }
+  if (state.graphLocked) {
+    return "Graph locked";
   }
   if (state.pendingPatchOps > 0) {
     return "Apply or clear pending patch operations first";

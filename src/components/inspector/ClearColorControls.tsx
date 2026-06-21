@@ -1,4 +1,5 @@
-import { Group, NumberInput, Stack, Text } from "@mantine/core";
+import { Group, Stack, Text } from "@mantine/core";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 
 export interface ClearColorControlsProps {
   color: [number, number, number, number];
@@ -13,16 +14,14 @@ export function ClearColorControls({ color, onChange }: ClearColorControlsProps)
       </Text>
       <Group grow>
         {(["R", "G", "B", "A"] as const).map((label, index) => (
-          <NumberInput
+          <DeferredNumberInput
             decimalScale={3}
             key={label}
             label={label}
             max={1}
             min={0}
-            onChange={(value) => {
-              if (typeof value !== "number" || !Number.isFinite(value)) {
-                return;
-              }
+            normalize={clampColorComponent}
+            onCommit={(value) => {
               const nextColor = [...color] as [number, number, number, number];
               nextColor[index] = value;
               onChange(nextColor);
@@ -35,4 +34,8 @@ export function ClearColorControls({ color, onChange }: ClearColorControlsProps)
       </Group>
     </Stack>
   );
+}
+
+function clampColorComponent(value: number) {
+  return Math.min(1, Math.max(0, value));
 }

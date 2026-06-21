@@ -1,5 +1,6 @@
-import { Button, Group, NumberInput, Text } from "@mantine/core";
+import { Group, NumberInput, Text } from "@mantine/core";
 import { Play, Route, ShieldCheck } from "lucide-react";
+import { Button } from "../core/Button/Button";
 
 interface RuntimeStatelessToolsPanelProps {
   busyAction: string | null;
@@ -30,7 +31,6 @@ export function RuntimeStatelessToolsPanel({
         max={120}
         min={1}
         onChange={(value) => onFramesChange(typeof value === "number" ? value : 1)}
-        radius="sm"
         size="xs"
         value={frames}
       />
@@ -45,7 +45,6 @@ export function RuntimeStatelessToolsPanel({
           leftSection={<ShieldCheck size={15} />}
           loading={busyAction === "validate"}
           onClick={onValidate}
-          radius="sm"
           size="xs"
           variant="subtle"
         >
@@ -56,7 +55,6 @@ export function RuntimeStatelessToolsPanel({
           leftSection={<Route size={15} />}
           loading={busyAction === "plan"}
           onClick={onPlan}
-          radius="sm"
           size="xs"
           variant="subtle"
         >
@@ -69,7 +67,6 @@ export function RuntimeStatelessToolsPanel({
         leftSection={<Play size={15} />}
         loading={busyAction === "run"}
         onClick={onRun}
-        radius="sm"
         size="xs"
         variant="subtle"
       >

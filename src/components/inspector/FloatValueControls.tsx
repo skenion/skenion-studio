@@ -1,5 +1,6 @@
-import { NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Select, Stack, Text } from "@mantine/core";
 import { FLOAT_REPRESENTATIONS, type FloatRepresentation } from "../../graph/floatValue";
+import { DeferredNumberInput } from "./DeferredNumberInput";
 
 export interface FloatValueControlsProps {
   representation: FloatRepresentation;
@@ -31,15 +32,10 @@ export function FloatValueControls({
         size="xs"
         value={representation}
       />
-      <NumberInput
+      <DeferredNumberInput
         decimalScale={3}
         label="Value"
-        onChange={(nextValue) => {
-          if (typeof nextValue !== "number" || !Number.isFinite(nextValue)) {
-            return;
-          }
-          onChange(nextValue);
-        }}
+        onCommit={onChange}
         size="xs"
         step={0.1}
         value={value}

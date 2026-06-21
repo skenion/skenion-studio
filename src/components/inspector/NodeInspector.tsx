@@ -1,9 +1,9 @@
-import { Button, Divider, Group, Stack, Text } from "@mantine/core";
+import { Divider, Group, Stack, Text } from "@mantine/core";
 import { BookOpen, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
 import type { GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
-import type { RuntimeControlEventRequest, RuntimeGeneratedShaderResponse } from "../../runtime/types";
+import type { RuntimeGeneratedShaderResponse } from "../../runtime/types";
 import { AssetControls } from "./AssetControls";
 import { BooleanValueControls } from "./BooleanValueControls";
 import { ClearColorControls } from "./ClearColorControls";
@@ -16,7 +16,6 @@ import { NodeHelp } from "./NodeHelp";
 import { PanelControlInspector } from "./PanelControlInspector";
 import { PortTable } from "./PortTable";
 import { RoutingNodeControls } from "./RoutingNodeControls";
-import { RuntimeControlValueControls } from "./RuntimeControlValueControls";
 import { StringValueControls } from "./StringValueControls";
 import { UnsignedIntegerValueControls } from "./UnsignedIntegerValueControls";
 import {
@@ -37,7 +36,6 @@ import {
   isCommentNode,
   readCommentTextParam
 } from "../../graph/commentNode";
-import { runtimeControlValueForNode } from "../../graph/controlValue";
 import {
   isFloatValueNode,
   readFloatRepresentationParam,
@@ -79,6 +77,8 @@ import {
   isToggleControlNode
 } from "../../graph/panelControls";
 import { isVideoAssetNode } from "../../graph/videoAsset";
+import { isRoutingCapableObjectNode } from "../../graph/controlRouting";
+import { Button } from "../core/Button/Button";
 
 export function NodeInspector({
   graphLocked = false,
@@ -87,15 +87,12 @@ export function NodeInspector({
   onLoadGeneratedShader,
   onImportAsset,
   onOpenHelpGraph,
-  onSendRuntimeControl,
   onSetNodeParam,
   onSyncShaderInputs,
   generatedShader,
   generatedShaderBusy,
   runtimeAssetImportBusy,
   runtimeAssetImportEnabled,
-  runtimeControlBusy,
-  runtimeControlEnabled,
   runtimeShaderDiagnostics
 }: {
   generatedShader?: RuntimeGeneratedShaderResponse | null;
@@ -107,13 +104,10 @@ export function NodeInspector({
   onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void>;
   onOpenHelpGraph?: (nodeKind: string) => void;
   onRemoveNode: (node: GraphNodeV01) => void;
-  onSendRuntimeControl: (request: RuntimeControlEventRequest) => void;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
   onSyncShaderInputs: (nodeId: string, source: string) => void;
   runtimeAssetImportBusy: boolean;
   runtimeAssetImportEnabled: boolean;
-  runtimeControlBusy: boolean;
-  runtimeControlEnabled: boolean;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const clearColor = isClearColorNode(node) ? readClearColorParam(node) : null;
@@ -133,8 +127,6 @@ export function NodeInspector({
   const stringValue = isStringValueNode(node) ? readStringValueParam(node) : null;
   const messageValue = isMessageNode(node) ? readMessageValueParam(node) : null;
   const isAssetNode = isVideoAssetNode(node);
-  const runtimeControlValue = isPanelControl ? null : runtimeControlValueForNode(node);
-  const runtimeControlActions = runtimeControlActionsForNode(node);
   const shaderSource = isFullscreenShaderNode(node) ? readShaderSourceParam(node) : null;
   const shaderLanguage = isFullscreenShaderNode(node) ? readShaderLanguageParam(node) : null;
   const shaderAnalysis = shaderSource !== null
@@ -145,6 +137,175 @@ export function NodeInspector({
     : false;
   const help = getBuiltinNodeHelp(node.kind);
   const helpGraph = getBuiltinNodeHelpGraph(node.kind);
+  const hasRoutingSettings = isRoutingCapableObjectNode(node);
+  const objectSettingBlocks: ReactNode[] = [];
+  const addObjectSettingBlock = (key: string, content: ReactNode) => {
+    objectSettingBlocks.push(
+      <Fragment key={key}>
+        {objectSettingBlocks.length > 0 ? <Divider /> : null}
+        {content}
+      </Fragment>
+    );
+  };
+
+  if (hasRoutingSettings) {
+    addObjectSettingBlock("routing", <RoutingNodeControls node={node} onSetNodeParam={onSetNodeParam} />);
+  }
+
+  if (isPanelControl) {
+    addObjectSettingBlock(
+      "panel-control",
+      <PanelControlInspector
+        node={node}
+        onSetNodeParam={onSetNodeParam}
+      />
+    );
+  }
+
+  if (isAssetNode) {
+    addObjectSettingBlock(
+      "asset",
+      <AssetControls
+        busy={runtimeAssetImportBusy}
+        enabled={runtimeAssetImportEnabled}
+        node={node}
+        onImportAsset={onImportAsset}
+      />
+    );
+  }
+
+  if (clearColor) {
+    addObjectSettingBlock(
+      "clear-color",
+      <ClearColorControls
+        color={clearColor}
+        onChange={(color) => onSetNodeParam(node.id, "color", color)}
+      />
+    );
+  }
+
+  if (floatValue !== null) {
+    addObjectSettingBlock(
+      "float",
+      <FloatValueControls
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+        representation={floatRepresentation!}
+        value={floatValue}
+      />
+    );
+  }
+
+  if (intValue !== null) {
+    addObjectSettingBlock(
+      "integer",
+      <IntegerValueControls
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+        representation={intRepresentation!}
+        value={intValue}
+      />
+    );
+  }
+
+  if (uintValue !== null) {
+    addObjectSettingBlock(
+      "unsigned-integer",
+      <UnsignedIntegerValueControls
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+        representation={uintRepresentation!}
+        value={uintValue}
+      />
+    );
+  }
+
+  if (boolValue !== null) {
+    addObjectSettingBlock(
+      "boolean",
+      <BooleanValueControls
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        value={boolValue}
+      />
+    );
+  }
+
+  if (toggleValue !== null) {
+    addObjectSettingBlock(
+      "toggle",
+      <BooleanValueControls
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        title="Toggle Graph Param"
+        value={toggleValue}
+      />
+    );
+  }
+
+  if (stringValue !== null) {
+    addObjectSettingBlock(
+      "string",
+      <StringValueControls
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        value={stringValue}
+      />
+    );
+  }
+
+  if (messageValue !== null) {
+    addObjectSettingBlock(
+      "message",
+      <StringValueControls
+        label="Message"
+        onChange={(value) => onSetNodeParam(node.id, "value", value)}
+        title="Message Graph Param"
+        value={messageValue}
+      />
+    );
+  }
+
+  if (commentText !== null) {
+    addObjectSettingBlock(
+      "comment",
+      <CommentControls
+        onChange={(text) => onSetNodeParam(node.id, "text", text)}
+        text={commentText}
+      />
+    );
+  }
+
+  if (colorRgba) {
+    addObjectSettingBlock(
+      "color-rgba",
+      <ColorRgbaControls
+        color={colorRgba}
+        colorSpace={colorSpace!}
+        onChange={(color) => onSetNodeParam(node.id, "value", color)}
+        onColorSpaceChange={(nextColorSpace) => onSetNodeParam(node.id, "colorSpace", nextColorSpace)}
+        onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
+        representation={colorRepresentation!}
+      />
+    );
+  }
+
+  if (shaderSource !== null) {
+    addObjectSettingBlock(
+      "fullscreen-shader",
+      <FullscreenShaderControls
+        analysis={shaderAnalysis!}
+        generatedShader={generatedShader}
+        generatedShaderBusy={generatedShaderBusy}
+        interfaceSynced={shaderInterfaceSynced}
+        language={shaderLanguage ?? "unsupported"}
+        onAnalyze={() => undefined}
+        onLoadGeneratedShader={onLoadGeneratedShader}
+        onResetSource={() => onSetNodeParam(node.id, "source", DEFAULT_FULLSCREEN_SHADER_SOURCE)}
+        onSourceChange={(source) => onSetNodeParam(node.id, "source", source)}
+        onSyncInputs={() => onSyncShaderInputs(node.id, shaderSource)}
+        runtimeDiagnostics={runtimeShaderDiagnostics}
+        source={shaderSource}
+      />
+    );
+  }
 
   return (
     <Stack gap="sm">
@@ -160,7 +321,6 @@ export function NodeInspector({
             <Button
               leftSection={<BookOpen size={15} />}
               onClick={() => setHelpOpen((open) => !open)}
-              radius="sm"
               size="compact-sm"
               variant="light"
             >
@@ -168,13 +328,11 @@ export function NodeInspector({
             </Button>
           ) : null}
           <Button
-            color="red"
             disabled={graphLocked}
+            intent="danger"
             leftSection={<Trash2 size={15} />}
             onClick={() => onRemoveNode(node)}
-            radius="sm"
             size="compact-sm"
-            variant="light"
           >
             Delete
           </Button>
@@ -189,194 +347,17 @@ export function NodeInspector({
         />
       ) : null}
 
+      {objectSettingBlocks.length > 0 ? (
+        <>
+          <Divider />
+          <Stack gap="md">
+            {objectSettingBlocks}
+          </Stack>
+        </>
+      ) : null}
+
       <PortTable node={node} />
 
-      <RoutingNodeControls node={node} onSetNodeParam={onSetNodeParam} />
-
-      {isPanelControl ? (
-        <>
-          <Divider />
-          <PanelControlInspector
-            busy={runtimeControlBusy}
-            enabled={runtimeControlEnabled}
-            node={node}
-            onSend={onSendRuntimeControl}
-            onSetNodeParam={onSetNodeParam}
-          />
-        </>
-      ) : null}
-
-      {isAssetNode ? (
-        <>
-          <Divider />
-            <AssetControls
-            busy={runtimeAssetImportBusy}
-            enabled={runtimeAssetImportEnabled}
-            node={node}
-            onImportAsset={onImportAsset}
-          />
-        </>
-      ) : null}
-
-      {clearColor ? (
-        <>
-          <Divider />
-          <ClearColorControls
-            color={clearColor}
-            onChange={(color) => onSetNodeParam(node.id, "color", color)}
-          />
-        </>
-      ) : null}
-
-      {floatValue !== null ? (
-        <>
-          <Divider />
-          <FloatValueControls
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
-            representation={floatRepresentation!}
-            value={floatValue}
-          />
-        </>
-      ) : null}
-
-      {intValue !== null ? (
-        <>
-          <Divider />
-          <IntegerValueControls
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
-            representation={intRepresentation!}
-            value={intValue}
-          />
-        </>
-      ) : null}
-
-      {uintValue !== null ? (
-        <>
-          <Divider />
-          <UnsignedIntegerValueControls
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
-            representation={uintRepresentation!}
-            value={uintValue}
-          />
-        </>
-      ) : null}
-
-      {boolValue !== null ? (
-        <>
-          <Divider />
-          <BooleanValueControls
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            value={boolValue}
-          />
-        </>
-      ) : null}
-
-      {toggleValue !== null ? (
-        <>
-          <Divider />
-          <BooleanValueControls
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            title="Toggle Graph Param"
-            value={toggleValue}
-          />
-        </>
-      ) : null}
-
-      {stringValue !== null ? (
-        <>
-          <Divider />
-          <StringValueControls
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            value={stringValue}
-          />
-        </>
-      ) : null}
-
-      {messageValue !== null ? (
-        <>
-          <Divider />
-          <StringValueControls
-            label="Message"
-            onChange={(value) => onSetNodeParam(node.id, "value", value)}
-            title="Message Graph Param"
-            value={messageValue}
-          />
-        </>
-      ) : null}
-
-      {commentText !== null ? (
-        <>
-          <Divider />
-          <CommentControls
-            onChange={(text) => onSetNodeParam(node.id, "text", text)}
-            text={commentText}
-          />
-        </>
-      ) : null}
-
-      {colorRgba ? (
-        <>
-          <Divider />
-          <ColorRgbaControls
-            color={colorRgba}
-            colorSpace={colorSpace!}
-            onChange={(color) => onSetNodeParam(node.id, "value", color)}
-            onColorSpaceChange={(nextColorSpace) => onSetNodeParam(node.id, "colorSpace", nextColorSpace)}
-            onRepresentationChange={(representation) => onSetNodeParam(node.id, "representation", representation)}
-            representation={colorRepresentation!}
-          />
-        </>
-      ) : null}
-
-      {runtimeControlValue ? (
-        <>
-          <Divider />
-          <RuntimeControlValueControls
-            availableActions={runtimeControlActions}
-            busy={runtimeControlBusy}
-            enabled={runtimeControlEnabled}
-            nodeId={node.id}
-            onSend={onSendRuntimeControl}
-            value={runtimeControlValue}
-          />
-        </>
-      ) : null}
-
-      {shaderSource !== null ? (
-        <>
-          <Divider />
-          <FullscreenShaderControls
-            analysis={shaderAnalysis!}
-            generatedShader={generatedShader}
-            generatedShaderBusy={generatedShaderBusy}
-            interfaceSynced={shaderInterfaceSynced}
-            language={shaderLanguage ?? "unsupported"}
-            onAnalyze={() => undefined}
-            onLoadGeneratedShader={onLoadGeneratedShader}
-            onResetSource={() => onSetNodeParam(node.id, "source", DEFAULT_FULLSCREEN_SHADER_SOURCE)}
-            onSourceChange={(source) => onSetNodeParam(node.id, "source", source)}
-            onSyncInputs={() => onSyncShaderInputs(node.id, shaderSource)}
-            runtimeDiagnostics={runtimeShaderDiagnostics}
-            source={shaderSource}
-          />
-        </>
-      ) : null}
     </Stack>
   );
-}
-
-function runtimeControlActionsForNode(node: GraphNodeV01) {
-  const hasHotInlet = hasInputPort(node, "in");
-  return {
-    in: hasHotInlet,
-    set: hasHotInlet,
-    bang: hasHotInlet
-  };
-}
-
-function hasInputPort(node: GraphNodeV01, portId: string): boolean {
-  return node.ports.some((port) => port.id === portId && port.direction === "input");
 }

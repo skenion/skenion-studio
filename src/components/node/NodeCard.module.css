@@ -7,19 +7,18 @@
 
 .body {
   position: relative;
-  border: 1px solid #cdd5df;
+  border: 1px solid var(--sk-border);
   border-left: 4px solid var(--node-accent);
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 30px rgb(31 41 51 / 10%);
+  background: var(--sk-surface);
+  box-shadow: 0 12px 30px var(--sk-shadow);
   overflow: visible;
 }
 
 .rootSelected .body {
-  border-color: #1c7ed6;
+  border-color: var(--sk-blue);
   box-shadow:
     0 0 0 2px rgb(28 126 214 / 22%),
-    0 12px 30px rgb(31 41 51 / 12%);
+    0 12px 30px var(--sk-shadow);
 }
 
 .header {
@@ -29,7 +28,7 @@
   min-height: 58px;
   gap: 10px;
   padding: 12px 12px 8px;
-  border-bottom: 1px solid #edf0f3;
+  border-bottom: 1px solid var(--sk-border);
 }
 
 .ports {
@@ -84,7 +83,7 @@
 }
 
 .rowSelected {
-  color: #1864ab;
+  color: var(--sk-blue);
 }
 
 .outputColumn .row {

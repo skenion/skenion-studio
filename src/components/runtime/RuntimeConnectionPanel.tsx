@@ -1,6 +1,7 @@
-import { Badge, Button, Group, Text, TextInput } from "@mantine/core";
+import { Badge, Group, Text, TextInput } from "@mantine/core";
 import { Cable, RefreshCw } from "lucide-react";
 import type { RuntimeConnectionStatus } from "../../runtime/types";
+import { Button } from "../core/Button/Button";
 
 export function RuntimeConnectionPanel({
   busyAction,
@@ -30,7 +31,7 @@ export function RuntimeConnectionPanel({
             Local HTTP control
           </Text>
         </div>
-        <Badge color={statusColor(status)} radius="sm" variant="light">
+        <Badge color={statusColor(status)} variant="light">
           {status}
         </Badge>
       </Group>
@@ -42,7 +43,6 @@ export function RuntimeConnectionPanel({
         aria-label="Runtime URL"
         disabled={busyAction !== null}
         onChange={(event) => onUrlChange(event.currentTarget.value)}
-        radius="sm"
         size="xs"
         value={url}
       />
@@ -51,7 +51,6 @@ export function RuntimeConnectionPanel({
           leftSection={<Cable size={15} />}
           loading={busyAction === "connect"}
           onClick={onConnect}
-          radius="sm"
           size="xs"
           variant={connected ? "light" : "filled"}
         >
@@ -62,7 +61,6 @@ export function RuntimeConnectionPanel({
           leftSection={<RefreshCw size={15} />}
           loading={busyAction === "session"}
           onClick={onRefreshSession}
-          radius="sm"
           size="xs"
           variant="light"
         >

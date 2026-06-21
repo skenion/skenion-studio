@@ -1,7 +1,9 @@
 import { Alert, Badge, Code, Group, Stack, Text } from "@mantine/core";
 import type {
   RuntimeActionResponse,
-  RuntimeActionResult
+  RuntimeActionResult,
+  RuntimeDummyExecutionReport,
+  RuntimePlan
 } from "../../runtime/types";
 
 export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }) {
@@ -16,7 +18,7 @@ export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }
         <Text fw={800} size="sm">
           {result.kind}
         </Text>
-        <Badge color={result.response.ok ? "green" : "red"} radius="sm" variant="light">
+        <Badge color={result.response.ok ? "green" : "red"} variant="light">
           {result.response.ok ? "ok" : "diagnostics"}
         </Badge>
       </Group>
@@ -27,7 +29,6 @@ export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }
             <Alert
               color={diagnostic.severity === "error" ? "red" : "yellow"}
               key={diagnostic.message}
-              radius="sm"
               variant="light"
             >
               {diagnostic.message}
@@ -85,22 +86,19 @@ export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }
   );
 }
 
-function responsePlan(response: RuntimeActionResponse) {
+function responsePlan(response: RuntimeActionResponse): RuntimePlan | null {
   if ("plan" in response) {
     return response.plan;
   }
-  if ("session" in response) {
-    return response.session.plan;
+  if ("snapshot" in response) {
+    return response.snapshot.plan;
   }
   return null;
 }
 
-function responseReport(response: RuntimeActionResponse) {
+function responseReport(response: RuntimeActionResponse): RuntimeDummyExecutionReport | null {
   if ("report" in response) {
     return response.report;
-  }
-  if ("session" in response) {
-    return response.session.report;
   }
   return null;
 }

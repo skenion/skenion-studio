@@ -1,7 +1,8 @@
-import { Alert, Button, FileButton, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, FileButton, Stack, Text, TextInput } from "@mantine/core";
 import { Upload } from "lucide-react";
 import type { GraphNodeV01 } from "@skenion/contracts";
 import { readVideoAssetParams } from "../../graph/videoAsset";
+import { Button } from "../core/Button/Button";
 
 export interface AssetControlsProps {
   busy?: boolean;
@@ -26,13 +27,20 @@ export function AssetControls({
       <TextInput label="Asset ref" readOnly size="xs" value={asset.assetRef} />
       <TextInput label="Name" readOnly size="xs" value={asset.name} />
       <TextInput label="MIME type" readOnly size="xs" value={asset.mimeType} />
+      <TextInput label="Display size" readOnly size="xs" value={`${asset.width} x ${asset.height}`} />
+      <TextInput
+        label="Source ratio"
+        readOnly
+        size="xs"
+        value={asset.sourceWidth > 0 && asset.sourceHeight > 0 ? `${asset.sourceWidth}:${asset.sourceHeight}` : ""}
+      />
       {!enabled ? (
-        <Alert color="yellow" radius="sm" variant="light">
+        <Alert color="yellow" variant="light">
           Runtime connection is required to import local assets.
         </Alert>
       ) : null}
       {!asset.assetRef ? (
-        <Alert color="yellow" radius="sm" variant="light">
+        <Alert color="yellow" variant="light">
           This asset node has no imported runtime asset reference.
         </Alert>
       ) : null}
@@ -50,7 +58,6 @@ export function AssetControls({
             disabled={!enabled || busy || !onImportAsset}
             leftSection={<Upload size={15} />}
             loading={busy}
-            radius="sm"
             size="compact-sm"
             variant="light"
             {...props}

@@ -12,9 +12,11 @@ export function ReactFlowNodeAdapter({ data, selected }: ReactFlowNodeAdapterPro
     card: data.card,
     node: data.node,
     layoutEditable: data.layoutEditable,
+    onImportAsset: data.onImportAsset,
     onObjectControl: data.onObjectControl,
     onObjectLiveControl: data.onObjectLiveControl,
     onObjectParamChange: data.onObjectParamChange,
+    onObjectTextCommit: data.onObjectTextCommit,
     runtimeControlEnabled: data.runtimeControlEnabled,
     runtimeControlPulseKey: data.runtimeControlPulseKey,
     runtimeControlValue: data.runtimeControlValue,
@@ -41,6 +43,7 @@ function ReactFlowPortHandle({
       id={port.id}
       position={side === "input" ? Position.Top : Position.Bottom}
       style={{
+        borderRadius: 0,
         "--port-color": port.color
       } as CSSProperties}
       type={side === "input" ? "target" : "source"}

@@ -1,7 +1,8 @@
-import { Alert, Badge, Button, Code, Group, Stack, Table, Text } from "@mantine/core";
+import { Alert, Badge, Code, Group, Stack, Table, Text } from "@mantine/core";
 import { GitBranch } from "lucide-react";
 import type { ReactNode } from "react";
 import type { EdgeInspectorModel, GraphSemanticDiagnostic } from "../../graph/portSemantics";
+import { Button } from "../core/Button/Button";
 
 export function EdgeInspector({
   diagnostics,
@@ -24,7 +25,6 @@ export function EdgeInspector({
         <Button
           leftSection={<GitBranch size={14} />}
           onClick={onOpenFeedbackDialog}
-          radius="sm"
           size="compact-sm"
           variant="light"
         >
@@ -41,7 +41,7 @@ export function EdgeInspector({
             <Code>{edge.target}</Code>
           </MetadataRow>
           <MetadataRow label="Resolved">
-            <Badge radius="sm" variant="light">
+            <Badge variant="light">
               {edge.resolvedType}
             </Badge>
           </MetadataRow>
@@ -67,7 +67,7 @@ export function EdgeInspector({
       </Table>
 
       {diagnostics.length > 0 ? (
-        <Alert color="red" radius="sm" variant="light">
+        <Alert color="red" variant="light">
           <Stack gap={4}>
             {diagnostics.map((diagnostic) => (
               <Text key={`${diagnostic.code}:${diagnostic.message}`} size="xs">

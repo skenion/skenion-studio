@@ -13,7 +13,6 @@ import { GraphDiagnosticsPanel } from "./GraphDiagnosticsPanel";
 import { InspectorShell } from "./InspectorShell";
 import { IntegerValueControls } from "./IntegerValueControls";
 import { NodeInspector } from "./NodeInspector";
-import { RuntimeControlValueControls } from "./RuntimeControlValueControls";
 import { StringValueControls } from "./StringValueControls";
 import {
   DEFAULT_FULLSCREEN_SHADER_SOURCE,
@@ -57,13 +56,10 @@ export const NodeControls: Story = {
         node={renderSampleGraph.nodes[0]!}
         onRemoveNode={noop}
         onImportAsset={asyncNoop}
-        onSendRuntimeControl={noop}
         onSetNodeParam={noop}
         onSyncShaderInputs={noop}
         runtimeAssetImportBusy={false}
         runtimeAssetImportEnabled={false}
-        runtimeControlBusy={false}
-        runtimeControlEnabled
       />
     </InspectorShell>
   )
@@ -106,31 +102,6 @@ export const CommentControl: Story = {
   render: () => <CommentControls text="Bang fans out to local control nodes." onChange={noop} />
 };
 
-export const RuntimeControlValueControl: Story = {
-  render: () => (
-    <RuntimeControlValueControls
-      busy={false}
-      enabled
-      nodeId="value_1"
-      onSend={noop}
-      value={{ type: "float", representation: "f32", value: 1.25 }}
-    />
-  )
-};
-
-export const RuntimeControlMessageOnly: Story = {
-  render: () => (
-    <RuntimeControlValueControls
-      availableActions={{ bang: true, in: false, set: false }}
-      busy={false}
-      enabled
-      nodeId="message_1"
-      onSend={noop}
-      value={{ type: "string", value: "perform" }}
-    />
-  )
-};
-
 export const MessageNodeInspector: Story = {
   render: () => {
     const definition = nodeRegistry.find((candidate) => candidate.id === "core.message");
@@ -140,13 +111,10 @@ export const MessageNodeInspector: Story = {
           node={createGraphNodeFromDefinition(definition!, [])}
           onRemoveNode={noop}
           onImportAsset={asyncNoop}
-          onSendRuntimeControl={noop}
           onSetNodeParam={noop}
           onSyncShaderInputs={noop}
           runtimeAssetImportBusy={false}
           runtimeAssetImportEnabled={false}
-          runtimeControlBusy={false}
-          runtimeControlEnabled
         />
       </InspectorShell>
     );

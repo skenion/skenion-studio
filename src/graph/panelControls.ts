@@ -7,6 +7,7 @@ export const TOGGLE_BOOL_NODE_KIND = "core.bool";
 export const SLIDER_WIDGET = "slider";
 export const TOGGLE_WIDGET = "toggle";
 export const CHECKBOX_WIDGET = "checkbox";
+export const DEFAULT_BANG_RADIUS = "999px";
 
 export function isBangControlNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
   return node?.kind === BANG_NODE_KIND;
@@ -22,7 +23,8 @@ export function isToggleControlNode(node: GraphNodeV01 | null): node is GraphNod
 
 export function defaultBangParams(): Record<string, unknown> {
   return {
-    label: "Bang"
+    label: "Bang",
+    radius: DEFAULT_BANG_RADIUS
   };
 }
 
@@ -49,6 +51,13 @@ export function readPanelLabelParam(node: GraphNodeV01): string {
   return typeof node.params.label === "string" && node.params.label.length > 0
     ? node.params.label
     : node.id;
+}
+
+export function readBangParams(node: GraphNodeV01) {
+  return {
+    label: readPanelLabelParam(node),
+    radius: cssRadiusParam(node.params.radius, DEFAULT_BANG_RADIUS)
+  };
 }
 
 export function readSliderFloatParams(node: GraphNodeV01) {
@@ -88,6 +97,20 @@ export function runtimeControlValueForPanelNode(node: GraphNodeV01): RuntimeCont
 
 function isToggleWidget(widget: unknown): boolean {
   return widget === TOGGLE_WIDGET || widget === CHECKBOX_WIDGET;
+}
+
+function cssRadiusParam(value: unknown, fallback: string): string {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return `${value}px`;
+  }
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (/^(0|[0-9]+(?:\.[0-9]+)?(px|rem|em|%)?)$/.test(trimmed)) {
+    return trimmed === "0" ? "0px" : trimmed;
+  }
+  return fallback;
 }
 
 function finiteNumber(value: unknown, fallback: number): number {

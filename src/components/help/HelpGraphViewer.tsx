@@ -52,7 +52,7 @@ export function HelpGraphViewer({ graph }: { graph: GraphDocumentV01 }) {
         preventScrolling={false}
         zoomOnDoubleClick={false}
       >
-        <Background color="#d8dee6" gap={20} size={1} />
+        <Background color="var(--sk-grid-dot)" gap={20} size={1} />
         <Controls position="bottom-left" showInteractive={false} />
       </ReactFlow>
     </div>

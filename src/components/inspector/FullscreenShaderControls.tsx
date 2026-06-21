@@ -1,9 +1,10 @@
-import { Alert, Badge, Button, Code, Group, Stack, Text, Textarea } from "@mantine/core";
+import { Alert, Badge, Code, Group, Stack, Text, Textarea } from "@mantine/core";
 import { FileCode, RotateCcw, ScanSearch, Waypoints } from "lucide-react";
 import { useState } from "react";
 import type { ShaderInterfaceAnalysisV01 } from "@skenion/contracts";
 import type { RuntimeGeneratedShaderResponse } from "../../runtime/types";
 import type { ShaderDiagnosticV01 } from "@skenion/contracts";
+import { Button } from "../core/Button/Button";
 
 export interface FullscreenShaderControlsProps {
   analysis: ShaderInterfaceAnalysisV01;
@@ -53,17 +54,17 @@ export function FullscreenShaderControls({
             <Text c="dimmed" size="xs">
               Language
             </Text>
-            <Badge radius="sm" variant="light">
+            <Badge variant="light">
               {language}
             </Badge>
-            <Badge color={hasErrors ? "red" : "green"} radius="sm" variant="light">
+            <Badge color={hasErrors ? "red" : "green"} variant="light">
               {hasErrors ? "analysis error" : "analysis ok"}
             </Badge>
-            <Badge color={interfaceSynced ? "green" : "yellow"} radius="sm" variant="light">
+            <Badge color={interfaceSynced ? "green" : "yellow"} variant="light">
               {interfaceSynced ? "inputs synced" : "sync needed"}
             </Badge>
             {runtimeDiagnostics.length > 0 ? (
-              <Badge color={runtimeErrors ? "red" : "yellow"} radius="sm" variant="light">
+              <Badge color={runtimeErrors ? "red" : "yellow"} variant="light">
                 runtime diagnostics
               </Badge>
             ) : null}
@@ -79,7 +80,6 @@ export function FullscreenShaderControls({
               setAnalysisVisible(true);
               onAnalyze();
             }}
-            radius="sm"
             size="compact-sm"
             variant="light"
           >
@@ -89,7 +89,6 @@ export function FullscreenShaderControls({
             disabled={hasErrors || interfaceSynced}
             leftSection={<Waypoints size={14} />}
             onClick={onSyncInputs}
-            radius="sm"
             size="compact-sm"
             variant="filled"
           >
@@ -98,7 +97,6 @@ export function FullscreenShaderControls({
           <Button
             leftSection={<RotateCcw size={14} />}
             onClick={onResetSource}
-            radius="sm"
             size="compact-sm"
             variant="light"
           >
@@ -112,7 +110,6 @@ export function FullscreenShaderControls({
               setGeneratedVisible(true);
               onLoadGeneratedShader?.();
             }}
-            radius="sm"
             size="compact-sm"
             variant="light"
           >
@@ -122,7 +119,7 @@ export function FullscreenShaderControls({
       </Group>
 
       {analysisVisible || hasErrors || !interfaceSynced ? (
-        <Alert color={hasErrors ? "red" : interfaceSynced ? "gray" : "yellow"} radius="sm" variant="light">
+        <Alert color={hasErrors ? "red" : interfaceSynced ? "gray" : "yellow"} variant="light">
           <Stack gap={6}>
             <Text fw={700} size="xs">
               Local Interface Analysis
@@ -144,7 +141,7 @@ export function FullscreenShaderControls({
       ) : null}
 
       {runtimeDiagnostics.length > 0 ? (
-        <Alert color={runtimeErrors ? "red" : "yellow"} radius="sm" variant="light">
+        <Alert color={runtimeErrors ? "red" : "yellow"} variant="light">
           <Stack gap={6}>
             <Text fw={700} size="xs">
               Runtime Shader Diagnostics
@@ -155,14 +152,14 @@ export function FullscreenShaderControls({
       ) : null}
 
       {generatedVisible ? (
-        <Alert color={generatedShader?.ok ? "gray" : "yellow"} radius="sm" variant="light">
+        <Alert color={generatedShader?.ok ? "gray" : "yellow"} variant="light">
           <Stack gap={6}>
             <Group justify="space-between" wrap="nowrap">
               <Text fw={700} size="xs">
                 Generated WGSL
               </Text>
               {generatedShader?.sourceMap ? (
-                <Badge radius="sm" variant="light">
+                <Badge variant="light">
                   user starts line {generatedShader.sourceMap.userSourceStartLine}
                 </Badge>
               ) : null}

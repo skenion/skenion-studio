@@ -65,6 +65,21 @@ const captures = [
     waitFor: ".mantine-Alert-root"
   },
   {
+    name: "clock-sources-no-devices",
+    id: "runtime-panels--clock-sources-no-devices",
+    waitForText: "No MIDI input ports found."
+  },
+  {
+    name: "clock-sources-running",
+    id: "runtime-panels--clock-sources-running",
+    waitForText: "midi-clock-main"
+  },
+  {
+    name: "clock-state-mixed-authority",
+    id: "runtime-panels--clock-state-mixed-authority",
+    waitForText: "authoritative"
+  },
+  {
     name: "help-panel-float",
     id: "help-nodehelp--float",
     waitFor: ".help-graph-viewer"

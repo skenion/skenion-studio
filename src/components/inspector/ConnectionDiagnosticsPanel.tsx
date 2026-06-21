@@ -11,7 +11,7 @@ export function ConnectionDiagnosticsPanel({
   }
 
   return (
-    <Alert color={connectionCheck.ok ? "green" : "red"} radius="sm" variant="light">
+    <Alert color={connectionCheck.ok ? "green" : "red"} variant="light">
       {connectionCheck.message}
     </Alert>
   );

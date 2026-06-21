@@ -49,7 +49,8 @@ describe("clear color graph helpers", () => {
       label: "Panel"
     });
     expect(defaultParamsForNodeKind("core.bang")).toEqual({
-      label: "Bang"
+      label: "Bang",
+      radius: "999px"
     });
   });
 

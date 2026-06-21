@@ -11,19 +11,19 @@ export function GraphDiagnosticsPanel({
 }) {
   const errorCount = semanticDiagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
   const warningCount = semanticDiagnostics.filter((diagnostic) => diagnostic.severity === "warning").length;
-  const color = validation.ok && errorCount === 0 ? (warningCount > 0 ? "yellow" : "green") : "red";
+  const color = validation.ok && errorCount === 0 ? (warningCount > 0 ? "yellow" : "gray") : "red";
 
   return (
-    <Alert color={color} radius="sm" variant="light">
+    <Alert color={color} variant="light">
       <Group justify="space-between" wrap="nowrap">
         <Text fw={700} size="sm">
-          {validation.ok && errorCount === 0 ? "Graph validation clear" : "Graph validation failed"}
+          Graph diagnostics
         </Text>
         <Group gap={6} wrap="nowrap">
-          <Badge color={errorCount > 0 || !validation.ok ? "red" : "gray"} radius="sm" size="xs">
+          <Badge color={errorCount > 0 || !validation.ok ? "red" : "gray"} size="xs">
             {validation.ok ? errorCount : errorCount + validation.errors.length} errors
           </Badge>
-          <Badge color={warningCount > 0 ? "yellow" : "gray"} radius="sm" size="xs">
+          <Badge color={warningCount > 0 ? "yellow" : "gray"} size="xs">
             {warningCount} warnings
           </Badge>
         </Group>

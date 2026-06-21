@@ -23,16 +23,16 @@ export function TelemetryPanel({ telemetry }: TelemetryPanelProps) {
           Runtime Telemetry
         </Text>
         <Group gap={6} wrap="nowrap">
-          <Badge color={telemetry ? "green" : "gray"} radius="sm" variant="light">
+          <Badge color={telemetry ? "green" : "gray"} variant="light">
             {telemetry ? "online" : "unavailable"}
           </Badge>
           {telemetry ? (
-            <Badge color={telemetryPreviewBadgeColor(telemetry)} radius="sm" variant="light">
+            <Badge color={telemetryPreviewBadgeColor(telemetry)} variant="light">
               {telemetry.preview.stale ? "stale" : telemetry.preview.state}
             </Badge>
           ) : null}
           {telemetry ? (
-            <Badge color={telemetry.render.controlLive ? "teal" : "yellow"} radius="sm" variant="light">
+            <Badge color={telemetry.render.controlLive ? "teal" : "yellow"} variant="light">
               {telemetry.render.controlLive ? "control live" : "control pending"}
             </Badge>
           ) : null}
@@ -94,13 +94,13 @@ export function TelemetryPanel({ telemetry }: TelemetryPanelProps) {
       </Code>
 
       {renderError && telemetry?.render.lastError ? (
-        <Alert color="red" icon={<Activity size={16} />} radius="sm" variant="light">
+        <Alert color="red" icon={<Activity size={16} />} variant="light">
           {telemetry.render.lastError}
         </Alert>
       ) : null}
 
       {telemetry?.render.diagnostics.length ? (
-        <Alert color={renderError ? "red" : "yellow"} icon={<Activity size={16} />} radius="sm" variant="light">
+        <Alert color={renderError ? "red" : "yellow"} icon={<Activity size={16} />} variant="light">
           <Stack gap={4}>
             {telemetry.render.diagnostics.slice(0, 5).map((diagnostic, index) => (
               <Text key={`${diagnostic.phase}:${diagnostic.code}:${index}`} size="xs">

@@ -1,6 +1,7 @@
-import { Badge, Button, Code, Group, Text } from "@mantine/core";
+import { Badge, Code, Group, Text } from "@mantine/core";
 import { Play, Route, ShieldCheck, Trash2 } from "lucide-react";
 import type { RuntimeSessionResponse } from "../../runtime/types";
+import { Button } from "../core/Button/Button";
 
 export function RuntimeSessionPanel({
   busyAction,
@@ -30,29 +31,29 @@ export function RuntimeSessionPanel({
           Session
         </Text>
         <Group gap={6} wrap="nowrap">
-          <Badge color={sessionLoaded ? "green" : "gray"} radius="sm" variant="light">
+          <Badge color={sessionLoaded ? "green" : "gray"} variant="light">
             {sessionLoaded ? "loaded" : "empty"}
           </Badge>
-          <Badge color={sessionSynced ? "green" : "yellow"} radius="sm" variant="light">
+          <Badge color={sessionSynced ? "green" : "yellow"} variant="light">
             {sessionSynced ? "synced" : "not synced"}
           </Badge>
         </Group>
       </Group>
 
       <Group gap="xs" grow>
-        <Button disabled={!connected || !sessionLoaded} leftSection={<Route size={15} />} loading={busyAction === "planSession"} onClick={onPlanSession} radius="sm" size="xs" variant="light">
+        <Button disabled={!connected || !sessionLoaded} leftSection={<Route size={15} />} loading={busyAction === "planSession"} onClick={onPlanSession} size="xs" variant="light">
           Plan Session
         </Button>
-        <Button disabled={!connected || !sessionLoaded} leftSection={<Play size={15} />} loading={busyAction === "runSession"} onClick={onRunSession} radius="sm" size="xs" variant="light">
+        <Button disabled={!connected || !sessionLoaded} leftSection={<Play size={15} />} loading={busyAction === "runSession"} onClick={onRunSession} size="xs" variant="light">
           Run Session
         </Button>
       </Group>
 
       <Group gap="xs" grow>
-        <Button disabled={!connected || !sessionLoaded} leftSection={<ShieldCheck size={15} />} loading={busyAction === "validateSession"} onClick={onValidateSession} radius="sm" size="xs" variant="light">
+        <Button disabled={!connected || !sessionLoaded} leftSection={<ShieldCheck size={15} />} loading={busyAction === "validateSession"} onClick={onValidateSession} size="xs" variant="light">
           Validate Session
         </Button>
-        <Button color="red" disabled={!connected || !sessionLoaded} leftSection={<Trash2 size={15} />} loading={busyAction === "clearSession"} onClick={onClearSession} radius="sm" size="xs" variant="light">
+        <Button color="red" disabled={!connected || !sessionLoaded} leftSection={<Trash2 size={15} />} loading={busyAction === "clearSession"} onClick={onClearSession} size="xs" variant="light">
           Clear
         </Button>
       </Group>
@@ -61,10 +62,11 @@ export function RuntimeSessionPanel({
         <Code block className="runtime-json">
           {JSON.stringify(
             {
-              graphId: session.graphId,
-              graphRevision: session.graphRevision,
-              sessionRevision: session.sessionRevision,
-              controlRevision: session.controlRevision
+              graphId: session.snapshot.project?.graph.id ?? null,
+              graphRevision: session.snapshot.project?.graph.revision ?? null,
+              sessionRevision: session.snapshot.sessionRevision,
+              viewRevision: session.snapshot.viewRevision,
+              controlRevision: session.snapshot.controlRevision
             },
             null,
             2

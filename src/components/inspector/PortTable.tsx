@@ -35,7 +35,7 @@ export function PortTable({ node }: { node: GraphNodeV01 }) {
                 </Text>
               </Table.Td>
               <Table.Td>
-                <Badge radius="sm" variant="light">
+                <Badge variant="light">
                   {semantics.type}
                 </Badge>
                 {semantics.storedType !== semantics.type ? (

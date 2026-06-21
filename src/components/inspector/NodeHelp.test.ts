@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MantineProvider } from "@mantine/core";
 import { getBuiltinNodeHelp } from "@skenion/contracts";
 import { describe, expect, it } from "vitest";
+import { theme } from "../../theme";
 import { NodeHelp } from "./NodeHelp";
 
 describe("NodeHelp", () => {
@@ -13,7 +14,7 @@ describe("NodeHelp", () => {
     }
 
     const html = renderToStaticMarkup(
-      createElement(MantineProvider, null, createElement(NodeHelp, { help }))
+      createElement(MantineProvider, { theme }, createElement(NodeHelp, { help }))
     );
 
     expect(html).toContain("Stores and emits");

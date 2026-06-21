@@ -54,9 +54,11 @@ interface GraphCanvasProps {
     position: { x: number; y: number },
     paramsOverride?: Record<string, unknown>
   ) => void;
+  onImportAsset?: (node: GraphDocumentV01["nodes"][number], file: File) => Promise<void> | void;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
+  onObjectTextCommit?: (nodeId: string, text: string) => void;
   runtimeControlEnabled?: boolean;
   runtimeControlPulses?: Record<string, number>;
   runtimeControlValues?: Record<string, RuntimeControlValue>;
@@ -75,9 +77,11 @@ export function GraphCanvas({
   selectedNodeId,
   onConnectionCheck,
   onAddNodeAtPosition,
+  onImportAsset,
   onObjectControl,
   onObjectLiveControl,
   onObjectParamChange,
+  onObjectTextCommit,
   runtimeControlEnabled = false,
   runtimeControlPulses = {},
   runtimeControlValues = {},
@@ -107,6 +111,7 @@ export function GraphCanvas({
   const objectControlRef = useRef(onObjectControl);
   const objectLiveControlRef = useRef(onObjectLiveControl);
   const objectParamChangeRef = useRef(onObjectParamChange);
+  const objectTextCommitRef = useRef(onObjectTextCommit);
   useEffect(() => {
     objectControlRef.current = onObjectControl;
   }, [onObjectControl]);
@@ -116,6 +121,9 @@ export function GraphCanvas({
   useEffect(() => {
     objectParamChangeRef.current = onObjectParamChange;
   }, [onObjectParamChange]);
+  useEffect(() => {
+    objectTextCommitRef.current = onObjectTextCommit;
+  }, [onObjectTextCommit]);
   const handleObjectControl = useCallback(
     (nodeId: string, portId: string, message: RuntimeControlMessage) => {
       objectControlRef.current?.(nodeId, portId, message);
@@ -134,15 +142,20 @@ export function GraphCanvas({
     },
     []
   );
+  const handleObjectTextCommit = useCallback((nodeId: string, text: string) => {
+    objectTextCommitRef.current?.(nodeId, text);
+  }, []);
   const flowNodes = useMemo<StudioFlowNode[]>(
     () =>
       viewModel.nodes.map((node) => ({
         ...node,
         data: {
           ...node.data,
+          onImportAsset,
           onObjectControl: handleObjectControl,
           onObjectLiveControl: handleObjectLiveControl,
           onObjectParamChange: handleObjectParamChange,
+          onObjectTextCommit: handleObjectTextCommit,
           layoutEditable: !graphLocked,
           runtimeControlEnabled,
           runtimeControlPulseKey: runtimeControlPulses[node.id] ?? 0,
@@ -153,7 +166,9 @@ export function GraphCanvas({
       handleObjectControl,
       handleObjectLiveControl,
       handleObjectParamChange,
+      handleObjectTextCommit,
       graphLocked,
+      onImportAsset,
       runtimeControlEnabled,
       runtimeControlPulses,
       runtimeControlValues,
@@ -519,7 +534,7 @@ export function GraphCanvas({
       }}
       onMoveEnd={(_event, nextViewport) => onMoveEnd(nextViewport)}
     >
-      <Background color="#d8dee6" gap={20} size={1} />
+      <Background color="var(--sk-grid-dot)" gap={20} size={1} />
       {activeConnectionMessage ? (
         <Panel className="connection-status" position="top-center">
           {activeConnectionMessage}

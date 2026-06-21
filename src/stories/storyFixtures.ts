@@ -2,13 +2,13 @@ import type {
   EdgeV01,
   GraphDocumentV01,
   GraphPatchEventV01,
-  GraphPatchHistoryV01,
   ValidationResult
 } from "@skenion/contracts";
 import type { EdgeInspectorModel, GraphSemanticDiagnostic } from "../graph/portSemantics";
 import type { NodeCardView, NodePortView } from "../components/node/nodeTypes";
 import type {
   RuntimeInfo,
+  RuntimeHistory,
   RuntimePreviewStatus,
   RuntimeSessionResponse,
   RuntimeTelemetrySnapshot
@@ -365,7 +365,7 @@ export const runtimeInfo: RuntimeInfo = {
   apiVersion: "v0",
   capabilities: [
     "session.load",
-    "session.patch",
+    "session.mutate",
     "session.history",
     "session.preview",
     "session.telemetry"
@@ -374,13 +374,26 @@ export const runtimeInfo: RuntimeInfo = {
 
 export const runtimeSession: RuntimeSessionResponse = {
   ok: true,
-  loaded: true,
-  graphId: "storybook-graph",
-  graphRevision: "7",
-  sessionRevision: 12,
-  controlRevision: 4,
+  snapshot: {
+    sessionRevision: 12,
+    viewRevision: 2,
+    controlRevision: 4,
+    project: {
+      graph: storyGraph,
+      nodes: [],
+      viewState: {
+        schema: "skenion.view-state",
+        schemaVersion: "0.1.0",
+        canvas: {
+          nodes: {},
+          viewport: { x: 0, y: 0, zoom: 1 }
+        }
+      }
+    },
+    diagnostics: [],
+    plan: null
+  },
   diagnostics: [],
-  plan: null,
   report: null
 };
 
@@ -519,10 +532,19 @@ const patchEvent: GraphPatchEventV01 = {
   createdAt: "2026-06-17T00:00:00.000Z"
 };
 
-export const runtimeHistory: GraphPatchHistoryV01 = {
-  schema: "skenion.graph.patch.history",
+export const runtimeHistory: RuntimeHistory = {
+  schema: "skenion.runtime.history",
   schemaVersion: "0.1.0",
-  events: [patchEvent],
+  entries: [
+    {
+      id: patchEvent.id,
+      sequence: patchEvent.sequence,
+      kind: "apply",
+      mutation: { graphPatch: patchEvent.patch },
+      inverseMutation: { graphPatch: patchEvent.inversePatch },
+      createdAt: patchEvent.createdAt
+    }
+  ],
   undoDepth: 1,
   redoDepth: 0,
   canUndo: true,
