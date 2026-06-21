@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.27.0...skenion-studio-v0.28.0) (2026-06-21)
+
+
+### Features
+
+* **graph:** add v0.2 patch library foundation ([#82](https://github.com/echovisionlab/skenion-studio/issues/82)) ([dc4476d](https://github.com/echovisionlab/skenion-studio/commit/dc4476dc8ca145569388db9b9d0d54aa5ccfe99f)), closes [#81](https://github.com/echovisionlab/skenion-studio/issues/81)
+
 ## [0.27.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.26.3...skenion-studio-v0.27.0) (2026-06-19)
 
 
