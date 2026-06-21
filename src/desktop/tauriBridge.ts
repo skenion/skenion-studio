@@ -1,4 +1,5 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { RuntimeProfileId } from "./runtimeProfiles";
 import type {
   RuntimeSidecarStartupResponse,
@@ -34,6 +35,7 @@ export interface OpenStudioWindowResponse {
 
 export interface TauriDesktopBridge {
   available: boolean;
+  currentWindowLabel: string | null;
   openStudioWindow: (request: OpenStudioWindowRequest) => Promise<OpenStudioWindowResponse>;
   startManagedSidecar: (request: StartRuntimeSidecarRequest) => Promise<RuntimeSidecarStartupResponse>;
   stopManagedSidecar: (request: StopRuntimeSidecarRequest) => Promise<RuntimeSidecarStopResponse>;
@@ -52,13 +54,16 @@ export function isTauriDesktopAvailable(globalValue: unknown = globalThis): bool
 export function createTauriDesktopBridge(
   options: {
     available?: boolean;
+    currentWindowLabel?: string | null;
     invokeImpl?: TauriInvoke;
   } = {}
 ): TauriDesktopBridge {
   const available = options.available ?? isTauriDesktopAvailable();
+  const currentWindowLabel = options.currentWindowLabel ?? readCurrentWindowLabel(available);
   const invokeImpl = options.invokeImpl ?? tauriInvoke;
   return {
     available,
+    currentWindowLabel,
     openStudioWindow: (request) =>
       invokeImpl<OpenStudioWindowResponse>("open_studio_window", { request }),
     startManagedSidecar: (request) =>
@@ -66,4 +71,15 @@ export function createTauriDesktopBridge(
     stopManagedSidecar: (request) =>
       invokeImpl<RuntimeSidecarStopResponse>("stop_runtime_sidecar", { request })
   };
+}
+
+function readCurrentWindowLabel(available: boolean): string | null {
+  if (!available) {
+    return null;
+  }
+  try {
+    return getCurrentWindow().label || null;
+  } catch {
+    return null;
+  }
 }

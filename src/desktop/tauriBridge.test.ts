@@ -12,6 +12,16 @@ describe("tauriBridge", () => {
     expect(isTauriDesktopAvailable(null)).toBe(false);
   });
 
+  it("exposes the current Tauri window label for sidecar ownership", () => {
+    const bridge = createTauriDesktopBridge({
+      available: true,
+      currentWindowLabel: "main",
+      invokeImpl: vi.fn() as unknown as TauriInvoke
+    });
+
+    expect(bridge.currentWindowLabel).toBe("main");
+  });
+
   it("invokes desktop sidecar and window commands with typed payloads", async () => {
     const invoke = vi.fn(async (command: string) => {
       if (command === "start_runtime_sidecar") {

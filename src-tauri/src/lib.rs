@@ -359,6 +359,15 @@ mod tests {
         assert!(owners.contains("detail"));
         assert!(owners.release("detail"));
     }
+
+    #[test]
+    fn shared_sidecar_owner_registration_is_idempotent_for_reused_window_label() {
+        let mut owners = RuntimeSidecarOwners::new("main".to_owned());
+
+        owners.register("main".to_owned());
+
+        assert!(owners.release("main"));
+    }
 }
 
 fn sidecar_key(profile_id: &str, owner_window_id: &str, isolated: bool) -> String {

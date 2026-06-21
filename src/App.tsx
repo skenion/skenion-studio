@@ -113,7 +113,10 @@ import {
   createVolatileHelpWorkingCopy,
   type VolatileHelpWorkingCopy
 } from "./components/help/HelpGraphViewer";
-import { readDesktopLaunchContext } from "./desktop/launchContext";
+import {
+  readDesktopLaunchContext,
+  resolveStudioWindowId
+} from "./desktop/launchContext";
 import {
   DEFAULT_RUNTIME_SESSION_ID,
   activeRuntimeProfile,
@@ -146,7 +149,12 @@ import {
 export default function App() {
   const [launchContext] = useState(() => readDesktopLaunchContext());
   const [desktopBridge] = useState(() => createTauriDesktopBridge());
-  const [studioWindowId] = useState(() => launchContext.windowId ?? createStudioWindowId());
+  const [studioWindowId] = useState(() =>
+    resolveStudioWindowId({
+      launchWindowId: launchContext.windowId,
+      tauriWindowLabel: desktopBridge.currentWindowLabel
+    })
+  );
   const [runtimeSessionId] = useState(() => launchContext.sessionId || DEFAULT_RUNTIME_SESSION_ID);
   const [runtimeProfileState, setRuntimeProfileState] = useState(() =>
     createRuntimeProfileState({

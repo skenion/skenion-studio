@@ -3,7 +3,10 @@ import {
   DEFAULT_RUNTIME_SESSION_ID,
   type RuntimeProfileId
 } from "./runtimeProfiles";
-import type { StudioWindowMode } from "./windowRegistry";
+import {
+  createStudioWindowId,
+  type StudioWindowMode
+} from "./windowRegistry";
 
 export interface DesktopLaunchContext {
   profileId: RuntimeProfileId;
@@ -22,6 +25,18 @@ export function readDesktopLaunchContext(search = globalThis.location?.search ??
     windowId: parseOptionalToken(params.get("windowId")),
     windowMode: parseWindowMode(params.get("windowMode"))
   };
+}
+
+export function resolveStudioWindowId(options: {
+  createWindowId?: () => string;
+  launchWindowId: string | null;
+  tauriWindowLabel?: string | null;
+}): string {
+  return (
+    options.launchWindowId ??
+    parseOptionalToken(options.tauriWindowLabel ?? null) ??
+    (options.createWindowId ?? createStudioWindowId)()
+  );
 }
 
 function parseRuntimeUrl(value: string | null): string {
