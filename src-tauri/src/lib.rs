@@ -97,6 +97,7 @@ struct OpenStudioWindowResponse {
 
 #[tauri::command]
 fn start_runtime_sidecar(
+    app: tauri::AppHandle,
     state: tauri::State<'_, RuntimeSidecarState>,
     request: StartRuntimeSidecarRequest,
 ) -> Result<Value, String> {
@@ -117,7 +118,7 @@ fn start_runtime_sidecar(
         }
     }
 
-    let executable = runtime_executable(request.runtime_executable.as_deref());
+    let executable = runtime_executable(&app, request.runtime_executable.as_deref());
     let mut child = Command::new(&executable)
         .args([
             "serve",
@@ -408,7 +409,7 @@ fn read_startup_json(stdout: impl std::io::Read + Send + 'static) -> Result<Valu
     Ok(startup)
 }
 
-fn runtime_executable(requested: Option<&str>) -> PathBuf {
+fn runtime_executable(app: &tauri::AppHandle, requested: Option<&str>) -> PathBuf {
     if let Some(path) = requested.filter(|value| !value.trim().is_empty()) {
         return PathBuf::from(path);
     }
@@ -417,10 +418,24 @@ fn runtime_executable(requested: Option<&str>) -> PathBuf {
             return PathBuf::from(path);
         }
     }
+    if let Some(path) = bundled_runtime_binary(app) {
+        return path;
+    }
     if let Some(path) = sibling_runtime_debug_binary() {
         return path;
     }
     PathBuf::from("skenion-runtime")
+}
+
+fn bundled_runtime_binary(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let binary_name = if cfg!(windows) {
+        "skenion-runtime.exe"
+    } else {
+        "skenion-runtime"
+    };
+    let resource_dir = app.path().resource_dir().ok()?;
+    let candidate = resource_dir.join(binary_name);
+    candidate.exists().then_some(candidate)
 }
 
 fn sibling_runtime_debug_binary() -> Option<PathBuf> {

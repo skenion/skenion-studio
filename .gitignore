@@ -4,6 +4,7 @@ storybook-static/
 artifacts/
 .deps/
 src-tauri/gen/
+src-tauri/binaries/
 src-tauri/target/
 .DS_Store
 *.local

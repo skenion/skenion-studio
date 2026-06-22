@@ -1,0 +1,335 @@
+name: Desktop Release
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Studio release tag to package, for example skenion-studio-v0.43.0
+        required: true
+        type: string
+      train-version:
+        description: Lockstep product train version, such as 0.43.0
+        required: true
+        type: string
+      release-train-mode:
+        description: Release train mode; publish uploads to the GitHub Release, verify builds only
+        default: verify
+        required: false
+        type: string
+      release-manifest:
+        description: Optional path to a checked-in release train manifest with Runtime sidecar checksums
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-desktop-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  RELEASE_TRAIN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-train-mode'] }}
+  RELEASE_MANIFEST: ${{ inputs['release-manifest'] }}
+
+jobs:
+  release:
+    name: release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.validate.outputs.tag }}
+      tag_ref: ${{ steps.validate.outputs.tag_ref }}
+      version: ${{ steps.validate.outputs.version }}
+      upload_release_assets: ${{ steps.validate.outputs.upload_release_assets }}
+    steps:
+      - id: validate
+        name: Validate release request
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          RELEASE_TRAIN_MODE: ${{ env.RELEASE_TRAIN_MODE }}
+          TRAIN_VERSION: ${{ inputs['train-version'] }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_TAG}" =~ ^skenion-studio-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::release tag must be skenion-studio-vx.y.z; got '${RELEASE_TAG}'."
+            exit 1
+          fi
+
+          version="${RELEASE_TAG#skenion-studio-v}"
+          if [[ -n "${TRAIN_VERSION}" && "${TRAIN_VERSION}" != "${version}" ]]; then
+            echo "::error::train-version (${TRAIN_VERSION}) must match release tag version (${version})."
+            exit 1
+          fi
+
+          case "${RELEASE_TRAIN_MODE}" in
+            publish)
+              upload_release_assets=true
+              ;;
+            verify)
+              upload_release_assets=false
+              ;;
+            *)
+              echo "::error::release-train-mode must be publish or verify; got '${RELEASE_TRAIN_MODE}'."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "tag=${RELEASE_TAG}"
+            echo "tag_ref=refs/tags/${RELEASE_TAG}"
+            echo "version=${version}"
+            echo "upload_release_assets=${upload_release_assets}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.validate.outputs.tag_ref }}
+
+      - name: Validate Studio package versions
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const expected = process.env.EXPECTED_VERSION;
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const tauriConfig = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+          const cargoToml = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+          const cargoVersion = cargoToml.match(/^version = "([^"]+)"$/m)?.[1];
+          const contractsDependency = packageJson.dependencies?.["@skenion/contracts"];
+          const contractsPeerDependency = packageJson.peerDependencies?.["@skenion/contracts"];
+
+          const versions = {
+            "package.json": packageJson.version,
+            "src-tauri/tauri.conf.json": tauriConfig.version,
+            "src-tauri/Cargo.toml": cargoVersion,
+            "package.json dependencies.@skenion/contracts": contractsDependency
+          };
+          if (contractsPeerDependency !== undefined) {
+            versions["package.json peerDependencies.@skenion/contracts"] = contractsPeerDependency;
+          }
+          for (const [source, actual] of Object.entries(versions)) {
+            if (actual !== expected) {
+              console.error(`::error::${source} version ${actual} does not match release ${expected}.`);
+              process.exit(1);
+            }
+          }
+          NODE
+
+      - name: Summarize desktop release request
+        shell: bash
+        run: |
+          {
+            echo "## Studio Desktop Release"
+            echo ""
+            echo "- Studio tag: ${{ steps.validate.outputs.tag }}"
+            echo "- Studio version: ${{ steps.validate.outputs.version }}"
+            echo "- Runtime sidecar release: skenion-runtime-v${{ steps.validate.outputs.version }}"
+            echo "- Contracts npm package: @skenion/contracts@${{ steps.validate.outputs.version }}"
+            echo "- Mode: ${RELEASE_TRAIN_MODE}"
+            echo "- Upload release assets: ${{ steps.validate.outputs.upload_release_assets }}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  desktop-package:
+    name: desktop package (${{ matrix.target }})
+    needs: release
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.release_blocking == false }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            release_blocking: true
+            tier: release-blocking
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+            release_blocking: true
+            tier: release-blocking
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2022
+            release_blocking: true
+            tier: release-blocking
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            release_blocking: true
+            tier: release-blocking
+          - target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+            release_blocking: false
+            tier: preview
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            release_blocking: false
+            tier: preview
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release.outputs.tag_ref }}
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Add Rust target
+        run: rustup target add "${TARGET}"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: skenion-studio-desktop-release-${{ matrix.target }}
+          cache-all-crates: "true"
+          cache-on-failure: "true"
+          workspaces: src-tauri -> target
+
+      - name: Verify released Contracts npm package
+        run: |
+          set -euo pipefail
+          if ! released_version="$(pnpm view "@skenion/contracts@${VERSION}" version --silent)"; then
+            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+            exit 1
+          fi
+          if [[ "${released_version}" != "${VERSION}" ]]; then
+            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+            exit 1
+          fi
+
+      - name: Install Studio dependencies from released packages
+        run: |
+          set -euo pipefail
+          pnpm install --no-frozen-lockfile
+          node <<'NODE'
+          const fs = require("node:fs");
+          const expected = process.env.VERSION;
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const declared = packageJson.dependencies?.["@skenion/contracts"];
+          const declaredPeer = packageJson.peerDependencies?.["@skenion/contracts"];
+          const installed = JSON.parse(fs.readFileSync("node_modules/@skenion/contracts/package.json", "utf8"));
+
+          if (declared !== expected) {
+            console.error(`::error::package.json declares @skenion/contracts as ${declared}, expected ${expected}.`);
+            process.exit(1);
+          }
+          if (declaredPeer !== undefined && declaredPeer !== expected) {
+            console.error(`::error::package.json peerDependency declares @skenion/contracts as ${declaredPeer}, expected ${expected}.`);
+            process.exit(1);
+          }
+          if (installed.version !== expected) {
+            console.error(`::error::installed @skenion/contracts is ${installed.version}, expected ${expected}.`);
+            process.exit(1);
+          }
+          NODE
+
+      - name: Stage same-train Runtime sidecar
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          args=(
+            --version "${VERSION}"
+            --target "${TARGET}"
+            --mode "${RELEASE_TRAIN_MODE}"
+          )
+          if [[ -n "${RELEASE_MANIFEST}" ]]; then
+            args+=(--manifest "${RELEASE_MANIFEST}")
+          fi
+          pnpm run stage-runtime-sidecar -- "${args[@]}"
+
+      - id: package_runtime_sidecar
+        name: Package Studio Runtime sidecar release asset
+        run: pnpm run package-runtime-sidecar -- --target "${TARGET}"
+
+      - name: Upload Studio Runtime sidecar release asset
+        if: needs.release.outputs.upload_release_assets == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ needs.release.outputs.tag }}" \
+            "${{ steps.package_runtime_sidecar.outputs.asset_path }}" \
+            "${{ steps.package_runtime_sidecar.outputs.checksum_path }}" \
+            --clobber
+
+      - name: Verify staged sidecar is declared for Tauri
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("src-tauri/tauri.release.conf.json", "utf8"));
+          if (!config.bundle?.externalBin?.includes("binaries/skenion-runtime")) {
+            console.error("::error::Release Tauri bundle.externalBin must include binaries/skenion-runtime.");
+            process.exit(1);
+          }
+          NODE
+
+      - name: Build and upload Tauri desktop package
+        if: needs.release.outputs.upload_release_assets == 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PNPM_HOME: ${{ env.PNPM_HOME }}
+        with:
+          tagName: ${{ needs.release.outputs.tag }}
+          releaseName: Skenion Studio v${{ needs.release.outputs.version }}
+          releaseBody: |
+            Skenion Studio desktop package for ${{ matrix.target }}.
+
+            Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.
+            Signing/notarization/updater status is tracked in docs/ci-release-policy.md.
+          includeUpdaterJson: false
+          projectPath: .
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+
+      - name: Build Tauri desktop package
+        if: needs.release.outputs.upload_release_assets != 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PNPM_HOME: ${{ env.PNPM_HOME }}
+        with:
+          includeUpdaterJson: false
+          projectPath: .
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+
+      - name: Summarize desktop package
+        run: |
+          {
+            echo "## Studio Desktop Package"
+            echo ""
+            echo "- Target: ${TARGET}"
+            echo "- Tier: ${{ matrix.tier }}"
+            echo "- Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}"
+            echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
+            echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"
+          } >> "${GITHUB_STEP_SUMMARY}"
