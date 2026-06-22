@@ -110,8 +110,9 @@ macOS artifacts are useful build or preview evidence, but they do not satisfy
 the desktop release-completion gate. Publish mode fails closed before Tauri
 packaging if `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, and
 `APPLE_SIGNING_IDENTITY` are absent, or if notarization credentials are absent.
-Notarization may use either `APPLE_API_KEY` with `APPLE_API_ISSUER` or
-`APPLE_ID` with `APPLE_PASSWORD` and `APPLE_TEAM_ID`.
+Notarization currently uses the Apple ID credential path and requires
+`APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` so the Tauri publish step can
+submit App/DMG artifacts to Apple from the macOS packaging jobs.
 
 Full application auto-updater rollout remains out of v0 scope. Missing updater
 feed publication or updater signing keys must be reported with the desktop

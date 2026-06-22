@@ -197,37 +197,31 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           failed=false
-          missing=()
+          signing_missing=()
+          notarization_missing=()
           for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY; do
             if [[ -z "${!name:-}" ]]; then
-              missing+=("${name}")
+              signing_missing+=("${name}")
+            fi
+          done
+          for name in APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              notarization_missing+=("${name}")
             fi
           done
 
-          has_api_key_credentials=false
-          if [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_ISSUER:-}" ]]; then
-            has_api_key_credentials=true
-          fi
-
-          has_apple_id_credentials=false
-          if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
-            has_apple_id_credentials=true
-          fi
-
-          if ((${#missing[@]} > 0)); then
-            echo "::error::macOS publish mode requires signing secrets: ${missing[*]}."
+          if ((${#signing_missing[@]} > 0)); then
+            echo "::error::macOS publish mode requires signing secrets: ${signing_missing[*]}."
             failed=true
           fi
-          if [[ "${has_api_key_credentials}" != "true" && "${has_apple_id_credentials}" != "true" ]]; then
-            echo "::error::macOS publish mode requires notarization credentials via APPLE_API_KEY + APPLE_API_ISSUER or APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID."
+          if ((${#notarization_missing[@]} > 0)); then
+            echo "::error::macOS publish mode requires Apple ID notarization secrets: ${notarization_missing[*]}."
             failed=true
           fi
           if [[ "${failed}" == "true" ]]; then
@@ -354,8 +348,8 @@ jobs:
           }
           NODE
 
-      - name: Build and upload Tauri desktop package
-        if: needs.release.outputs.upload_release_assets == 'true'
+      - name: Build and upload Tauri desktop package (macOS)
+        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -363,11 +357,28 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ needs.release.outputs.tag }}
+          releaseName: Skenion Studio v${{ needs.release.outputs.version }}
+          releaseBody: |
+            Skenion Studio desktop package for ${{ matrix.target }}.
+
+            Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.
+            Signing/notarization/updater status is tracked in docs/ci-release-policy.md.
+          includeUpdaterJson: false
+          projectPath: .
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
+
+      - name: Build and upload Tauri desktop package (non-macOS)
+        if: needs.release.outputs.upload_release_assets == 'true' && runner.os != 'macOS'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PNPM_HOME: ${{ env.PNPM_HOME }}
         with:
           tagName: ${{ needs.release.outputs.tag }}
           releaseName: Skenion Studio v${{ needs.release.outputs.version }}
