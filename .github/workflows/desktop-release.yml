@@ -337,6 +337,14 @@ jobs:
             console.error("::error::Release Tauri bundle.externalBin must include binaries/skenion-runtime.");
             process.exit(1);
           }
+          if (target.includes("windows")) {
+            const iconPath = "src-tauri/icons/icon.ico";
+            if (!fs.existsSync(iconPath)) {
+              console.error("::error::Windows desktop releases require src-tauri/icons/icon.ico for the Tauri Windows resource file.");
+              process.exit(1);
+            }
+            validateIcoFile(iconPath);
+          }
           const isLinux = target.endsWith("-unknown-linux-gnu");
           if (isLinux && bundleArgs !== "--bundles deb,rpm") {
             console.error(`::error::Linux desktop releases must currently scope Tauri bundles to deb,rpm; got '${bundleArgs}'.`);
@@ -344,6 +352,71 @@ jobs:
           }
           if (!isLinux && bundleArgs !== "") {
             console.error(`::error::Non-Linux desktop releases should use native Tauri bundle defaults; got '${bundleArgs}'.`);
+            process.exit(1);
+          }
+
+          function validateIcoFile(iconPath) {
+            const icon = fs.readFileSync(iconPath);
+            const headerLength = 6;
+            const directoryEntryLength = 16;
+            if (icon.length < headerLength) {
+              fail(`${iconPath} must include a complete ICO header.`);
+            }
+
+            const reserved = icon.readUInt16LE(0);
+            const type = icon.readUInt16LE(2);
+            const count = icon.readUInt16LE(4);
+            if (reserved !== 0 || type !== 1) {
+              fail(`${iconPath} must be an ICO image file with reserved=0 and type=1.`);
+            }
+            if (count === 0) {
+              fail(`${iconPath} must contain at least one image entry.`);
+            }
+
+            const directoryLength = headerLength + count * directoryEntryLength;
+            if (icon.length < directoryLength) {
+              fail(`${iconPath} declares ${count} image entries but the ICO directory is truncated.`);
+            }
+
+            for (let index = 0; index < count; index += 1) {
+              const entryOffset = headerLength + index * directoryEntryLength;
+              const width = decodeIcoDimension(icon[entryOffset]);
+              const height = decodeIcoDimension(icon[entryOffset + 1]);
+              const entryReserved = icon[entryOffset + 3];
+              const planes = icon.readUInt16LE(entryOffset + 4);
+              const bitDepth = icon.readUInt16LE(entryOffset + 6);
+              const imageLength = icon.readUInt32LE(entryOffset + 8);
+              const imageOffset = icon.readUInt32LE(entryOffset + 12);
+              const imageEnd = imageOffset + imageLength;
+              const entryLabel = `${iconPath} entry ${index + 1}`;
+
+              if (entryReserved !== 0) {
+                fail(`${entryLabel} has a nonzero reserved byte.`);
+              }
+              if (width <= 0 || height <= 0) {
+                fail(`${entryLabel} must declare nonzero dimensions.`);
+              }
+              if (planes === 0 || bitDepth === 0) {
+                fail(`${entryLabel} must declare a nonzero color plane count and bit depth.`);
+              }
+              if (imageLength === 0) {
+                fail(`${entryLabel} must point to a non-empty image payload.`);
+              }
+              if (imageOffset < directoryLength) {
+                fail(`${entryLabel} image offset ${imageOffset} overlaps the ${directoryLength}-byte ICO directory.`);
+              }
+              if (imageEnd > icon.length) {
+                fail(`${entryLabel} image range ${imageOffset}-${imageEnd} exceeds file length ${icon.length}.`);
+              }
+            }
+          }
+
+          function decodeIcoDimension(value) {
+            return value === 0 ? 256 : value;
+          }
+
+          function fail(message) {
+            console.error(`::error::${message}`);
             process.exit(1);
           }
           NODE
