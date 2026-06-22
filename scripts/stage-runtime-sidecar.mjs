@@ -78,7 +78,7 @@ try {
     await verifySha256(artifactPath, expectedChecksum, assetName);
   }
 
-  await run("tar", ["-xzf", artifactPath, "-C", tempDir]);
+  await run("tar", ["-xzf", path.basename(artifactPath)], { cwd: tempDir });
   const extractedBinary = path.join(
     tempDir,
     `skenion-runtime-v${version}-${target}`,
@@ -220,9 +220,9 @@ async function githubFetch(url, init = {}) {
   });
 }
 
-async function run(command, args) {
+async function run(command, args, options = {}) {
   await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit" });
+    const child = spawn(command, args, { stdio: "inherit", ...options });
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {

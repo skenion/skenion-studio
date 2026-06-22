@@ -53,11 +53,14 @@ try {
     "utf8"
   );
 
+  const tempAssetPath = path.join(tempDir, assetName);
+  const packageDirName = path.basename(packageDir);
   if (isWindows) {
-    await run("tar", ["-a", "-cf", assetPath, "-C", tempDir, path.basename(packageDir)]);
+    await run("tar", ["-a", "-cf", assetName, packageDirName], { cwd: tempDir });
   } else {
-    await run("tar", ["-czf", assetPath, "-C", tempDir, path.basename(packageDir)]);
+    await run("tar", ["-czf", assetName, packageDirName], { cwd: tempDir });
   }
+  await fs.copyFile(tempAssetPath, assetPath);
 
   const checksum = await sha256(assetPath);
   await fs.writeFile(checksumPath, `${checksum}  ${assetName}\n`, "utf8");
@@ -110,9 +113,9 @@ async function sha256(filePath) {
   return hash.digest("hex");
 }
 
-async function run(command, args) {
+async function run(command, args, options = {}) {
   await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit" });
+    const child = spawn(command, args, { stdio: "inherit", ...options });
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
