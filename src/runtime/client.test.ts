@@ -74,10 +74,10 @@ describe("runtime client", () => {
     expect(() => normalizeRuntimeUrl(" ")).toThrow(RuntimeClientError);
     expect(normalizeRuntimeSessionId(" alpha ")).toBe("alpha");
     expect(normalizeRuntimeSessionId(" ")).toBeNull();
-    expect(runtimeSessionPath(null)).toBe("/v0/session");
+    expect(runtimeSessionPath(null)).toBe("/v0/sessions/default");
     expect(runtimeSessionPath("alpha/beta", "/events/stream")).toBe("/v0/sessions/alpha%2Fbeta/events/stream");
     expect(runtimeSessionEventsStreamUrl("http://localhost:3761/")).toBe(
-      "http://localhost:3761/v0/session/events/stream"
+      "http://localhost:3761/v0/sessions/default/events/stream"
     );
     expect(runtimeSessionEventsStreamUrl("http://localhost:3761/", "alpha")).toBe(
       "http://localhost:3761/v0/sessions/alpha/events/stream"
@@ -189,11 +189,11 @@ describe("runtime client", () => {
 
   it("calls runtime session endpoints", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-      String(_input).endsWith("/v0/session/history")
+      String(_input).endsWith("/v0/sessions/default/history")
         ? jsonResponse(historyResponse())
-        : String(_input).endsWith("/v0/session/mutate") ||
-            String(_input).endsWith("/v0/session/undo") ||
-            String(_input).endsWith("/v0/session/redo")
+        : String(_input).endsWith("/v0/sessions/default/mutate") ||
+            String(_input).endsWith("/v0/sessions/default/undo") ||
+            String(_input).endsWith("/v0/sessions/default/redo")
         ? jsonResponse(patchResponse())
         : jsonResponse(sessionResponse())
     );
@@ -218,21 +218,21 @@ describe("runtime client", () => {
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(fetchMock).toHaveBeenCalledTimes(11);
-    expect(calls[0]).toEqual(["http://runtime.local/v0/session", { method: "GET" }]);
-    expect(calls[1][0]).toBe("http://runtime.local/v0/session/load");
+    expect(calls[0]).toEqual(["http://runtime.local/v0/sessions/default", { method: "GET" }]);
+    expect(calls[1][0]).toBe("http://runtime.local/v0/sessions/default/load");
     expect(JSON.parse(String(calls[1][1].body))).toEqual(project);
-    expect(calls[2]).toEqual(["http://runtime.local/v0/session/validate", { method: "POST" }]);
-    expect(calls[3]).toEqual(["http://runtime.local/v0/session/plan", { method: "POST" }]);
-    expect(calls[4][0]).toBe("http://runtime.local/v0/session/run");
+    expect(calls[2]).toEqual(["http://runtime.local/v0/sessions/default/validate", { method: "POST" }]);
+    expect(calls[3]).toEqual(["http://runtime.local/v0/sessions/default/plan", { method: "POST" }]);
+    expect(calls[4][0]).toBe("http://runtime.local/v0/sessions/default/run");
     expect(JSON.parse(String(calls[4][1].body))).toEqual({ frames: 2 });
-    expect(calls[5][0]).toBe("http://runtime.local/v0/session/mutate");
+    expect(calls[5][0]).toBe("http://runtime.local/v0/sessions/default/mutate");
     expect(JSON.parse(String(calls[5][1].body))).toEqual(mutation);
-    expect(calls[6][0]).toBe("http://runtime.local/v0/session/mutate");
+    expect(calls[6][0]).toBe("http://runtime.local/v0/sessions/default/mutate");
     expect(JSON.parse(String(calls[6][1].body))).toMatchObject({ viewPatch: { baseViewRevision: 1 } });
-    expect(calls[7]).toEqual(["http://runtime.local/v0/session/history", { method: "GET" }]);
-    expect(calls[8]).toEqual(["http://runtime.local/v0/session/undo", { method: "POST" }]);
-    expect(calls[9]).toEqual(["http://runtime.local/v0/session/redo", { method: "POST" }]);
-    expect(calls[10]).toEqual(["http://runtime.local/v0/session", { method: "DELETE" }]);
+    expect(calls[7]).toEqual(["http://runtime.local/v0/sessions/default/history", { method: "GET" }]);
+    expect(calls[8]).toEqual(["http://runtime.local/v0/sessions/default/undo", { method: "POST" }]);
+    expect(calls[9]).toEqual(["http://runtime.local/v0/sessions/default/redo", { method: "POST" }]);
+    expect(calls[10]).toEqual(["http://runtime.local/v0/sessions/default", { method: "DELETE" }]);
   });
 
   it("targets explicit runtime session endpoints when a session id is provided", async () => {
@@ -292,15 +292,15 @@ describe("runtime client", () => {
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(calls[0][0]).toBe("http://runtime.local/v0/session/operation");
+    expect(calls[0][0]).toBe("http://runtime.local/v0/sessions/default/operation");
     expect(JSON.parse(String(calls[0][1].body))).toEqual(operation);
   });
 
   it("calls runtime control endpoints", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-      String(_input).endsWith("/v0/session/control/state")
+      String(_input).endsWith("/v0/sessions/default/control/state")
         ? jsonResponse(controlStateResponse())
-        : String(_input).endsWith("/v0/session/control/read")
+        : String(_input).endsWith("/v0/sessions/default/control/read")
         ? jsonResponse(controlReadResponse())
         : jsonResponse(controlEventResponse())
     );
@@ -316,14 +316,14 @@ describe("runtime client", () => {
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(calls[0][0]).toBe("http://runtime.local/v0/session/control/event");
+    expect(calls[0][0]).toBe("http://runtime.local/v0/sessions/default/control/event");
     expect(JSON.parse(String(calls[0][1].body))).toEqual({
       nodeId: "value_1",
       portId: "in",
       message: { selector: "float", atoms: [{ type: "float", representation: "f32", value: 1.25 }] }
     });
-    expect(calls[1]).toEqual(["http://runtime.local/v0/session/control/state", { method: "GET" }]);
-    expect(calls[2][0]).toBe("http://runtime.local/v0/session/control/read");
+    expect(calls[1]).toEqual(["http://runtime.local/v0/sessions/default/control/state", { method: "GET" }]);
+    expect(calls[2][0]).toBe("http://runtime.local/v0/sessions/default/control/read");
     expect(JSON.parse(String(calls[2][1].body))).toEqual({
       nodeId: "value_1",
       target: "state",
@@ -335,7 +335,7 @@ describe("runtime client", () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
       fetchImpl: vi.fn(async (_input: RequestInfo | URL) =>
-        String(_input).endsWith("/v0/session/control/state")
+        String(_input).endsWith("/v0/sessions/default/control/state")
           ? jsonResponse(
               controlStateResponse({
                 values: {
@@ -426,13 +426,13 @@ describe("runtime client", () => {
 
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(calls[0]).toEqual(["http://runtime.local/v0/session/preview", { method: "GET" }]);
-    expect(calls[1][0]).toBe("http://runtime.local/v0/session/preview/start");
+    expect(calls[0]).toEqual(["http://runtime.local/v0/sessions/default/preview", { method: "GET" }]);
+    expect(calls[1][0]).toBe("http://runtime.local/v0/sessions/default/preview/start");
     expect(JSON.parse(String(calls[1][1].body))).toEqual({ restart: false });
-    expect(calls[2][0]).toBe("http://runtime.local/v0/session/preview/start");
+    expect(calls[2][0]).toBe("http://runtime.local/v0/sessions/default/preview/start");
     expect(JSON.parse(String(calls[2][1].body))).toEqual({ restart: true });
-    expect(calls[3]).toEqual(["http://runtime.local/v0/session/preview/stop", { method: "POST" }]);
-    expect(calls[4]).toEqual(["http://runtime.local/v0/session/preview/restart", { method: "POST" }]);
+    expect(calls[3]).toEqual(["http://runtime.local/v0/sessions/default/preview/stop", { method: "POST" }]);
+    expect(calls[4]).toEqual(["http://runtime.local/v0/sessions/default/preview/restart", { method: "POST" }]);
   });
 
   it("calls runtime asset endpoints", async () => {
@@ -477,7 +477,7 @@ describe("runtime client", () => {
 
     await client.getTelemetry();
 
-    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/session/telemetry", { method: "GET" });
+    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/sessions/default/telemetry", { method: "GET" });
   });
 
   it("calls runtime log snapshot endpoint and builds stream URLs", async () => {
@@ -707,7 +707,7 @@ describe("runtime client", () => {
         userSourceStartLine: 32
       }
     });
-    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/session/render/generated-shader", { method: "GET" });
+    expect(fetchMock).toHaveBeenCalledWith("http://runtime.local/v0/sessions/default/render/generated-shader", { method: "GET" });
 
     const diagnosticsClient = createRuntimeClient({
       baseUrl: "http://runtime.local",
@@ -799,7 +799,7 @@ describe("runtime client", () => {
     const client = createRuntimeClient({
       baseUrl: "http://runtime.local",
       fetchImpl: vi.fn(async (_input: RequestInfo | URL) =>
-        String(_input).endsWith("/v0/session/history")
+        String(_input).endsWith("/v0/sessions/default/history")
           ? jsonResponse(historyResponse({ canUndo: false, undoDepth: 0, entries: [] }))
           : jsonResponse(patchResponse())
       ) as typeof fetch

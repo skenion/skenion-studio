@@ -55,6 +55,8 @@ export { isRuntimeLogEvent, isRuntimeSessionEvent } from "@skenion/contracts/run
 
 type FetchLike = typeof fetch;
 
+export const DEFAULT_RUNTIME_SESSION_ID = "default";
+
 export interface RuntimeClient {
   getHealth: () => Promise<RuntimeHealth>;
   getRuntimeInfo: () => Promise<RuntimeInfo>;
@@ -319,10 +321,8 @@ export function normalizeRuntimeSessionId(sessionId?: string | null): string | n
 
 export function runtimeSessionPath(sessionId?: string | null, suffix = ""): string {
   const normalizedSessionId = normalizeRuntimeSessionId(sessionId);
-  if (!normalizedSessionId) {
-    return `/v0/session${suffix}`;
-  }
-  return `/v0/sessions/${encodeURIComponent(normalizedSessionId)}${suffix}`;
+  const explicitSessionId = normalizedSessionId ?? DEFAULT_RUNTIME_SESSION_ID;
+  return `/v0/sessions/${encodeURIComponent(explicitSessionId)}${suffix}`;
 }
 
 export function runtimeLogStreamUrl(url: string = DEFAULT_RUNTIME_URL): string {

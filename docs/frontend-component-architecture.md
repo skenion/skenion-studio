@@ -64,7 +64,7 @@ Node and port stories should cover:
 - nodes with many ports
 - selected node state
 - long labels and long port names
-- v0.2 metadata such as rate, max connections, merge policy, fan-out policy, and trigger mode
+- current 0.1 contract metadata such as rate, max connections, merge policy, fan-out policy, and trigger mode
 - feedback-looking ports or previous-frame feedback surfaces
 - value number, event bang, render frame, and GPU texture/resource port rows
 - required input ports
