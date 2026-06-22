@@ -254,6 +254,7 @@ jobs:
 
       - name: Stage same-train Runtime sidecar
         env:
+          SKENION_RELEASE_TRAIN_TOKEN: ${{ secrets.SKENION_RELEASE_TRAIN_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           args=(

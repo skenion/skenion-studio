@@ -103,6 +103,9 @@ function parseArgs(args) {
   const parsed = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--") {
+      continue;
+    }
     if (!arg.startsWith("--")) {
       fail(`Unexpected positional argument '${arg}'.`);
     }
@@ -202,7 +205,8 @@ async function verifySha256(filePath, expected, label) {
 }
 
 async function githubFetch(url, init = {}) {
-  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  const token =
+    process.env.SKENION_RELEASE_TRAIN_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
   const headers = {
     "User-Agent": "skenion-studio-sidecar-stager",
     ...init.headers
