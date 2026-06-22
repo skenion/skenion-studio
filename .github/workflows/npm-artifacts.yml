@@ -30,6 +30,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NPM_REGISTRY: https://registry.npmjs.org/
   RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
   RELEASE_TRAIN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-train-mode'] }}
 
@@ -242,7 +243,7 @@ jobs:
           VERSION: ${{ steps.validate.outputs.version }}
         run: |
           set -euo pipefail
-          if ! released_version="$(pnpm view "@skenion/contracts@${VERSION}" version --silent)"; then
+          if ! released_version="$(pnpm view "@skenion/contracts@${VERSION}" version --silent --registry "${NPM_REGISTRY}")"; then
             echo "::error::@skenion/contracts@${VERSION} is not available on npm."
             exit 1
           fi
@@ -288,16 +289,100 @@ jobs:
             local package_dir="$1"
             local package_name="$2"
 
-            if npm view "${package_name}@${VERSION}" version --silent >/dev/null 2>&1; then
-              echo "${package_name}@${VERSION} already exists on npm; skipping publish."
+            if npm view "${package_name}@${VERSION}" version --silent --registry "${NPM_REGISTRY}" >/dev/null 2>&1; then
+              echo "${package_name}@${VERSION} already exists on npm; skipping publish and enforcing public access."
+            else
+              npm publish "${package_dir}" --provenance --access public --registry "${NPM_REGISTRY}"
+            fi
+
+            enforce_public_access "${package_name}"
+            verify_authenticated_view "${package_name}"
+          }
+
+          enforce_public_access() {
+            local package_name="$1"
+            local attempts=6
+
+            for attempt in $(seq 1 "${attempts}"); do
+              local access_output
+              local access_status
+
+              set +e
+              access_output="$(npm access public "${package_name}" --registry "${NPM_REGISTRY}" 2>&1)"
+              access_status=$?
+              set -e
+
+              if [[ "${access_status}" -eq 0 ]]; then
+                echo "npm access public accepted for ${package_name}."
+                return
+              fi
+
+              if grep -Eiq "(already|currently).*(public)|already has public access|is already public" <<< "${access_output}"; then
+                echo "npm reports ${package_name} is already public."
+                printf '%s\n' "${access_output}" | sed 's/^/npm access: /'
+                return
+              fi
+
+              if [[ "${attempt}" -lt "${attempts}" ]]; then
+                echo "::notice::npm access public ${package_name} failed on attempt ${attempt}/${attempts}; retrying in 10 seconds."
+                printf '%s\n' "${access_output}" | sed 's/^/npm access: /'
+                sleep 10
+                continue
+              fi
+
+              echo "::error::Unable to enforce public npm access for ${package_name} after ${attempts} attempts."
+              printf '%s\n' "${access_output}" | sed 's/^/npm access: /'
+              exit 1
+            done
+          }
+
+          verify_authenticated_view() {
+            local package_name="$1"
+            local published_version
+
+            if published_version="$(npm view "${package_name}@${VERSION}" version --silent --registry "${NPM_REGISTRY}")" && [[ "${published_version}" == "${VERSION}" ]]; then
+              echo "Authenticated npm view sees ${package_name}@${VERSION}."
               return
             fi
 
-            npm publish "${package_dir}" --provenance --access public
+            echo "::warning::Authenticated npm view did not immediately return ${package_name}@${VERSION} after publish/access enforcement."
+          }
+
+          print_target_access_diagnostic() {
+            local access_json_file
+            local access_error_file
+
+            access_json_file="$(mktemp)"
+            access_error_file="$(mktemp)"
+
+            if npm access ls-packages @skenion --json --registry "${NPM_REGISTRY}" >"${access_json_file}" 2>"${access_error_file}"; then
+              ACCESS_JSON_FILE="${access_json_file}" node <<'NODE'
+          const fs = require("node:fs");
+
+          let packageAccess = {};
+          try {
+            packageAccess = JSON.parse(fs.readFileSync(process.env.ACCESS_JSON_FILE, "utf8"));
+          } catch (error) {
+            console.log(`::warning::Unable to parse npm access ls-packages diagnostic JSON: ${error.message}`);
+          }
+          for (const packageName of ["@skenion/studio-web", "@skenion/studio-desktop"]) {
+            const access = Object.hasOwn(packageAccess, packageName)
+              ? JSON.stringify(packageAccess[packageName])
+              : "<not listed>";
+            console.log(`npm access ls-packages target entry: ${packageName}=${access}`);
+          }
+          NODE
+            else
+              echo "::warning::npm access ls-packages @skenion failed; package-level public access enforcement already ran."
+              sed 's/^/npm access ls-packages: /' "${access_error_file}"
+            fi
+
+            rm -f "${access_json_file}" "${access_error_file}"
           }
 
           publish_package ./packages/studio-web @skenion/studio-web
           publish_package ./packages/studio-desktop @skenion/studio-desktop
+          print_target_access_diagnostic
 
       - name: Verify published npm artifacts
         if: steps.validate.outputs.publish_npm == 'true'
@@ -306,15 +391,30 @@ jobs:
           VERSION: ${{ steps.validate.outputs.version }}
         run: |
           set -euo pipefail
+          public_npm_userconfig="$(mktemp)"
+          public_npm_error="$(mktemp)"
+          trap 'rm -f "${public_npm_userconfig}" "${public_npm_error}"' EXIT
+
           for package_name in @skenion/studio-web @skenion/studio-desktop; do
-            for attempt in {1..12}; do
-              if published_version="$(npm view "${package_name}@${VERSION}" version --silent 2>/dev/null)" && [[ "${published_version}" == "${VERSION}" ]]; then
-                echo "Verified ${package_name}@${VERSION} on npm."
+            echo "Waiting for unauthenticated public npm view of ${package_name}@${VERSION} from ${NPM_REGISTRY}."
+            for attempt in {1..30}; do
+              : >"${public_npm_error}"
+              npm_view_output=""
+              if npm_view_output="$(NODE_AUTH_TOKEN= NPM_CONFIG_USERCONFIG="${public_npm_userconfig}" npm view "${package_name}@${VERSION}" version --silent --registry "${NPM_REGISTRY}" 2>"${public_npm_error}")" && [[ "${npm_view_output}" == "${VERSION}" ]]; then
+                echo "Verified public npm visibility for ${package_name}@${VERSION}."
                 break
               fi
-              if [[ "${attempt}" == "12" ]]; then
-                echo "::error::${package_name}@${VERSION} was not visible on npm after publish."
+              if [[ "${attempt}" == "30" ]]; then
+                echo "::error::${package_name}@${VERSION} was not visible through unauthenticated npm view after publish and access enforcement."
+                echo "::error::Checked ${NPM_REGISTRY} for 30 attempts over about 5 minutes. Do not publish locally; inspect npm package access or registry propagation before rerunning NPM Artifacts."
+                printf '%s\n' "${npm_view_output}" | sed 's/^/npm view: /'
+                sed 's/^/npm view: /' "${public_npm_error}"
                 exit 1
+              fi
+              if (( attempt == 1 || attempt % 5 == 0 )); then
+                echo "Public npm view is not visible yet for ${package_name}@${VERSION} (attempt ${attempt}/30)."
+                printf '%s\n' "${npm_view_output}" | sed 's/^/npm view: /'
+                sed 's/^/npm view: /' "${public_npm_error}"
               fi
               sleep 10
             done
