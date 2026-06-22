@@ -156,29 +156,36 @@ jobs:
             runner: macos-14
             release_blocking: true
             tier: release-blocking
+            tauri_bundle_args: ""
           - target: x86_64-apple-darwin
             runner: macos-15-intel
             release_blocking: true
             tier: release-blocking
+            tauri_bundle_args: ""
           - target: x86_64-pc-windows-msvc
             runner: windows-2022
             release_blocking: true
             tier: release-blocking
+            tauri_bundle_args: ""
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             release_blocking: true
             tier: release-blocking
+            tauri_bundle_args: "--bundles deb,rpm"
           - target: aarch64-pc-windows-msvc
             runner: windows-11-arm
             release_blocking: false
             tier: preview
+            tauri_bundle_args: ""
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             release_blocking: false
             tier: preview
+            tauri_bundle_args: "--bundles deb,rpm"
     env:
       TARGET: ${{ matrix.target }}
       VERSION: ${{ needs.release.outputs.version }}
+      TAURI_BUNDLE_ARGS: ${{ matrix.tauri_bundle_args }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -281,13 +288,24 @@ jobs:
             "${{ steps.package_runtime_sidecar.outputs.checksum_path }}" \
             --clobber
 
-      - name: Verify staged sidecar is declared for Tauri
+      - name: Verify release Tauri packaging inputs
         run: |
           node <<'NODE'
           const fs = require("node:fs");
+          const target = process.env.TARGET;
+          const bundleArgs = process.env.TAURI_BUNDLE_ARGS ?? "";
           const config = JSON.parse(fs.readFileSync("src-tauri/tauri.release.conf.json", "utf8"));
           if (!config.bundle?.externalBin?.includes("binaries/skenion-runtime")) {
             console.error("::error::Release Tauri bundle.externalBin must include binaries/skenion-runtime.");
+            process.exit(1);
+          }
+          const isLinux = target.endsWith("-unknown-linux-gnu");
+          if (isLinux && bundleArgs !== "--bundles deb,rpm") {
+            console.error(`::error::Linux desktop releases must currently scope Tauri bundles to deb,rpm; got '${bundleArgs}'.`);
+            process.exit(1);
+          }
+          if (!isLinux && bundleArgs !== "") {
+            console.error(`::error::Non-Linux desktop releases should use native Tauri bundle defaults; got '${bundleArgs}'.`);
             process.exit(1);
           }
           NODE
@@ -309,7 +327,7 @@ jobs:
           includeUpdaterJson: false
           projectPath: .
           tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - name: Build Tauri desktop package
         if: needs.release.outputs.upload_release_assets != 'true'
@@ -321,7 +339,7 @@ jobs:
           includeUpdaterJson: false
           projectPath: .
           tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - name: Summarize desktop package
         run: |
@@ -332,5 +350,6 @@ jobs:
             echo "- Tier: ${{ matrix.tier }}"
             echo "- Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}"
             echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
+            echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
             echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"
           } >> "${GITHUB_STEP_SUMMARY}"
