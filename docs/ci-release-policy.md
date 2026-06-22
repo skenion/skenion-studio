@@ -89,6 +89,15 @@ transport only, not the Studio Windows installer. macOS and Linux sidecars use
 upload, and extraction. Publish mode uploads those sidecar assets to the Studio
 GitHub Release.
 
+Windows Studio distribution is installer-based. The primary v0 user-facing
+Windows artifact family is the Tauri NSIS setup executable ending in
+`-setup.exe`; MSI output may be published as an additional installer when it is
+stable. A `skenion-runtime-sidecar-*-windows-*.zip` asset is never evidence of a
+Windows Studio installer, even though it transports a Windows `.exe` sidecar.
+The desktop release workflow records this split in the Windows package summary
+and fails the classification check if the sidecar asset stops being named as an
+internal Runtime sidecar ZIP.
+
 Desktop release packaging consumes `@skenion/contracts` from npm, not from a
 sibling checkout. The release tag must declare `@skenion/contracts` as the exact
 train version, the package must already exist on npm, and the installed package
@@ -113,6 +122,16 @@ packaging if `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, and
 Notarization currently uses the Apple ID credential path and requires
 `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` so the Tauri publish step can
 submit App/DMG artifacts to Apple from the macOS packaging jobs.
+
+Windows desktop publish mode also fails closed unless the repository variable
+`WINDOWS_INSTALLER_SIGNING_MODE` is explicitly set. The only currently
+permitted non-signing value is `unsigned-preview`, which may publish installer
+artifacts as explicit preview evidence but does not satisfy Windows desktop
+release completion. `signed-required` and `azure-trusted-signing` are reserved
+for real signed-installer release paths and must not pass until Tauri Windows
+signing is wired with the matching certificate, signing service, timestamp, or
+custom signing command configuration. Verify mode does not require this
+variable because it is a packaging smoke test, not release evidence.
 
 Full application auto-updater rollout remains out of v0 scope. Missing updater
 feed publication or updater signing keys must be reported with the desktop

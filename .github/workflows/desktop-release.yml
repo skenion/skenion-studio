@@ -36,6 +36,7 @@ env:
   RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
   RELEASE_TRAIN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-train-mode'] }}
   RELEASE_MANIFEST: ${{ inputs['release-manifest'] }}
+  WINDOWS_INSTALLER_SIGNING_MODE: ${{ vars.WINDOWS_INSTALLER_SIGNING_MODE }}
 
 jobs:
   release:
@@ -229,6 +230,46 @@ jobs:
           fi
           echo "macOS signing and notarization secret preflight passed."
 
+      - name: Preflight Windows installer signing policy
+        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'Windows'
+        env:
+          WINDOWS_INSTALLER_SIGNING_MODE: ${{ env.WINDOWS_INSTALLER_SIGNING_MODE }}
+        run: |
+          set -euo pipefail
+
+          mode="${WINDOWS_INSTALLER_SIGNING_MODE:-}"
+          if [[ -z "${mode}" ]]; then
+            echo "::error::Windows publish mode requires repository variable WINDOWS_INSTALLER_SIGNING_MODE. Use unsigned-preview only for explicit non-release-complete evidence, or add a signed mode after Tauri signing is wired."
+            exit 1
+          fi
+
+          case "${mode}" in
+            unsigned-preview)
+              signing_status="unsigned-preview"
+              release_completion="blocked"
+              ;;
+            signed-required|azure-trusted-signing)
+              echo "::error::WINDOWS_INSTALLER_SIGNING_MODE=${mode} is reserved for signed Windows installer releases, but this workflow does not yet configure Tauri Windows signing. Wire signing first instead of publishing artifacts that only claim to be signed."
+              exit 1
+              ;;
+            *)
+              echo "::error::WINDOWS_INSTALLER_SIGNING_MODE must be unsigned-preview, signed-required, or azure-trusted-signing; got '${mode}'."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "## Windows Installer Signing Gate"
+            echo ""
+            echo "- Target: ${TARGET}"
+            echo "- App installer artifact class: Tauri Windows installer bundle"
+            echo "- Primary Windows installer family: NSIS setup executable (-setup.exe)"
+            echo "- Secondary Windows installer family: MSI, when emitted by Tauri"
+            echo "- Runtime sidecar asset class: internal release-train transport ZIP"
+            echo "- Windows installer signing mode: ${signing_status}"
+            echo "- Windows release-completion status: ${release_completion}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - uses: pnpm/action-setup@v6
         with:
           version: 10.12.4
@@ -315,6 +356,32 @@ jobs:
       - id: package_runtime_sidecar
         name: Package Studio Runtime sidecar release asset
         run: pnpm run package-runtime-sidecar -- --target "${TARGET}"
+
+      - name: Verify Windows installer artifact classification
+        if: runner.os == 'Windows'
+        env:
+          SIDECAR_ASSET_NAME: ${{ steps.package_runtime_sidecar.outputs.asset_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${SIDECAR_ASSET_NAME}" =~ ^skenion-runtime-sidecar-.+\.zip$ ]]; then
+            echo "::error::Windows Runtime sidecar asset must be named as an internal sidecar ZIP; got '${SIDECAR_ASSET_NAME}'."
+            exit 1
+          fi
+          if [[ "${SIDECAR_ASSET_NAME}" == *setup.exe || "${SIDECAR_ASSET_NAME}" == *.msi ]]; then
+            echo "::error::Runtime sidecar '${SIDECAR_ASSET_NAME}' must not be classified as a Windows app installer."
+            exit 1
+          fi
+
+          {
+            echo "## Windows Artifact Classification"
+            echo ""
+            echo "- Target: ${TARGET}"
+            echo "- User-facing Windows app installer: Tauri NSIS setup executable (-setup.exe)"
+            echo "- Additional installer, if emitted: Tauri MSI"
+            echo "- Runtime sidecar ZIP: ${SIDECAR_ASSET_NAME}"
+            echo "- Sidecar ZIP installer status: not a Studio Windows installer"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload Studio Runtime sidecar release asset
         if: needs.release.outputs.upload_release_assets == 'true'
@@ -525,4 +592,8 @@ jobs:
             echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
             echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"
+            if [[ "${RUNNER_OS}" == "Windows" ]]; then
+              echo "- Windows app installer family: primary NSIS setup executable (-setup.exe), secondary MSI when emitted"
+              echo "- Windows installer signing mode: ${WINDOWS_INSTALLER_SIGNING_MODE:-verify-mode-not-required}"
+            fi
           } >> "${GITHUB_STEP_SUMMARY}"
