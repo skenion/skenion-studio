@@ -80,6 +80,9 @@ function parseArgs(args) {
   const parsed = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--") {
+      continue;
+    }
     if (!arg.startsWith("--")) {
       fail(`Unexpected positional argument '${arg}'.`);
     }
