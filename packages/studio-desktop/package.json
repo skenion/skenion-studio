@@ -1,0 +1,27 @@
+{
+  "name": "@skenion/studio-desktop",
+  "version": "0.43.0",
+  "description": "Versioned Skenion Studio desktop release metadata",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "peerDependencies": {
+    "@skenion/contracts": "0.43.0"
+  },
+  "peerDependenciesMeta": {
+    "@skenion/contracts": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./manifest": "./studio-desktop-manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "studio-desktop-manifest.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

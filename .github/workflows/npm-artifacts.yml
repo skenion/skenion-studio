@@ -1,0 +1,192 @@
+name: NPM Artifacts
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Studio release tag to publish, for example skenion-studio-v0.43.0
+        required: true
+        type: string
+      train-version:
+        description: Lockstep product train version, such as 0.43.0
+        required: true
+        type: string
+      release-train-mode:
+        description: Release train mode; publish uploads npm artifacts, verify packs only
+        default: verify
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: studio-npm-artifacts-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  RELEASE_TRAIN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-train-mode'] }}
+
+jobs:
+  npm-artifacts:
+    name: npm artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+    steps:
+      - id: validate
+        name: Validate release request
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          RELEASE_TRAIN_MODE: ${{ env.RELEASE_TRAIN_MODE }}
+          TRAIN_VERSION: ${{ inputs['train-version'] }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_TAG}" =~ ^skenion-studio-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::release tag must be skenion-studio-vx.y.z; got '${RELEASE_TAG}'."
+            exit 1
+          fi
+
+          version="${RELEASE_TAG#skenion-studio-v}"
+          if [[ -n "${TRAIN_VERSION}" && "${TRAIN_VERSION}" != "${version}" ]]; then
+            echo "::error::train-version (${TRAIN_VERSION}) must match release tag version (${version})."
+            exit 1
+          fi
+
+          case "${RELEASE_TRAIN_MODE}" in
+            publish)
+              publish_npm=true
+              ;;
+            verify)
+              publish_npm=false
+              ;;
+            *)
+              echo "::error::release-train-mode must be publish or verify; got '${RELEASE_TRAIN_MODE}'."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "tag_ref=refs/tags/${RELEASE_TAG}"
+            echo "version=${version}"
+            echo "publish_npm=${publish_npm}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.validate.outputs.tag_ref }}
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify released Contracts npm package
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! released_version="$(pnpm view "@skenion/contracts@${VERSION}" version --silent)"; then
+            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+            exit 1
+          fi
+          if [[ "${released_version}" != "${VERSION}" ]]; then
+            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+            exit 1
+          fi
+
+      - name: Install Studio dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Studio web artifact
+        run: pnpm run build
+
+      - name: Prepare npm artifact packages
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: pnpm run prepare-studio-npm-artifacts -- --version "${VERSION}" --tag "${RELEASE_TAG}"
+
+      - name: Pack npm artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run ./packages/studio-web
+          npm pack --dry-run ./packages/studio-desktop
+
+      - name: Publish npm artifacts
+        if: steps.validate.outputs.publish_npm == 'true'
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "::error::NPM_TOKEN is required to publish Studio npm artifacts."
+            exit 1
+          fi
+
+          publish_package() {
+            local package_dir="$1"
+            local package_name="$2"
+
+            if npm view "${package_name}@${VERSION}" version --silent >/dev/null 2>&1; then
+              echo "${package_name}@${VERSION} already exists on npm; skipping publish."
+              return
+            fi
+
+            npm publish "${package_dir}" --provenance --access public
+          }
+
+          publish_package ./packages/studio-web @skenion/studio-web
+          publish_package ./packages/studio-desktop @skenion/studio-desktop
+
+      - name: Verify published npm artifacts
+        if: steps.validate.outputs.publish_npm == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          for package_name in @skenion/studio-web @skenion/studio-desktop; do
+            for attempt in {1..12}; do
+              if published_version="$(npm view "${package_name}@${VERSION}" version --silent 2>/dev/null)" && [[ "${published_version}" == "${VERSION}" ]]; then
+                echo "Verified ${package_name}@${VERSION} on npm."
+                break
+              fi
+              if [[ "${attempt}" == "12" ]]; then
+                echo "::error::${package_name}@${VERSION} was not visible on npm after publish."
+                exit 1
+              fi
+              sleep 10
+            done
+          done
+
+      - name: Summarize npm artifacts
+        shell: bash
+        run: |
+          {
+            echo "## Studio npm Artifacts"
+            echo ""
+            echo "- Version: ${{ steps.validate.outputs.version }}"
+            echo "- Web package: @skenion/studio-web@${{ steps.validate.outputs.version }}"
+            echo "- Desktop package: @skenion/studio-desktop@${{ steps.validate.outputs.version }}"
+            echo "- Mode: ${RELEASE_TRAIN_MODE}"
+            echo "- Publish npm: ${{ steps.validate.outputs.publish_npm }}"
+          } >> "${GITHUB_STEP_SUMMARY}"
