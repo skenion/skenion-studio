@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.43.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.31.0...skenion-studio-v0.43.0) (2026-06-22)
+
+
+### Features
+
+* **studio:** package desktop runtime sidecars ([ce8df02](https://github.com/echovisionlab/skenion-studio/commit/ce8df02056d29f809785543b155bc5c720e7fcc9)), closes [#86](https://github.com/echovisionlab/skenion-studio/issues/86)
+
+
+### Bug Fixes
+
+* **ci:** dispatch release please by train ([89ec3a2](https://github.com/echovisionlab/skenion-studio/commit/89ec3a2292a6fea88b7e1dbe531d56b383596bbd))
+* **runtime:** use explicit default session path ([#100](https://github.com/echovisionlab/skenion-studio/issues/100)) ([405afe1](https://github.com/echovisionlab/skenion-studio/commit/405afe174a557372096556c235c17084964b803d))
+* **studio:** align contracts dependency with 0.43 train ([7caeb15](https://github.com/echovisionlab/skenion-studio/commit/7caeb15726cc24e0653790646a8bcb2815af4b16))
+
 ## [0.31.0](https://github.com/echovisionlab/skenion-studio/compare/skenion-studio-v0.30.0...skenion-studio-v0.31.0) (2026-06-21)
 
 
