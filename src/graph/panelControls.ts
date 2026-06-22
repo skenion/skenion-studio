@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { RuntimeControlValue } from "../runtime/types";
 
 export const BANG_NODE_KIND = "core.bang";
@@ -9,15 +9,15 @@ export const TOGGLE_WIDGET = "toggle";
 export const CHECKBOX_WIDGET = "checkbox";
 export const DEFAULT_BANG_RADIUS = "999px";
 
-export function isBangControlNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isBangControlNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === BANG_NODE_KIND;
 }
 
-export function isSliderFloatNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isSliderFloatNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === SLIDER_FLOAT_NODE_KIND && node.params.widget === SLIDER_WIDGET;
 }
 
-export function isToggleControlNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isToggleControlNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === TOGGLE_BOOL_NODE_KIND && isToggleWidget(node.params.widget);
 }
 
@@ -47,20 +47,20 @@ export function defaultToggleControlParams(): Record<string, unknown> {
   };
 }
 
-export function readPanelLabelParam(node: GraphNodeV01): string {
+export function readPanelLabelParam(node: DisplayGraphNodeV01): string {
   return typeof node.params.label === "string" && node.params.label.length > 0
     ? node.params.label
     : node.id;
 }
 
-export function readBangParams(node: GraphNodeV01) {
+export function readBangParams(node: DisplayGraphNodeV01) {
   return {
     label: readPanelLabelParam(node),
     radius: cssRadiusParam(node.params.radius, DEFAULT_BANG_RADIUS)
   };
 }
 
-export function readSliderFloatParams(node: GraphNodeV01) {
+export function readSliderFloatParams(node: DisplayGraphNodeV01) {
   const value = finiteNumber(node.params.value, 0);
   const min = finiteNumber(node.params.min, 0);
   const max = finiteNumber(node.params.max, 1);
@@ -74,11 +74,11 @@ export function readSliderFloatParams(node: GraphNodeV01) {
   };
 }
 
-export function readToggleControlValue(node: GraphNodeV01): boolean {
+export function readToggleControlValue(node: DisplayGraphNodeV01): boolean {
   return typeof node.params.value === "boolean" ? node.params.value : false;
 }
 
-export function runtimeControlValueForPanelNode(node: GraphNodeV01): RuntimeControlValue | null {
+export function runtimeControlValueForPanelNode(node: DisplayGraphNodeV01): RuntimeControlValue | null {
   if (isSliderFloatNode(node)) {
     return {
       type: "float",

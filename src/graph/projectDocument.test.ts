@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectDocumentV01, ProjectDocumentV02, ViewStateV01 } from "@skenion/contracts";
+import type { ProjectDocumentV01, ViewStateV01 } from "@skenion/contracts";
 import { sampleGraph } from "../data/sampleGraph";
+import { displayGraphToContractGraph } from "./patchLibrary";
 import {
   activeProjectDisplayGraph,
+  ContractDocumentError,
   createProjectDocument,
   createViewStateFromPositions,
   parseGraphDocumentAsActiveProject,
@@ -100,7 +102,7 @@ describe("project document helpers", () => {
 
     expect(project).toMatchObject({
       schema: "skenion.project",
-      schemaVersion: "0.2.0",
+      schemaVersion: "0.1.0",
       id: sampleGraph.id,
       revision: sampleGraph.revision,
       metadata: {
@@ -111,17 +113,17 @@ describe("project document helpers", () => {
       },
       patchLibrary: []
     });
-    expect(project.graph.schemaVersion).toBe("0.2.0");
+    expect(project.graph.schemaVersion).toBe("0.1.0");
     expect(parsed.graph).toEqual(project.graph);
-    expectDisplayGraphMatchesLegacyImport(activeProjectDisplayGraph(parsed));
+    expectDisplayGraphMatchesSample(activeProjectDisplayGraph(parsed));
     expect(parsed.viewState.canvas.nodes.value_1).toEqual({ x: 32, y: 48 });
   });
 
-  it("migrates legacy v0.1 project documents into the active v0.2 model", () => {
+  it("accepts current 0.1 project documents without migration", () => {
     const viewState = createViewStateFromPositions(sampleGraph, {
       value_1: { x: 32, y: 48 }
     });
-    const legacyProject = {
+    const project = {
       schema: "skenion.project",
       schemaVersion: "0.1.0",
       id: sampleGraph.id,
@@ -132,38 +134,39 @@ describe("project document helpers", () => {
         createdAt: "2026-06-17T00:00:00.000Z",
         updatedAt: "2026-06-17T00:00:00.000Z"
       },
-      graph: sampleGraph,
-      viewState
+      graph: displayGraphToContractGraph(sampleGraph),
+      viewState,
+      patchLibrary: []
     } satisfies ProjectDocumentV01;
-    const parsed = parseProjectDocument(legacyProject);
+    const parsed = parseProjectDocument(project);
 
-    expect(parsed.schemaVersion).toBe("0.2.0");
+    expect(parsed.schemaVersion).toBe("0.1.0");
     expect(parsed.metadata?.title).toBe("Legacy Project");
-    expect(parsed.graph.schemaVersion).toBe("0.2.0");
+    expect(parsed.graph.schemaVersion).toBe("0.1.0");
     expect(parsed.patchLibrary).toEqual([]);
-    expectDisplayGraphMatchesLegacyImport(activeProjectDisplayGraph(parsed));
+    expectDisplayGraphMatchesSample(activeProjectDisplayGraph(parsed));
     expect(parsed.viewState.canvas.nodes.value_1).toEqual({ x: 32, y: 48 });
   });
 
-  it("imports legacy v0.1 graph files as v0.2 project documents", () => {
-    const project = parseGraphDocumentAsActiveProject(sampleGraph);
+  it("imports current 0.1 graph files as current 0.1 project documents", () => {
+    const project = parseGraphDocumentAsActiveProject(displayGraphToContractGraph(sampleGraph));
 
-    expect(project.schemaVersion).toBe("0.2.0");
-    expect(project.graph.schemaVersion).toBe("0.2.0");
+    expect(project.schemaVersion).toBe("0.1.0");
+    expect(project.graph.schemaVersion).toBe("0.1.0");
     expect(project.patchLibrary).toEqual([]);
-    expectDisplayGraphMatchesLegacyImport(activeProjectDisplayGraph(project));
+    expectDisplayGraphMatchesSample(activeProjectDisplayGraph(project));
   });
 
-  it("imports active v0.2 graph files as v0.2 project documents", () => {
+  it("imports active current 0.1 graph files as current 0.1 project documents", () => {
     const activeGraph = createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {})).graph;
     const project = parseGraphDocumentAsActiveProject(activeGraph);
 
-    expect(project.schemaVersion).toBe("0.2.0");
+    expect(project.schemaVersion).toBe("0.1.0");
     expect(project.graph).toEqual(activeGraph);
     expect(project.viewState.canvas.nodes.value_1).toEqual({ x: 96, y: 96 });
   });
 
-  it("updates active project view state against the v0.2 display adapter", () => {
+  it("updates active project view state against the current 0.1 display adapter", () => {
     const project = createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}));
     const updated = updateProjectViewState(project, {
       ...project.viewState,
@@ -176,7 +179,7 @@ describe("project document helpers", () => {
       }
     });
 
-    expect(updated.schemaVersion).toBe("0.2.0");
+    expect(updated.schemaVersion).toBe("0.1.0");
     expect(updated.viewState.canvas.nodes.value_1).toEqual({ x: 11, y: 12 });
   });
 
@@ -193,7 +196,7 @@ describe("project document helpers", () => {
 
     expect(replaced.id).toBe("replacement");
     expect(replaced.revision).toBe("9");
-    expect(replaced.graph.schemaVersion).toBe("0.2.0");
+    expect(replaced.graph.schemaVersion).toBe("0.1.0");
     expect(replaced.viewState.canvas.nodes.value_1).toBeDefined();
     expect(replaced.viewState.canvas.nodes.target_1).toBeUndefined();
   });
@@ -234,9 +237,45 @@ describe("project document helpers", () => {
     expect(parsed.patchLibrary[1]?.viewState).toBeUndefined();
   });
 
-  it("rejects documents that are neither active nor legacy graphs or projects", () => {
+  it("rejects documents that are not current graphs or projects", () => {
     expect(() => parseGraphDocumentAsActiveProject({ schema: "wrong" })).toThrow();
     expect(() => parseProjectDocument({ schema: "wrong" })).toThrow();
+  });
+
+  it("rejects unsupported versions and old display-shape imports", () => {
+    expect(() =>
+      parseGraphDocumentAsActiveProject({
+        ...displayGraphToContractGraph(sampleGraph),
+        schemaVersion: "0.2.0"
+      })
+    ).toThrow("Unsupported graph schemaVersion 0.2.0; expected 0.1.0.");
+    expect(() => parseGraphDocumentAsActiveProject(sampleGraph)).toThrow();
+    expect(() =>
+      parseProjectDocument({
+        ...createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {})),
+        schemaVersion: "0.2.0"
+      })
+    ).toThrow("Unsupported project schemaVersion 0.2.0; expected 0.1.0.");
+  });
+
+  it("throws structured diagnostics for unsupported contract versions", () => {
+    try {
+      parseGraphDocumentAsActiveProject({
+        ...displayGraphToContractGraph(sampleGraph),
+        schemaVersion: "0.2.0"
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(ContractDocumentError);
+      expect((error as ContractDocumentError).diagnostic).toMatchObject({
+        code: "unsupported-schema-version",
+        expectedSchemaVersion: "0.1.0",
+        kind: "graph",
+        schemaVersion: "0.2.0",
+        severity: "error"
+      });
+      return;
+    }
+    throw new Error("Expected unsupported graph version to throw.");
   });
 
   it("validates standalone view state documents", () => {
@@ -270,13 +309,13 @@ describe("project document helpers", () => {
           }
         }
       }
-    } satisfies ProjectDocumentV02;
+    } satisfies ProjectDocumentV01;
 
     expect(() => parseProjectDocument(invalidProject)).toThrow("viewState references missing graph node: missing");
   });
 });
 
-function expectDisplayGraphMatchesLegacyImport(displayGraph: typeof sampleGraph) {
+function expectDisplayGraphMatchesSample(displayGraph: typeof sampleGraph) {
   expect(displayGraph.schema).toBe("skenion.graph");
   expect(displayGraph.schemaVersion).toBe("0.1.0");
   expect(displayGraph.id).toBe(sampleGraph.id);

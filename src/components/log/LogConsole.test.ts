@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MantineProvider } from "@mantine/core";
 import { describe, expect, it } from "vitest";
-import type { GraphDocumentV01 } from "@skenion/contracts";
+import type { DisplayGraphDocumentV01 as GraphDocumentV01 } from "../../graph/patchLibrary";
 import type { GraphSemanticDiagnostic } from "../../graph/portSemantics";
 import { theme } from "../../theme";
 import {

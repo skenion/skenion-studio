@@ -1,19 +1,19 @@
 import { Badge, Group, Stack, Text } from "@mantine/core";
 import { ExternalLink } from "lucide-react";
-import type { BuiltinNodeHelpV01, GraphFragmentV02 } from "@skenion/contracts";
+import type { BuiltinNodeHelpV01, GraphFragmentV01 } from "@skenion/contracts";
 import {
-  isPatchDefinitionV02,
+  isPatchDefinition,
   patchDescription,
   patchDefinitionBoundaryPorts,
   patchDisplayName,
   patchTags,
-  type PatchDefinitionV02
+  type PatchDefinitionV01
 } from "../../graph/patchLibrary";
 import { HelpGraphViewer, type HelpGraphViewerDocument } from "../help/HelpGraphViewer";
 import { Button } from "../core/Button/Button";
 import type { GraphFragmentBuildResult } from "../../graph/fragmentClipboard";
 
-export type NodeHelpDocument = BuiltinNodeHelpV01 | PatchDefinitionV02;
+export type NodeHelpDocument = BuiltinNodeHelpV01 | PatchDefinitionV01;
 
 export function NodeHelp({
   help,
@@ -26,13 +26,13 @@ export function NodeHelp({
   help: NodeHelpDocument;
   helpGraph?: HelpGraphViewerDocument;
   onClipboardWriteError?: (message: string) => void;
-  onCopyFragment?: (fragment: GraphFragmentV02, result: GraphFragmentBuildResult) => void;
+  onCopyFragment?: (fragment: GraphFragmentV01, result: GraphFragmentBuildResult) => void;
   onCopyFragmentError?: (message: string) => void;
   onOpenAsEditableCopy?: () => void;
 }) {
   const view = nodeHelpView(help);
-  const graph = helpGraph ?? (isPatchDefinitionV02(help) ? help : undefined);
-  const graphTitle = isPatchDefinitionV02(graph) ? "Patch Graph" : "Help Graph";
+  const graph = helpGraph ?? (isPatchDefinition(help) ? help : undefined);
+  const graphTitle = isPatchDefinition(graph) ? "Patch Graph" : "Help Graph";
 
   return (
     <Stack
@@ -138,7 +138,7 @@ interface NodeHelpView {
 }
 
 function nodeHelpView(help: NodeHelpDocument): NodeHelpView {
-  if (!isPatchDefinitionV02(help)) {
+  if (!isPatchDefinition(help)) {
     return {
       summary: help.summary,
       description: help.description,

@@ -1,10 +1,10 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { GraphPatch } from "./skenionGraph";
 
 export const STRING_VALUE_NODE_KIND = "core.string";
 export const DEFAULT_STRING_VALUE = "";
 
-export function isStringValueNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isStringValueNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === STRING_VALUE_NODE_KIND;
 }
 
@@ -14,7 +14,7 @@ export function defaultStringValueParams(): Record<string, unknown> {
   };
 }
 
-export function readStringValueParam(node: GraphNodeV01): string {
+export function readStringValueParam(node: DisplayGraphNodeV01): string {
   return typeof node.params.value === "string" ? node.params.value : DEFAULT_STRING_VALUE;
 }
 

@@ -1,0 +1,94 @@
+# Codex Agent Context
+
+This repository is one part of the Skenion workspace. Do not treat local code
+momentum as the source of truth: before committing, pushing, opening a PR, or
+writing PR close keywords, check the relevant GitHub milestone and issue with
+`/opt/homebrew/bin/gh`.
+
+Use the bundled Codex pnpm when needed:
+`/Users/state303/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/pnpm`.
+For dependency rebuilds in this non-interactive environment, `CI=true` and
+`PNPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS=true` may be required.
+
+## Strict v0 Studio Policy
+
+Skenion v0 does not support legacy, deprecated, or import-only compatibility
+paths. Studio authoring, Runtime HTTP clients, clipboard formats, collaboration
+operations, package UX, and extension UX must model the current product surface
+only. Unsupported schema, protocol, graph, project, package, manifest, or ABI
+versions must be rejected with structured diagnostics rather than migrated,
+imported, shimmed, or kept behind deprecated aliases.
+
+The forward graph/project contract label is `0.1`. Studio should follow
+Contracts the current 0.1 Contracts surface. Do not preserve the old v0.1
+meaning as legacy compatibility, and do not keep v0.2 as a parallel Studio
+surface. If a version field remains, Studio should accept only exact current
+`0.1` for that surface and reject all others.
+
+Studio should consume generated/exported contracts rather than maintaining
+hand-written duplicate Runtime response shapes.
+
+## Product Direction
+
+Studio remains a web React/Vite client, and the desktop product uses Tauri.
+Do not add Electron fallback work to v0 planning. Tauri coordinates windows,
+webviews, sidecar lifecycle, connection profiles, and app-level clipboard
+bridges; Runtime sessions remain authoritative for shared graph documents.
+
+Copy/paste is a graph-editor primitive for every persisted node family,
+including built-ins, extension nodes, subpatches, IO convenience nodes, and
+living-help/example patches.
+
+## Lockstep Release Train
+
+Skenion releasable packages and applications use lockstep product SemVer during
+v0. If the product train is `0.55`, Studio web/desktop artifacts publish as
+`0.55.0` where tooling requires patch SemVer, and Runtime/contracts/sdk/docs
+artifacts must belong to that same train. Do not create an independent Studio
+version stream. Release artifacts must be produced through GitHub Actions and
+Release Please, not local publishing.
+
+## Manager, Worker, And Review Gate Defaults
+
+Codex should operate as a manager/orchestrator on Skenion work. The manager owns
+sequencing, milestone and issue hygiene, PR title/body/close-keyword control,
+worker assignment, integration, and final reporting. Except for trivial
+documentation, context, issue, or status edits, the manager should not directly
+modify code. Implementation work and follow-up fixes should be delegated to
+focused worker agents, then integrated by the manager. Workers must receive a
+clear ownership scope, usually specific files, modules, or repository slices,
+and must be told that other agents may be editing nearby code.
+
+Follow-up work is not an exception: if review, CI, or user feedback requires
+non-trivial code changes, the manager must assign that work to a worker and send
+the completed slice through a separate review gate again. The manager may run
+verification and status commands, but should not directly patch non-trivial
+implementation code.
+
+Every completed worker slice needs a separate review gate before it is treated
+as done. The gate should be a different expert agent from the worker. A gate
+review should prioritize correctness, API cleanliness, responsibility
+boundaries, readability, test coverage, CI risk, and milestone acceptance
+criteria. If the gate fails, the manager must send concrete fixes back to a
+worker, then run the gate again until the slice passes or a real blocker is
+recorded in the issue. The manager may only make trivial documentation,
+context, issue, or status corrections directly.
+
+Default code quality requirements:
+
+- Write code that is easy to read before it is clever.
+- Follow clean-code principles: clear names, small responsibilities, explicit
+  data flow, predictable control flow, and low incidental coupling.
+- Do not introduce interface-based abstraction lightly. Public APIs, traits,
+  generated clients, schemas, and extension points must earn their existence and
+  remain small, stable, and understandable.
+- Keep responsibility ownership clear. Runtime, Studio, Contracts, SDK,
+  Examples, and Docs must not duplicate each other's source-of-truth roles.
+- UI/UX work must be reviewed for actual workflow quality, not merely rendered
+  components.
+
+Issues and milestones are the operating ledger. When work discovers new debt,
+missing scope, or a design risk, record it on the relevant GitHub issue or open
+a properly milestoned issue before burying it in local context. Close issues
+only when the repository-specific acceptance criteria are genuinely complete.
+Use `Refs` for partial or cross-repo work and `Closes` only for finished scope.

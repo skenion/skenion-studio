@@ -1,8 +1,9 @@
-import type { GraphNodeV01, PortV01 } from "@skenion/contracts";
+import type { PortV01 } from "@skenion/contracts";
 import type { NodeCardView, NodePortView } from "../components/node/nodeTypes";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import { portSemanticsForPort, semanticTypeColor } from "./portSemantics";
 
-export function toNodeCardView(node: GraphNodeV01, selected = false): NodeCardView {
+export function toNodeCardView(node: DisplayGraphNodeV01, selected = false): NodeCardView {
   const inputs = node.ports
     .filter((port) => port.direction === "input")
     .map((port) => toPortView(node, port));
@@ -24,7 +25,7 @@ export function toNodeCardView(node: GraphNodeV01, selected = false): NodeCardVi
   };
 }
 
-export function toPortView(node: GraphNodeV01, port: PortV01): NodePortView {
+export function toPortView(node: DisplayGraphNodeV01, port: PortV01): NodePortView {
   const semantics = portSemanticsForPort(node, port);
 
   return {

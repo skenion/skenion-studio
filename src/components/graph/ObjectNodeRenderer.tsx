@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "../../graph/patchLibrary";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { readCommentTextParam } from "../../graph/commentNode";
@@ -43,9 +43,9 @@ import socketStyles from "../node/PortSocket.module.css";
 export interface ObjectNodeRendererProps {
   card: NodeCardView;
   layoutEditable?: boolean;
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
-  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void> | void;
+  onImportAsset?: (node: DisplayGraphNodeV01, file: File) => Promise<void> | void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   onObjectTextCommit?: (nodeId: string, text: string) => void;
@@ -148,7 +148,7 @@ export function ObjectNodeRenderer({
     );
   }
 
-  const toggleNode = node as GraphNodeV01;
+  const toggleNode = node as DisplayGraphNodeV01;
   if (isToggleControlNode(toggleNode)) {
     const value = controlBoolValue(runtimeControlValue) ?? readToggleControlValue(toggleNode);
     const nodeId = toggleNode.id;
@@ -179,7 +179,7 @@ export function ObjectNodeRenderer({
     );
   }
 
-  const sliderNode = node as GraphNodeV01;
+  const sliderNode = node as DisplayGraphNodeV01;
   if (isSliderFloatNode(sliderNode)) {
     return (
       <SliderControlObject
@@ -197,7 +197,7 @@ export function ObjectNodeRenderer({
     );
   }
 
-  const valueNode = node as GraphNodeV01;
+  const valueNode = node as DisplayGraphNodeV01;
   if (isValueObject(valueNode)) {
     return (
       <ObjectBox
@@ -222,7 +222,7 @@ export function ObjectNodeRenderer({
     );
   }
 
-  const fallbackNode = node as GraphNodeV01;
+  const fallbackNode = node as DisplayGraphNodeV01;
   if (fallbackNode.kind === VIDEO_ASSET_NODE_KIND) {
     return (
       <VideoAssetObject
@@ -266,7 +266,7 @@ function GenericObjectBox({
   card: NodeCardView;
   chromePolicy: ObjectChromePolicy;
   layoutEditable: boolean;
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onObjectTextCommit?: (nodeId: string, text: string) => void;
   renderInputHandle?: NodePortHandleRenderer;
   renderOutputHandle?: NodePortHandleRenderer;
@@ -382,8 +382,8 @@ function VideoAssetObject({
   card: NodeCardView;
   chromePolicy: ObjectChromePolicy;
   layoutEditable: boolean;
-  node: GraphNodeV01;
-  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void> | void;
+  node: DisplayGraphNodeV01;
+  onImportAsset?: (node: DisplayGraphNodeV01, file: File) => Promise<void> | void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
   renderInputHandle?: NodePortHandleRenderer;
   renderOutputHandle?: NodePortHandleRenderer;
@@ -526,7 +526,7 @@ function SliderControlObject({
   card: NodeCardView;
   chromePolicy: ObjectChromePolicy;
   layoutEditable: boolean;
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   runtimeControlEnabled: boolean;
   runtimeControlValue?: RuntimeControlValue;
@@ -605,7 +605,7 @@ function BangControlObject({
   card: NodeCardView;
   chromePolicy: ObjectChromePolicy;
   layoutEditable: boolean;
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   pulseKey: number;
   renderInputHandle?: NodePortHandleRenderer;
@@ -867,7 +867,7 @@ function minimumWidthForPorts(inputCount: number, outputCount: number): number {
   return portCount * socketWidth + (portCount - 1) * socketGap + sidePadding;
 }
 
-function RoutingBadges({ node }: { node: GraphNodeV01 }) {
+function RoutingBadges({ node }: { node: DisplayGraphNodeV01 }) {
   const send = typeof node.params.sendName === "string" && node.params.sendName.trim() ? node.params.sendName : null;
   const receive = typeof node.params.receiveName === "string" && node.params.receiveName.trim() ? node.params.receiveName : null;
   if (!send && !receive) {
@@ -881,7 +881,7 @@ function RoutingBadges({ node }: { node: GraphNodeV01 }) {
   );
 }
 
-function isValueObject(node: GraphNodeV01): boolean {
+function isValueObject(node: DisplayGraphNodeV01): boolean {
   return [
     FLOAT_VALUE_NODE_KIND,
     INT_VALUE_NODE_KIND,
@@ -898,7 +898,7 @@ function ValueObjectContent({
   runtimeControlEnabled,
   runtimeControlValue
 }: {
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   runtimeControlEnabled: boolean;
   runtimeControlValue?: RuntimeControlValue;
@@ -977,7 +977,7 @@ function NumericValueDragObject({
   runtimeControlValue
 }: {
   mode: "float" | "int" | "uint";
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   runtimeControlEnabled: boolean;
   runtimeControlValue?: RuntimeControlValue;
@@ -1087,7 +1087,7 @@ function NumericValueDragObject({
 
 function numericDisplayValue(
   mode: "float" | "int" | "uint",
-  node: GraphNodeV01,
+  node: DisplayGraphNodeV01,
   runtimeControlValue?: RuntimeControlValue
 ): number {
   if (mode === "float") {

@@ -1,7 +1,7 @@
-import type { ProjectDocumentV02 } from "@skenion/contracts";
+import type { ProjectDocumentV01 } from "@skenion/contracts";
 import type { RuntimeProjectPayload } from "./types";
 
-export function createRuntimeProjectPayload(project: ProjectDocumentV02): RuntimeProjectPayload {
+export function createRuntimeProjectPayload(project: ProjectDocumentV01): RuntimeProjectPayload {
   return clone(project);
 }
 

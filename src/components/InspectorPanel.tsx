@@ -1,7 +1,7 @@
 import { Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { getBuiltinNodeHelp, getBuiltinNodeHelpGraph } from "@skenion/contracts";
-import type { GraphDocumentV01, GraphFragmentV02, GraphNodeV01, ShaderDiagnosticV01 } from "@skenion/contracts";
+import type { GraphFragmentV01, ShaderDiagnosticV01 } from "@skenion/contracts";
 import { ConnectionDiagnosticsPanel } from "./inspector/ConnectionDiagnosticsPanel";
 import { EdgeInspector } from "./inspector/EdgeInspector";
 import { FeedbackPolicyDialog } from "./inspector/FeedbackPolicyDialog";
@@ -14,14 +14,15 @@ import type {
 } from "../graph/portSemantics";
 import type { ConnectionCheck } from "../graph/skenionGraph";
 import type { GraphFragmentBuildResult } from "../graph/fragmentClipboard";
+import type { DisplayGraphDocumentV01, DisplayGraphNodeV01 } from "../graph/patchLibrary";
 import type { RuntimeGeneratedShaderResponse } from "../runtime/types";
 
 interface InspectorPanelProps {
   connectionCheck: ConnectionCheck | null;
   edge: EdgeInspectorModel | null;
   graphLocked: boolean;
-  graph: GraphDocumentV01;
-  node: GraphNodeV01 | null;
+  graph: DisplayGraphDocumentV01;
+  node: DisplayGraphNodeV01 | null;
   helpNodeId: string | null;
   semanticDiagnostics: GraphSemanticDiagnostic[];
   generatedShader: RuntimeGeneratedShaderResponse | null;
@@ -29,13 +30,13 @@ interface InspectorPanelProps {
   runtimeAssetImportBusy: boolean;
   runtimeAssetImportEnabled: boolean;
   runtimeShaderDiagnostics: ShaderDiagnosticV01[];
-  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void>;
+  onImportAsset?: (node: DisplayGraphNodeV01, file: File) => Promise<void>;
   onHelpClipboardWriteError?: (message: string) => void;
-  onHelpCopyFragment?: (fragment: GraphFragmentV02, result: GraphFragmentBuildResult) => void;
+  onHelpCopyFragment?: (fragment: GraphFragmentV01, result: GraphFragmentBuildResult) => void;
   onHelpCopyFragmentError?: (message: string) => void;
   onLoadGeneratedShader?: () => void;
   onOpenHelpGraph?: (nodeKind: string) => void;
-  onRemoveNode: (node: GraphNodeV01) => void;
+  onRemoveNode: (node: DisplayGraphNodeV01) => void;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
   onSyncShaderInputs: (nodeId: string, source: string) => void;
 }

@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { RuntimeControlValue } from "../runtime/types";
 import { isBoolValueNode, readBoolValueParam } from "./boolValue";
 import { isColorRgbaNode, readColorRepresentationParam, readColorRgbaParam, readColorSpaceParam } from "./colorRgba";
@@ -8,7 +8,7 @@ import { isMessageNode, readMessageValueParam } from "./messageNode";
 import { isStringValueNode, readStringValueParam } from "./stringValue";
 import { isUIntValueNode, readUIntRepresentationParam, readUIntValueParam } from "./uintValue";
 
-export function runtimeControlValueForNode(node: GraphNodeV01): RuntimeControlValue | null {
+export function runtimeControlValueForNode(node: DisplayGraphNodeV01): RuntimeControlValue | null {
   if (isFloatValueNode(node)) {
     return {
       type: "float",

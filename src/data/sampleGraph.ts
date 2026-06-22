@@ -1,5 +1,5 @@
-import type { GraphDocumentV01 } from "@skenion/contracts";
 import { DEFAULT_FULLSCREEN_SHADER_SOURCE, portsForFullscreenShaderSource } from "../graph/fullscreenShader";
+import type { DisplayGraphDocumentV01 } from "../graph/patchLibrary";
 import { createViewStateFromPositions, type ViewPositions } from "../graph/projectDocument";
 import { createGraphNodeFromDefinition } from "../graph/skenionGraph";
 import { nodeRegistry } from "./registry";
@@ -48,7 +48,7 @@ fn fs_main() -> @location(0) vec4<f32> {
   return select(vec4<f32>(0.04, 0.04, 0.04, 1.0), active, sk_bool(skenion.enabled));
 }`;
 
-export const sampleGraph: GraphDocumentV01 = {
+export const sampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-sample",
@@ -117,7 +117,7 @@ export const sampleGraph: GraphDocumentV01 = {
   ]
 };
 
-export const renderSampleGraph: GraphDocumentV01 = {
+export const renderSampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-render-sample",
@@ -140,7 +140,7 @@ export const renderSampleGraph: GraphDocumentV01 = {
   ]
 };
 
-export const shaderUniformSampleGraph: GraphDocumentV01 = {
+export const shaderUniformSampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-shader-uniform-sample",
@@ -184,7 +184,7 @@ export const shaderUniformSampleViewState = createViewStateFromPositions(
   shaderUniformSamplePositions
 );
 
-export const shaderMultiUniformSampleGraph: GraphDocumentV01 = {
+export const shaderMultiUniformSampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-shader-multi-uniform-sample",
@@ -254,7 +254,7 @@ export const shaderMultiUniformSampleViewState = createViewStateFromPositions(
   shaderMultiUniformSamplePositions
 );
 
-export const objectRoutingPanelSampleGraph: GraphDocumentV01 = {
+export const objectRoutingPanelSampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-object-routing-panel-sample",
@@ -323,7 +323,7 @@ export const objectRoutingPanelSampleViewState = createViewStateFromPositions(
   objectRoutingPanelSamplePositions
 );
 
-export const objectVisualSampleGraph: GraphDocumentV01 = {
+export const objectVisualSampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-object-visual-sample",
@@ -407,7 +407,7 @@ export const objectVisualSampleViewState = createViewStateFromPositions(
   objectVisualSamplePositions
 );
 
-export const portDemoSampleGraph: GraphDocumentV01 = {
+export const portDemoSampleGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "studio-port-demo-sample",

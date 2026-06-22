@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Group, SegmentedControl, Text } from "@mantine/core";
-import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type { ValidationResult } from "@skenion/contracts";
+import type { DisplayGraphDocumentV01 } from "../../graph/patchLibrary";
 import type { GraphSemanticDiagnostic } from "../../graph/portSemantics";
 import type {
   RuntimeActionResult,
@@ -47,7 +48,7 @@ export function logLinesFromRuntimeState({
   session: RuntimeSessionResponse | null;
   status: RuntimeConnectionStatus;
   telemetry: RuntimeTelemetrySnapshot | null;
-  validation: ValidationResult<GraphDocumentV01>;
+  validation: ValidationResult<DisplayGraphDocumentV01>;
 }): LogLine[] {
   const counts = diagnosticCounts(validation, semanticDiagnostics);
   const lines: LogLine[] = [
@@ -139,7 +140,7 @@ export function logLinesFromRuntimeState({
         result.receivedAt
       )
     );
-    result.response.diagnostics.forEach((diagnostic, index) => {
+    result.response.diagnostics.forEach((diagnostic: { severity: LogLevel; message: string }, index: number) => {
       lines.push(runtimeLine(`result-diagnostic-${index}`, diagnostic.severity, diagnostic.message, result.receivedAt));
     });
   }

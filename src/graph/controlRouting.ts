@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 
 const ROUTING_CAPABLE_NODE_KINDS = new Set([
   "core.bang",
@@ -13,14 +13,14 @@ const ROUTING_CAPABLE_NODE_KINDS = new Set([
   "core.panel"
 ]);
 
-export function isRoutingCapableObjectNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isRoutingCapableObjectNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return Boolean(node && ROUTING_CAPABLE_NODE_KINDS.has(node.kind));
 }
 
-export function readSendNameParam(node: GraphNodeV01): string {
+export function readSendNameParam(node: DisplayGraphNodeV01): string {
   return typeof node.params.sendName === "string" ? node.params.sendName : "";
 }
 
-export function readReceiveNameParam(node: GraphNodeV01): string {
+export function readReceiveNameParam(node: DisplayGraphNodeV01): string {
   return typeof node.params.receiveName === "string" ? node.params.receiveName : "";
 }

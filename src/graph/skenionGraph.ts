@@ -1,29 +1,34 @@
-import { validateGraphDocument, validateGraphDocumentV02 } from "@skenion/contracts";
+import { validateGraphDocument } from "@skenion/contracts";
 import type {
   DataTypeV01,
-  EdgeV01,
-  GraphDocumentV01,
-  GraphNodeV01,
   NodeDefinitionManifestV01,
   PortV01,
   ValidationResult
 } from "@skenion/contracts";
 import type { Connection, Edge } from "@xyflow/react";
 import { defaultParamsForNodeKind } from "./clearColor";
-import { graphDocumentV01ToGraphDocumentV02 } from "./patchLibrary";
+import {
+  CURRENT_CONTRACT_SCHEMA_VERSION,
+  contractGraphToDisplayGraph,
+  displayGraphToContractGraph,
+  portSpecToGraphPort,
+  type DisplayEdgeV01,
+  type DisplayGraphDocumentV01,
+  type DisplayGraphNodeV01
+} from "./patchLibrary";
 import { connectionSemanticCheck } from "./portSemantics";
 
 export type ViewPositions = Record<string, { x: number; y: number }>;
 
 export type GraphPatch =
-  | { type: "addNode"; node: GraphNodeV01 }
-  | { type: "addEdge"; edge: EdgeV01 }
-  | { type: "removeEdge"; edge: EdgeV01 }
+  | { type: "addNode"; node: DisplayGraphNodeV01 }
+  | { type: "addEdge"; edge: DisplayEdgeV01 }
+  | { type: "removeEdge"; edge: DisplayEdgeV01 }
   | { type: "removeNode"; nodeId: string }
   | {
       type: "replaceNode";
       nodeId: string;
-      node: GraphNodeV01;
+      node: DisplayGraphNodeV01;
       edgePolicy: "removeInvalidEdges";
     }
   | { type: "setNodeParam"; nodeId: string; key: string; value: unknown }
@@ -53,9 +58,9 @@ export function portKey(nodeId: string, portId: string): string {
 
 export function createGraphNodeFromDefinition(
   definition: NodeDefinitionManifestV01,
-  existingNodes: GraphNodeV01[],
+  existingNodes: DisplayGraphNodeV01[],
   paramsOverride: Record<string, unknown> = {}
-): GraphNodeV01 {
+): DisplayGraphNodeV01 {
   const baseId = definition.id.split(".").pop() || "node";
   let index = existingNodes.length + 1;
   let id = `${baseId}_${index}`;
@@ -74,32 +79,29 @@ export function createGraphNodeFromDefinition(
       ...defaultParamsForNodeKind(definition.id),
       ...paramsOverride
     },
-    ports: definition.ports.map((port) => ({ ...port, type: { ...port.type } }))
+    ports: definition.ports.map(portSpecToGraphPort),
+    ...(definition.portGroups ? { portGroups: definition.portGroups.map((group) => ({ ...group })) } : {})
   };
 }
 
-export function graphSummary(graph: GraphDocumentV01): string {
+export function graphSummary(graph: DisplayGraphDocumentV01): string {
   return `${graph.nodes.length} nodes · ${graph.edges.length} edges · rev ${graph.revision}`;
 }
 
-export function validateGraph(graph: unknown): ValidationResult<GraphDocumentV01> {
-  const legacyResult = validateGraphDocument(graph);
-  if (legacyResult.ok) {
-    return legacyResult;
+export function validateGraph(graph: unknown): ValidationResult<DisplayGraphDocumentV01> {
+  const contractResult = validateGraphDocument(graph);
+  if (contractResult.ok) {
+    return { ok: true, value: contractGraphToDisplayGraph(contractResult.value) };
   }
-  const displayGraph = graph as GraphDocumentV01;
+  const displayGraph = graph as DisplayGraphDocumentV01;
   if (!isDisplayGraphDocument(displayGraph)) {
-    return legacyResult;
+    return { ok: false, errors: contractResult.errors };
   }
 
-  const activeResult = validateGraphDocumentV02(graphDocumentV01ToGraphDocumentV02(displayGraph));
-  return activeResult.ok
+  const currentResult = validateGraphDocument(displayGraphToContractGraph(displayGraph));
+  return currentResult.ok
     ? { ok: true, value: displayGraph }
-    : { ok: false, errors: activeResult.errors };
-}
-
-export function normalizeLegacyGraphTypes(graph: GraphDocumentV01): GraphDocumentV01 {
-  return graph;
+    : { ok: false, errors: currentResult.errors };
 }
 
 export function toSkenionPatch(connection: Connection): GraphPatch | null {
@@ -122,7 +124,7 @@ export function toSkenionPatch(connection: Connection): GraphPatch | null {
   };
 }
 
-export function edgeFromReactFlow(edge: Edge): EdgeV01 | null {
+export function edgeFromReactFlow(edge: Edge): DisplayEdgeV01 | null {
   if (!edge.sourceHandle || !edge.targetHandle) {
     return null;
   }
@@ -139,7 +141,7 @@ export function edgeFromReactFlow(edge: Edge): EdgeV01 | null {
   };
 }
 
-export function applyPatch(graph: GraphDocumentV01, patch: GraphPatch): GraphDocumentV01 {
+export function applyPatch(graph: DisplayGraphDocumentV01, patch: GraphPatch): DisplayGraphDocumentV01 {
   if (patch.type === "addNode") {
     return {
       ...graph,
@@ -235,7 +237,7 @@ export function applyPatch(graph: GraphDocumentV01, patch: GraphPatch): GraphDoc
   };
 }
 
-export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | null): ConnectionCheck {
+export function checkConnection(graph: DisplayGraphDocumentV01, patch: GraphPatch | null): ConnectionCheck {
   if (!patch || patch.type !== "addEdge") {
     return {
       ok: false,
@@ -270,9 +272,16 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
   const draft = applyPatch(graph, patch);
   const result = validateGraph(draft);
   if (!result.ok) {
+    const blockingError = result.errors.find((error) => !isAuthoringIncompleteInputError(error));
+    if (!blockingError) {
+      return {
+        ok: true,
+        message: `${typeLabel(sourcePort.type)} connected to ${typeLabel(targetPort.type)}.`
+      };
+    }
     return {
       ok: false,
-      message: result.errors[0]!
+      message: blockingError
     };
   }
 
@@ -282,12 +291,16 @@ export function checkConnection(graph: GraphDocumentV01, patch: GraphPatch | nul
   };
 }
 
-export function isValidSkenionConnection(graph: GraphDocumentV01, connection: Connection): boolean {
+export function isValidSkenionConnection(graph: DisplayGraphDocumentV01, connection: Connection): boolean {
   return checkConnection(graph, toSkenionPatch(connection)).ok;
 }
 
-export function findPort(graph: GraphDocumentV01, nodeId: string, portId: string): PortV01 | undefined {
+export function findPort(graph: DisplayGraphDocumentV01, nodeId: string, portId: string): PortV01 | undefined {
   return graph.nodes.find((node) => node.id === nodeId)?.ports.find((port) => port.id === portId);
+}
+
+function isAuthoringIncompleteInputError(error: string): boolean {
+  return error.startsWith("missing-required-input:");
 }
 
 function bumpRevision(revision: string): string {
@@ -299,13 +312,14 @@ function clonePort(port: PortV01): PortV01 {
   return JSON.parse(JSON.stringify(port)) as PortV01;
 }
 
-function cloneGraphNode(node: GraphNodeV01): GraphNodeV01 {
-  return JSON.parse(JSON.stringify(node)) as GraphNodeV01;
+function cloneGraphNode(node: DisplayGraphNodeV01): DisplayGraphNodeV01 {
+  return JSON.parse(JSON.stringify(node)) as DisplayGraphNodeV01;
 }
 
-function isDisplayGraphDocument(graph: Partial<GraphDocumentV01>): graph is GraphDocumentV01 {
+function isDisplayGraphDocument(graph: Partial<DisplayGraphDocumentV01>): graph is DisplayGraphDocumentV01 {
   return (
     graph.schema === "skenion.graph" &&
+    graph.schemaVersion === CURRENT_CONTRACT_SCHEMA_VERSION &&
     Array.isArray(graph.nodes) &&
     Array.isArray(graph.edges) &&
     typeof graph.id === "string" &&
@@ -313,7 +327,7 @@ function isDisplayGraphDocument(graph: Partial<GraphDocumentV01>): graph is Grap
   );
 }
 
-function edgeEquals(left: EdgeV01, right: EdgeV01): boolean {
+function edgeEquals(left: DisplayEdgeV01, right: DisplayEdgeV01): boolean {
   return (
     left.from.node === right.from.node &&
     left.from.port === right.from.port &&
@@ -323,9 +337,9 @@ function edgeEquals(left: EdgeV01, right: EdgeV01): boolean {
 }
 
 function edgeRemainsValidAfterNodeReplace(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   replacedNodeId: string,
-  edge: EdgeV01
+  edge: DisplayEdgeV01
 ): boolean {
   if (edge.from.node !== replacedNodeId && edge.to.node !== replacedNodeId) {
     return true;
@@ -345,9 +359,9 @@ function edgeRemainsValidAfterNodeReplace(
 }
 
 function edgeRemainsValidAfterInterfaceReplace(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   replacedNodeId: string,
-  edge: EdgeV01
+  edge: DisplayEdgeV01
 ): boolean {
   if (edge.from.node !== replacedNodeId && edge.to.node !== replacedNodeId) {
     return true;

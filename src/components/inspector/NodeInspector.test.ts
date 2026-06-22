@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MantineProvider } from "@mantine/core";
 import { describe, expect, it } from "vitest";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 as GraphNodeV01 } from "../../graph/patchLibrary";
 import { theme } from "../../theme";
 import { NodeInspector } from "./NodeInspector";
 

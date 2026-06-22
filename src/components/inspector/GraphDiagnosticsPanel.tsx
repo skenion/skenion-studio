@@ -1,5 +1,6 @@
 import { Alert, Badge, Code, Group, Stack, Text } from "@mantine/core";
-import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type { ValidationResult } from "@skenion/contracts";
+import type { DisplayGraphDocumentV01 } from "../../graph/patchLibrary";
 import type { GraphSemanticDiagnostic } from "../../graph/portSemantics";
 
 export function GraphDiagnosticsPanel({
@@ -7,7 +8,7 @@ export function GraphDiagnosticsPanel({
   validation
 }: {
   semanticDiagnostics: GraphSemanticDiagnostic[];
-  validation: ValidationResult<GraphDocumentV01>;
+  validation: ValidationResult<DisplayGraphDocumentV01>;
 }) {
   const errorCount = semanticDiagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
   const warningCount = semanticDiagnostics.filter((diagnostic) => diagnostic.severity === "warning").length;

@@ -1,12 +1,18 @@
 import { planConversion } from "@skenion/contracts";
-import type { ConversionPlanV01, DataTypeV01, EdgeV01, GraphDocumentV01, GraphNodeV01, PortV01 } from "@skenion/contracts";
+import type {
+  ConversionPlanV01,
+  DataTypeV01,
+  FanOutPolicyV01,
+  FeedbackPolicyV01,
+  MergePolicyV01,
+  PortV01,
+  TriggerModeV01
+} from "@skenion/contracts";
+import type { DisplayEdgeV01, DisplayGraphDocumentV01, DisplayGraphNodeV01 } from "./patchLibrary";
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
-export type MergePolicyV02 = "forbid" | "ordered-events" | "mix" | "array" | "latest" | "first" | "custom";
-export type FanOutPolicyV02 = "allow" | "copy" | "reference" | "broadcast" | "forbid";
-export type TriggerModeV02 = "passive" | "trigger" | "latched";
 
-export interface PortSemanticsV02 {
+export interface PortSemantics {
   id: string;
   label: string;
   description: string | null;
@@ -15,18 +21,12 @@ export interface PortSemanticsV02 {
   storedType: string;
   rate: string;
   maxConnections: number | null;
-  mergePolicy: MergePolicyV02;
-  fanOutPolicy: FanOutPolicyV02;
-  triggerMode: TriggerModeV02;
+  mergePolicy: MergePolicyV01;
+  fanOutPolicy: FanOutPolicyV01;
+  triggerMode: TriggerModeV01;
   required: boolean;
   group: string | null;
   styleKey: string | null;
-}
-
-export interface FeedbackPolicyPreview {
-  boundary: string;
-  bufferMode?: string;
-  maxLatencyFrames?: number;
 }
 
 export interface EdgeInspectorModel {
@@ -37,10 +37,10 @@ export interface EdgeInspectorModel {
   order: number | null;
   enabled: boolean;
   adapter: string | null;
-  feedback: FeedbackPolicyPreview | null;
+  feedback: FeedbackPolicyV01 | null;
   styleOverride: string | null;
-  sourcePort: PortSemanticsV02 | null;
-  targetPort: PortSemanticsV02 | null;
+  sourcePort: PortSemantics | null;
+  targetPort: PortSemantics | null;
   conversion: EdgeConversionPreview | null;
 }
 
@@ -61,31 +61,21 @@ export interface GraphSemanticDiagnostic {
   portId?: string;
 }
 
-interface V02PortExtras {
+interface DisplayPortExtras {
   rate?: string;
   maxConnections?: number;
-  mergePolicy?: MergePolicyV02;
-  fanOutPolicy?: FanOutPolicyV02;
-  triggerMode?: TriggerModeV02;
+  mergePolicy?: MergePolicyV01;
+  fanOutPolicy?: FanOutPolicyV01;
+  triggerMode?: TriggerModeV01;
   group?: string;
   styleKey?: string;
   description?: string;
 }
 
-interface V02EdgeExtras {
-  id?: string;
-  resolvedType?: string;
-  order?: number;
-  enabled?: boolean;
-  adapter?: string;
-  feedback?: FeedbackPolicyPreview;
-  styleOverride?: string;
-}
+type AddEdgePatch = { type: "addEdge"; edge: DisplayEdgeV01 };
 
-type AddEdgePatch = { type: "addEdge"; edge: EdgeV01 };
-
-export function portSemanticsForPort(node: GraphNodeV01, port: PortV01): PortSemanticsV02 {
-  const extras = port as PortV01 & V02PortExtras;
+export function portSemanticsForPort(node: DisplayGraphNodeV01, port: PortV01): PortSemantics {
+  const extras = port as PortV01 & DisplayPortExtras;
   const type = artistFacingType(node, port);
   const isInput = port.direction === "input";
 
@@ -132,31 +122,34 @@ export function semanticTypeColor(type: string): string {
   return "#495057";
 }
 
-export function edgeId(edge: EdgeV01): string {
-  const extras = edge as EdgeV01 & V02EdgeExtras;
-  return extras.id ?? `${edge.from.node}.${edge.from.port}->${edge.to.node}.${edge.to.port}`;
+export function edgeId(edge: DisplayEdgeV01): string {
+  return edge.id ?? `${edge.from.node}.${edge.from.port}->${edge.to.node}.${edge.to.port}`;
 }
 
-export function edgeInspectorModel(graph: GraphDocumentV01, edge: EdgeV01): EdgeInspectorModel {
-  const extras = edge as EdgeV01 & V02EdgeExtras;
+export function edgeInspectorModel(graph: DisplayGraphDocumentV01, edge: DisplayEdgeV01): EdgeInspectorModel {
   const sourceNode = graph.nodes.find((node) => node.id === edge.from.node);
   const targetNode = graph.nodes.find((node) => node.id === edge.to.node);
   const sourcePort = sourceNode?.ports.find((port) => port.id === edge.from.port);
   const targetPort = targetNode?.ports.find((port) => port.id === edge.to.port);
   const sourceSemantics = sourceNode && sourcePort ? portSemanticsForPort(sourceNode, sourcePort) : null;
   const targetSemantics = targetNode && targetPort ? portSemanticsForPort(targetNode, targetPort) : null;
-  const conversion = sourcePort && targetPort ? conversionPreview(planConversion(sourcePort.type, targetPort.type)) : null;
+  const conversion = sourceNode && sourcePort && targetNode && targetPort
+    ? conversionPreview(planConversion(
+        semanticDataTypeForPort(sourceNode, sourcePort),
+        semanticDataTypeForPort(targetNode, targetPort)
+      ))
+    : null;
 
   return {
     id: edgeId(edge),
     source: `${edge.from.node}.${edge.from.port}`,
     target: `${edge.to.node}.${edge.to.port}`,
-    resolvedType: extras.resolvedType ?? sourceSemantics?.type ?? targetSemantics?.type ?? "unknown",
-    order: extras.order ?? null,
-    enabled: extras.enabled ?? true,
-    adapter: extras.adapter ?? null,
-    feedback: extras.feedback ?? null,
-    styleOverride: extras.styleOverride ?? null,
+    resolvedType: edge.resolvedType ?? sourceSemantics?.type ?? targetSemantics?.type ?? "unknown",
+    order: edge.order ?? null,
+    enabled: edge.enabled ?? true,
+    adapter: edge.adapter ?? null,
+    feedback: edge.feedback ?? null,
+    styleOverride: edge.styleOverride ?? null,
     sourcePort: sourceSemantics,
     targetPort: targetSemantics,
     conversion
@@ -164,7 +157,7 @@ export function edgeInspectorModel(graph: GraphDocumentV01, edge: EdgeV01): Edge
 }
 
 export function findEdgeInspectorModel(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   selectedEdgeId: string | null
 ): EdgeInspectorModel | null {
   if (!selectedEdgeId) {
@@ -175,9 +168,9 @@ export function findEdgeInspectorModel(
   return edge ? edgeInspectorModel(graph, edge) : null;
 }
 
-export function analyzeGraphPortSemantics(graph: GraphDocumentV01): GraphSemanticDiagnostic[] {
+export function analyzeGraphPortSemantics(graph: DisplayGraphDocumentV01): GraphSemanticDiagnostic[] {
   const diagnostics: GraphSemanticDiagnostic[] = [];
-  const incomingByPort = new Map<string, EdgeV01[]>();
+  const incomingByPort = new Map<string, DisplayEdgeV01[]>();
 
   for (const edge of graph.edges) {
     const source = findNodePort(graph, edge.from.node, edge.from.port);
@@ -205,7 +198,10 @@ export function analyzeGraphPortSemantics(graph: GraphDocumentV01): GraphSemanti
 
     const sourceSemantics = portSemanticsForPort(source.node, source.port);
     const targetSemantics = portSemanticsForPort(target.node, target.port);
-    const conversion = planConversion(source.port.type, target.port.type);
+    const conversion = planConversion(
+      semanticDataTypeForPort(source.node, source.port),
+      semanticDataTypeForPort(target.node, target.port)
+    );
     if (!conversion.ok) {
       diagnostics.push({
         severity: "error",
@@ -237,7 +233,7 @@ export function analyzeGraphPortSemantics(graph: GraphDocumentV01): GraphSemanti
 
   const cycles = findDirectedCycles(graph);
   for (const cycleEdges of cycles) {
-    if (cycleEdges.some((edge) => Boolean((edge as EdgeV01 & V02EdgeExtras).feedback))) {
+    if (cycleEdges.some((edge) => Boolean(edge.feedback))) {
       diagnostics.push({
         severity: "warning",
         code: "feedback-cycle",
@@ -261,14 +257,14 @@ export function analyzeGraphPortSemantics(graph: GraphDocumentV01): GraphSemanti
 }
 
 export function connectionSemanticCheck(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   patch: AddEdgePatch | null
 ): GraphSemanticDiagnostic | null {
   if (!patch || patch.type !== "addEdge") {
     return null;
   }
 
-  const draft: GraphDocumentV01 = {
+  const draft: DisplayGraphDocumentV01 = {
     ...graph,
     edges: [...graph.edges, patch.edge]
   };
@@ -276,16 +272,16 @@ export function connectionSemanticCheck(
 }
 
 function findNodePort(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   nodeId: string,
   portId: string
-): { node: GraphNodeV01; port: PortV01 } | null {
+): { node: DisplayGraphNodeV01; port: PortV01 } | null {
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   const port = node?.ports.find((candidate) => candidate.id === portId);
   return node && port ? { node, port } : null;
 }
 
-function artistFacingType(node: GraphNodeV01, port: PortV01): string {
+function artistFacingType(node: DisplayGraphNodeV01, port: PortV01): string {
   if (port.type.dataKind === "render.frame") {
     return "render.frame";
   }
@@ -307,7 +303,17 @@ function artistFacingType(node: GraphNodeV01, port: PortV01): string {
   return `${port.type.flow}.${port.type.dataKind}`;
 }
 
-function isRenderFramePort(node: GraphNodeV01, port: PortV01): boolean {
+function semanticDataTypeForPort(node: DisplayGraphNodeV01, port: PortV01): DataTypeV01 {
+  if (artistFacingType(node, port) === "render.frame") {
+    return {
+      flow: "resource",
+      dataKind: "render.frame"
+    };
+  }
+  return port.type;
+}
+
+function isRenderFramePort(node: DisplayGraphNodeV01, port: PortV01): boolean {
   return node.kind.startsWith("render.") && ["out", "in"].includes(port.id);
 }
 
@@ -347,13 +353,13 @@ function conversionPreview(plan: ConversionPlanV01): EdgeConversionPreview | nul
   };
 }
 
-function findDirectedCycles(graph: GraphDocumentV01): EdgeV01[][] {
-  const adjacency = new Map<string, EdgeV01[]>();
+function findDirectedCycles(graph: DisplayGraphDocumentV01): DisplayEdgeV01[][] {
+  const adjacency = new Map<string, DisplayEdgeV01[]>();
   for (const edge of graph.edges) {
     adjacency.set(edge.from.node, [...(adjacency.get(edge.from.node) ?? []), edge]);
   }
 
-  const cycles: EdgeV01[][] = [];
+  const cycles: DisplayEdgeV01[][] = [];
   const seen = new Set<string>();
 
   for (const node of graph.nodes) {
@@ -362,7 +368,7 @@ function findDirectedCycles(graph: GraphDocumentV01): EdgeV01[][] {
 
   return cycles;
 
-  function visit(nodeId: string, path: EdgeV01[], visiting: Set<string>) {
+  function visit(nodeId: string, path: DisplayEdgeV01[], visiting: Set<string>) {
     if (visiting.has(nodeId)) {
       const startIndex = path.findIndex((edge) => edge.from.node === nodeId);
       const cycle = path.slice(startIndex);

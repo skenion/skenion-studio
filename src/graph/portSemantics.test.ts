@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { EdgeV01, GraphDocumentV01, GraphNodeV01 } from "@skenion/contracts";
+import type {
+  DisplayEdgeV01 as EdgeV01,
+  DisplayGraphDocumentV01 as GraphDocumentV01,
+  DisplayGraphNodeV01 as GraphNodeV01
+} from "./patchLibrary";
 import { renderSampleGraph, sampleGraph } from "../data/sampleGraph";
 import {
   analyzeGraphPortSemantics,
@@ -12,7 +16,7 @@ import {
 } from "./portSemantics";
 
 describe("port and edge semantics", () => {
-  it("derives v0.2 artist-facing port metadata from persisted v0.1 ports", () => {
+  it("derives current 0.1 artist-facing port metadata from persisted ports", () => {
     const shader = renderSampleGraph.nodes[0];
     const out = shader.ports.find((port) => port.id === "out")!;
     const uniform = shader.ports.find((port) => port.id === "speed")!;
@@ -60,7 +64,7 @@ describe("port and edge semantics", () => {
     const node: GraphNodeV01 = {
       id: "adapter",
       kind: "core.subpatch",
-      kindVersion: "0.2.0",
+      kindVersion: "0.1.0",
       params: {},
       ports: [
         {
@@ -80,21 +84,21 @@ describe("port and edge semantics", () => {
     expect(portSemanticsForPort(node, node.ports[1]!).type).toBe("signal.audio");
   });
 
-  it("builds edge inspector metadata with v0.2 defaults and explicit overrides", () => {
+  it("builds edge inspector metadata with current defaults and explicit overrides", () => {
     const edge = {
       ...renderSampleGraph.edges[0],
       id: "explicit_edge",
       order: 2,
       enabled: false,
       adapter: "adapter.example",
-      feedback: { boundary: "render-frame", bufferMode: "previous-frame", maxLatencyFrames: 1 },
+      feedback: { enabled: true, boundary: "render-frame", bufferMode: "latest" },
       styleOverride: "feedback"
     } as EdgeV01 & {
       id: string;
       order: number;
       enabled: boolean;
       adapter: string;
-      feedback: { boundary: string; bufferMode: string; maxLatencyFrames: number };
+      feedback: { enabled: boolean; boundary: "render-frame"; bufferMode: "latest" };
       styleOverride: string;
     };
     const graph: GraphDocumentV01 = {
@@ -298,8 +302,8 @@ describe("port and edge semantics", () => {
     const graph = twoNodeValueCycle();
     const feedbackEdge = {
       ...graph.edges[1],
-      feedback: { boundary: "render-frame" }
-    } as EdgeV01 & { feedback: { boundary: string } };
+      feedback: { enabled: true, boundary: "render-frame" }
+    } as EdgeV01 & { feedback: { enabled: boolean; boundary: "render-frame" } };
     const feedbackGraph = {
       ...graph,
       edges: [graph.edges[0], feedbackEdge]

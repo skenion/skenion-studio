@@ -18,7 +18,6 @@ import {
   findPort,
   graphSummary,
   isValidSkenionConnection,
-  normalizeLegacyGraphTypes,
   portKey,
   toSkenionPatch,
   typeKey,
@@ -72,7 +71,7 @@ describe("skenion graph helpers", () => {
     expect(validateGraph({}).ok).toBe(false);
   });
 
-  it("reports v0.2 display graph validation errors", () => {
+  it("reports current 0.1 display graph validation errors", () => {
     const activeDisplayGraph = {
       schema: "skenion.graph",
       schemaVersion: "0.1.0",
@@ -89,7 +88,7 @@ describe("skenion graph helpers", () => {
               id: "out",
               direction: "output",
               type: { flow: "value", dataKind: "number.float" },
-              description: "Preserved v0.2 port help text."
+              description: "Preserved current port help text."
             }
           ]
         }
@@ -126,10 +125,6 @@ describe("skenion graph helpers", () => {
     expect(result.ok ? [] : result.errors).toEqual([
       "missing-required-input: input collector_1:in requires at least 1 connection(s)"
     ]);
-  });
-
-  it("does not silently normalize legacy semantic type names", () => {
-    expect(normalizeLegacyGraphTypes(sampleGraph)).toBe(sampleGraph);
   });
 
   it("converts React Flow connections and edges to Skenion patches", () => {

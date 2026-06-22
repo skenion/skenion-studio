@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { EdgeV01, GraphDocumentV01 } from "@skenion/contracts";
+import type {
+  DisplayEdgeV01 as EdgeV01,
+  DisplayGraphDocumentV01 as GraphDocumentV01
+} from "./patchLibrary";
 import {
   portDemoSampleGraph,
   portDemoSampleViewState,
@@ -126,8 +129,8 @@ describe("React Flow adapter", () => {
   it("marks explicit feedback edges in the view model", () => {
     const feedbackEdge = {
       ...renderSampleGraph.edges[0],
-      feedback: { boundary: "render-frame" }
-    } as EdgeV01 & { feedback: { boundary: string } };
+      feedback: { enabled: true, boundary: "render-frame" }
+    } as EdgeV01 & { feedback: { enabled: boolean; boundary: "render-frame" } };
     const viewModel = toReactFlowViewModel(
       {
         ...renderSampleGraph,

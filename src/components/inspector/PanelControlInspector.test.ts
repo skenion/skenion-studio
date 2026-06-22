@@ -1,7 +1,7 @@
 import { TextInput } from "@mantine/core";
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 as GraphNodeV01 } from "../../graph/patchLibrary";
 import { DeferredNumberInput } from "./DeferredNumberInput";
 import { PanelControlInspector } from "./PanelControlInspector";
 import { RoutingNodeControls } from "./RoutingNodeControls";

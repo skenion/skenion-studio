@@ -1,9 +1,9 @@
-import type {
-  EdgeV01,
-  GraphDocumentV01,
-  ValidationResult
-} from "@skenion/contracts";
-import { graphDocumentV01ToGraphDocumentV02 } from "../graph/patchLibrary";
+import type { ValidationResult } from "@skenion/contracts";
+import {
+  displayGraphToContractGraph,
+  type DisplayEdgeV01,
+  type DisplayGraphDocumentV01
+} from "../graph/patchLibrary";
 import type { EdgeInspectorModel, GraphSemanticDiagnostic } from "../graph/portSemantics";
 import type { NodeCardView, NodePortView } from "../components/node/nodeTypes";
 import type {
@@ -130,7 +130,7 @@ export const gpuTextureOutputPort: NodePortView = {
   color: "#7048e8",
   metadata: {
     rate: "frame",
-    fanOutPolicy: "reference",
+    fanOutPolicy: "share",
     triggerMode: "passive"
   }
 };
@@ -153,7 +153,7 @@ export const zeroPortCard: NodeCardView = {
   id: "note_1",
   label: "Metadata",
   kind: "core.note",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   accentColor: "#868e96",
   inputs: [],
   outputs: []
@@ -163,7 +163,7 @@ export const renderCard: NodeCardView = {
   id: "shader_1",
   label: "Fullscreen Shader",
   kind: "render.fullscreen-shader",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   typeBadgeLabel: "render.frame",
   accentColor: "#d6336c",
   inputs: [],
@@ -179,7 +179,7 @@ export const targetCard: NodeCardView = {
   id: "output_1",
   label: "Render Output",
   kind: "render.output",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   typeBadgeLabel: "render.frame",
   accentColor: "#d6336c",
   inputs: [renderFrameInputPort],
@@ -190,7 +190,7 @@ export const valueTransformCard: NodeCardView = {
   id: "scale_1",
   label: "Scale Value",
   kind: "core.scale-float",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   typeBadgeLabel: "value.number.float",
   accentColor: "#495057",
   inputs: [valueInputPort],
@@ -212,7 +212,7 @@ export const longLabelCard: NodeCardView = {
   id: "shader_with_long_label_1",
   label: "Fullscreen Shader With A Long Artist Facing Label",
   kind: "render.fullscreen-shader.with-very-long-kind-name",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   typeBadgeLabel: "render.frame",
   accentColor: "#d6336c",
   inputs: [
@@ -235,7 +235,7 @@ export const feedbackPortCard: NodeCardView = {
   id: "feedback_1",
   label: "Previous Frame",
   kind: "render.previous-frame-feedback",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   typeBadgeLabel: "feedback",
   accentColor: "#d6336c",
   inputs: [
@@ -253,7 +253,7 @@ export const feedbackPortCard: NodeCardView = {
       metadata: {
         ...renderFrameOutputPort.metadata,
         rate: "frame",
-        fanOutPolicy: "broadcast"
+        fanOutPolicy: "share"
       }
     }
   ]
@@ -263,7 +263,7 @@ export const multiPortCard: NodeCardView = {
   id: "mixer_1",
   label: "Audio Mixer",
   kind: "audio.mix",
-  kindVersion: "0.2.0",
+  kindVersion: "0.1.0",
   typeBadgeLabel: "signal",
   accentColor: "#0ca678",
   inputs: [
@@ -298,12 +298,12 @@ export const multiPortCard: NodeCardView = {
   ]
 };
 
-export const storyEdge: EdgeV01 = {
+export const storyEdge: DisplayEdgeV01 = {
   from: { node: "shader_1", port: "out" },
   to: { node: "output_1", port: "in" }
 };
 
-export const storyGraph: GraphDocumentV01 = {
+export const storyGraph: DisplayGraphDocumentV01 = {
   schema: "skenion.graph",
   schemaVersion: "0.1.0",
   id: "storybook-graph",
@@ -312,12 +312,12 @@ export const storyGraph: GraphDocumentV01 = {
   edges: [storyEdge]
 };
 
-export const validationOk: ValidationResult<GraphDocumentV01> = {
+export const validationOk: ValidationResult<DisplayGraphDocumentV01> = {
   ok: true,
   value: storyGraph
 };
 
-export const validationFailed: ValidationResult<GraphDocumentV01> = {
+export const validationFailed: ValidationResult<DisplayGraphDocumentV01> = {
   ok: false,
   errors: ["ambiguous-algebraic-loop: value cycle requires explicit feedback policy"]
 };
@@ -353,9 +353,9 @@ export const edgeInspectorModel: EdgeInspectorModel = {
 export const feedbackEdgeInspectorModel: EdgeInspectorModel = {
   ...edgeInspectorModel,
   feedback: {
+    enabled: true,
     boundary: "render-frame",
-    bufferMode: "previous-frame",
-    maxLatencyFrames: 1
+    bufferMode: "latest"
   }
 };
 
@@ -380,10 +380,10 @@ export const runtimeSession: RuntimeSessionResponse = {
     controlRevision: 4,
     project: {
       schema: "skenion.project",
-      schemaVersion: "0.2.0",
+      schemaVersion: "0.1.0",
       id: storyGraph.id,
       revision: storyGraph.revision,
-      graph: graphDocumentV01ToGraphDocumentV02(storyGraph),
+      graph: displayGraphToContractGraph(storyGraph),
       viewState: {
         schema: "skenion.view-state",
         schemaVersion: "0.1.0",

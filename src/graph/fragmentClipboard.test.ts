@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import type { GraphDocumentV01 } from "@skenion/contracts";
+import type { DisplayGraphDocumentV01 as GraphDocumentV01 } from "./patchLibrary";
+import { displayGraphToContractGraph } from "./patchLibrary";
 import {
   createGraphFragmentFromSelection,
   graphFragmentPasteAvailability,
@@ -69,7 +70,7 @@ describe("fragmentClipboard", () => {
     expect(parseGraphFragmentClipboard("{")).toBeNull();
   });
 
-  it("maps all supported v0.1 port flow hints into v0.2 fragment ports", () => {
+  it("maps all supported v0.1 port flow hints into current 0.1 fragment ports", () => {
     const result = createGraphFragmentFromSelection(
       portFlowGraph,
       createViewStateFromPositions(portFlowGraph, {}),
@@ -100,7 +101,7 @@ describe("fragmentClipboard", () => {
     });
   });
 
-  it("preserves v0.2 port metadata, port groups, and edge metadata in copied fragments", () => {
+  it("preserves current 0.1 port metadata, port groups, and edge metadata in copied fragments", () => {
     const graph: GraphDocumentV01 = {
       schema: "skenion.graph",
       schemaVersion: "0.1.0",
@@ -110,7 +111,7 @@ describe("fragmentClipboard", () => {
         {
           id: "source",
           kind: "core.metadata-source",
-          kindVersion: "0.2.0",
+          kindVersion: "0.1.0",
           params: { label: "Source" },
           portGroups: [
             {
@@ -143,7 +144,7 @@ describe("fragmentClipboard", () => {
         {
           id: "sink",
           kind: "core.metadata-sink",
-          kindVersion: "0.2.0",
+          kindVersion: "0.1.0",
           params: { label: "Sink" },
           ports: [
             {
@@ -256,7 +257,8 @@ describe("fragmentClipboard", () => {
   });
 
   it("keeps help source immutable while a volatile working copy can move and edit", () => {
-    const source = testGraph;
+    const source = displayGraphToContractGraph(testGraph);
+    const sourceDisplayGraph = helpGraphDisplayDocument(source);
     const workingCopy = createVolatileHelpWorkingCopy(source, {
       sourcePatchId: "core.float",
       workingCopyId: "help-work-copy-1"
@@ -284,8 +286,8 @@ describe("fragmentClipboard", () => {
     };
 
     expect(helpGraphDisplayDocument(source).nodes[0]?.params.label).toBe("Source");
-    expect(source).toBe(testGraph);
-    expect(movedWorkingCopy.sourceGraph).toBe(source);
+    expect(source).toEqual(displayGraphToContractGraph(testGraph));
+    expect(movedWorkingCopy.sourceGraph).toEqual(sourceDisplayGraph);
     expect(movedWorkingCopy.graph.nodes[0]?.params.label).toBe("Edited");
     expect(movedWorkingCopy.viewState.canvas.nodes.source).toEqual({ x: 999, y: 777 });
     expect(source.nodes[0]?.params.label).toBe("Source");

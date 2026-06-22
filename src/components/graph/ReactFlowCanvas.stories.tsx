@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
+import type { ViewStateV01 } from "@skenion/contracts";
 import { GraphCanvas } from "../GraphCanvas";
 import {
   portDemoSampleGraph,
@@ -17,6 +17,7 @@ import {
   shaderUniformSampleViewState
 } from "../../data/sampleGraph";
 import { createViewStateFromPositions, reconcileViewStateWithGraph } from "../../graph/projectDocument";
+import type { DisplayGraphDocumentV01 } from "../../graph/patchLibrary";
 import type { ConnectionCheck, GraphPatch } from "../../graph/skenionGraph";
 
 const meta = {
@@ -96,7 +97,7 @@ export const ObjectVisualObjectsGraph: Story = {
   )
 };
 
-export const CompatibilityGraph: Story = {
+export const CurrentSampleGraph: Story = {
   render: () => <GraphCanvasStory initialGraph={sampleGraph} />
 };
 
@@ -130,7 +131,7 @@ function GraphCanvasStory({
   initialViewState,
   initialSelectedEdgeId = null
 }: {
-  initialGraph: GraphDocumentV01;
+  initialGraph: DisplayGraphDocumentV01;
   initialConnectionCheck?: ConnectionCheck | null;
   initialViewState?: ViewStateV01;
   initialSelectedEdgeId?: string | null;

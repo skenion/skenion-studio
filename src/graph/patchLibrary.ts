@@ -1,29 +1,53 @@
 import type {
   DataFlow,
   DataTypeV01,
-  EdgeSpecV02,
-  EdgeV01,
+  EdgeSpecV01,
+  FeedbackPolicyV01,
   GraphDocumentV01,
-  GraphDocumentV02,
-  GraphNodeV01,
-  PatchContractPortV02,
-  PatchDefinitionV02,
-  PortSpecV02,
+  GraphNodeV01 as ContractGraphNodeV01,
+  PatchContractPortV01,
+  PatchDefinitionV01,
+  PortGroupSpecV01,
+  PortSpecV01,
   PortV01
 } from "@skenion/contracts";
-import { derivePatchContractV02 } from "@skenion/contracts";
+import { derivePatchContractV01 } from "@skenion/contracts";
 
-export const PATCH_DEFINITION_SCHEMA_VERSION = "0.2.0" as const;
+export const CURRENT_CONTRACT_SCHEMA_VERSION = "0.1.0" as const;
 export const SUBPATCH_NODE_KIND = "core.subpatch" as const;
 
-export type { PatchDefinitionV02 };
+export type { PatchDefinitionV01 };
 
-export interface PatchLibraryV02 {
-  patches: PatchDefinitionV02[];
+export interface DisplayEdgeV01 {
+  from: { node: string; port: string };
+  to: { node: string; port: string };
+  id?: string;
+  resolvedType?: string;
+  order?: number;
+  enabled?: boolean;
+  adapter?: string;
+  feedback?: FeedbackPolicyV01;
+  styleOverride?: string;
+  label?: string;
+  description?: string;
 }
 
-type PortV02DisplayExtras = Pick<
-  PortSpecV02,
+export interface DisplayGraphNodeV01 extends Omit<ContractGraphNodeV01, "ports"> {
+  ports: PortV01[];
+  portGroups?: PortGroupSpecV01[];
+}
+
+export interface DisplayGraphDocumentV01 extends Omit<GraphDocumentV01, "edges" | "nodes"> {
+  nodes: DisplayGraphNodeV01[];
+  edges: DisplayEdgeV01[];
+}
+
+export interface PatchLibrary {
+  patches: PatchDefinitionV01[];
+}
+
+type PortSpecDisplayExtras = Pick<
+  PortSpecV01,
   | "accepts"
   | "defaultValue"
   | "description"
@@ -38,16 +62,16 @@ type PortV02DisplayExtras = Pick<
   | "triggerMode"
 >;
 
-export function createPatchLibraryV02(patches: PatchDefinitionV02[] = []): PatchLibraryV02 {
+export function createPatchLibrary(patches: PatchDefinitionV01[] = []): PatchLibrary {
   return { patches };
 }
 
-export function isPatchDefinitionV02(value: unknown): value is PatchDefinitionV02 {
+export function isPatchDefinition(value: unknown): value is PatchDefinitionV01 {
   if (!value || typeof value !== "object") {
     return false;
   }
 
-  const candidate = value as Partial<PatchDefinitionV02>;
+  const candidate = value as Partial<PatchDefinitionV01>;
   return (
     typeof candidate.id === "string" &&
     candidate.id.length > 0 &&
@@ -55,46 +79,46 @@ export function isPatchDefinitionV02(value: unknown): value is PatchDefinitionV0
     candidate.revision.length > 0 &&
     Boolean(candidate.graph) &&
     candidate.graph?.schema === "skenion.graph" &&
-    candidate.graph?.schemaVersion === PATCH_DEFINITION_SCHEMA_VERSION
+    candidate.graph?.schemaVersion === CURRENT_CONTRACT_SCHEMA_VERSION
   );
 }
 
 export function findPatchDefinition(
-  library: PatchLibraryV02 | undefined,
+  library: PatchLibrary | undefined,
   patchId: string
-): PatchDefinitionV02 | null {
+): PatchDefinitionV01 | null {
   return library?.patches.find((patch) => patch.id === patchId) ?? null;
 }
 
-export function patchDisplayName(definition: PatchDefinitionV02): string {
+export function patchDisplayName(definition: PatchDefinitionV01): string {
   return metadataString(definition.metadata?.title) ?? definition.id;
 }
 
-export function patchDescription(definition: PatchDefinitionV02): string {
+export function patchDescription(definition: PatchDefinitionV01): string {
   return metadataString(definition.metadata?.description) ?? "";
 }
 
-export function patchTags(definition: PatchDefinitionV02): string[] {
+export function patchTags(definition: PatchDefinitionV01): string[] {
   const tags = definition.metadata?.["tags"];
   return Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === "string") : [];
 }
 
-export function patchDefinitionBoundaryPorts(definition: PatchDefinitionV02): PatchContractPortV02[] {
-  return derivePatchContractV02(definition).ports;
+export function patchDefinitionBoundaryPorts(definition: PatchDefinitionV01): PatchContractPortV01[] {
+  return derivePatchContractV01(definition).ports;
 }
 
 export function createSubpatchNodeFromDefinition(
-  definition: PatchDefinitionV02,
-  existingNodes: GraphNodeV01[],
+  definition: PatchDefinitionV01,
+  existingNodes: DisplayGraphNodeV01[],
   options: { nodeId?: string; objectText?: string } = {}
-): GraphNodeV01 {
+): DisplayGraphNodeV01 {
   const objectText = options.objectText ?? `p ${definition.id}`;
   const description = patchDescription(definition).trim();
 
   return {
     id: options.nodeId ?? uniqueSubpatchNodeId(definition.id, existingNodes),
     kind: SUBPATCH_NODE_KIND,
-    kindVersion: PATCH_DEFINITION_SCHEMA_VERSION,
+    kindVersion: CURRENT_CONTRACT_SCHEMA_VERSION,
     params: {
       label: objectText,
       objectText,
@@ -102,7 +126,7 @@ export function createSubpatchNodeFromDefinition(
       patchRevision: definition.revision,
       ...(description ? { description } : {})
     },
-    ports: patchDefinitionBoundaryPorts(definition).map(portSpecV02ToGraphPort)
+    ports: patchDefinitionBoundaryPorts(definition).map(portSpecToGraphPort)
   };
 }
 
@@ -110,40 +134,40 @@ function metadataString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function patchDefinitionToDisplayGraph(definition: PatchDefinitionV02): GraphDocumentV01 {
-  return graphDocumentV02ToDisplayGraph(definition.graph);
+export function patchDefinitionToDisplayGraph(definition: PatchDefinitionV01): DisplayGraphDocumentV01 {
+  return contractGraphToDisplayGraph(definition.graph);
 }
 
-export function graphDocumentV01ToGraphDocumentV02(graph: GraphDocumentV01): GraphDocumentV02 {
+export function displayGraphToContractGraph(graph: DisplayGraphDocumentV01): GraphDocumentV01 {
   return {
     schema: "skenion.graph",
-    schemaVersion: PATCH_DEFINITION_SCHEMA_VERSION,
+    schemaVersion: CURRENT_CONTRACT_SCHEMA_VERSION,
     id: graph.id,
     revision: graph.revision,
-    nodes: graph.nodes.map(graphNodeToGraphNodeV02),
-    edges: graph.edges.map(graphEdgeToEdgeSpecV02)
+    nodes: graph.nodes.map(displayNodeToContractNode),
+    edges: graph.edges.map(displayEdgeToEdgeSpec)
   };
 }
 
-export function graphNodeToGraphNodeV02(node: GraphNodeV01): GraphDocumentV02["nodes"][number] {
+export function displayNodeToContractNode(node: DisplayGraphNodeV01): GraphDocumentV01["nodes"][number] {
   return {
     id: node.id,
     kind: node.kind,
     kindVersion: node.kindVersion,
     params: { ...node.params },
-    ports: node.ports.map(graphPortToPortSpecV02),
+    ports: node.ports.map(graphPortToPortSpec),
     ...("portGroups" in node && Array.isArray(node.portGroups)
       ? {
-          portGroups: node.portGroups.map((group) => ({ ...group } as GraphNodeV02PortGroup))
+          portGroups: node.portGroups.map((group) => ({ ...group }))
         }
       : {})
   };
 }
 
-export function graphDocumentV02ToDisplayGraph(graph: GraphDocumentV02): GraphDocumentV01 {
+export function contractGraphToDisplayGraph(graph: GraphDocumentV01): DisplayGraphDocumentV01 {
   return {
     schema: "skenion.graph",
-    schemaVersion: "0.1.0",
+    schemaVersion: CURRENT_CONTRACT_SCHEMA_VERSION,
     id: graph.id,
     revision: graph.revision,
     nodes: graph.nodes.map((node) => ({
@@ -151,19 +175,19 @@ export function graphDocumentV02ToDisplayGraph(graph: GraphDocumentV02): GraphDo
       kind: node.kind,
       kindVersion: node.kindVersion,
       params: { ...node.params },
-      ports: node.ports.map(portSpecV02ToGraphPort),
+      ports: node.ports.map(portSpecToGraphPort),
       ...(node.portGroups ? { portGroups: node.portGroups.map((group) => ({ ...group })) } : {})
-    }) as GraphNodeV01),
-    edges: graph.edges.map(edgeSpecV02ToGraphEdge)
+    })),
+    edges: graph.edges.map(edgeSpecToDisplayEdge)
   };
 }
 
-export function portSpecV02ToGraphPort(port: PortSpecV02): PortV01 {
-  const graphPort: PortV01 & PortV02DisplayExtras = {
+export function portSpecToGraphPort(port: PortSpecV01): PortV01 {
+  const graphPort: PortV01 & PortSpecDisplayExtras = {
     id: port.id,
     direction: port.direction,
     label: port.label ?? labelForPatchPort(port.id),
-    type: dataTypeFromPortSpecV02(port),
+    type: dataTypeFromPortSpec(port),
     required: port.required ?? ((port.minConnections ?? 0) > 0),
     rate: port.rate,
     accepts: port.accepts ? [...port.accepts] : undefined,
@@ -190,9 +214,9 @@ export function portSpecV02ToGraphPort(port: PortSpecV02): PortV01 {
   return omitUndefined(graphPort);
 }
 
-export function graphPortToPortSpecV02(port: PortV01): PortSpecV02 {
-  const extras = port as PortV01 & PortV02DisplayExtras;
-  const portSpec: PortSpecV02 = {
+export function graphPortToPortSpec(port: PortV01): PortSpecV01 {
+  const extras = port as PortV01 & PortSpecDisplayExtras;
+  const portSpec: PortSpecV01 = {
     id: port.id,
     direction: port.direction,
     type: portSpecTypeFromGraphPort(port),
@@ -215,7 +239,7 @@ export function graphPortToPortSpecV02(port: PortV01): PortSpecV02 {
   return omitUndefined(portSpec);
 }
 
-export function dataTypeFromPortSpecV02(port: PortSpecV02): DataTypeV01 {
+export function dataTypeFromPortSpec(port: PortSpecV01): DataTypeV01 {
   const type = normalizedPortSpecType(port.type);
   const graphType: DataTypeV01 = {
     flow: flowForPortSpecType(type, port.rate),
@@ -230,7 +254,7 @@ export function dataTypeFromPortSpecV02(port: PortSpecV02): DataTypeV01 {
   return graphType;
 }
 
-function edgeSpecV02ToGraphEdge(edge: EdgeSpecV02): EdgeV01 {
+function edgeSpecToDisplayEdge(edge: EdgeSpecV01): DisplayEdgeV01 {
   return omitUndefined({
     from: {
       node: edge.source.nodeId,
@@ -249,11 +273,11 @@ function edgeSpecV02ToGraphEdge(edge: EdgeSpecV02): EdgeV01 {
     styleOverride: edge.styleOverride,
     label: edge.label,
     description: edge.description
-  }) as EdgeV01;
+  }) as DisplayEdgeV01;
 }
 
-export function graphEdgeToEdgeSpecV02(edge: EdgeV01): EdgeSpecV02 {
-  const extras = edge as EdgeV01 & Partial<Omit<EdgeSpecV02, "id" | "source" | "target">> & { id?: string };
+export function displayEdgeToEdgeSpec(edge: DisplayEdgeV01): EdgeSpecV01 {
+  const extras = edge as DisplayEdgeV01 & Partial<Omit<EdgeSpecV01, "id" | "source" | "target">> & { id?: string };
   return omitUndefined({
     id: extras.id ?? displayEdgeId(edge),
     source: {
@@ -275,7 +299,7 @@ export function graphEdgeToEdgeSpecV02(edge: EdgeV01): EdgeSpecV02 {
   });
 }
 
-function activationForPortSpec(port: PortSpecV02): PortV01["activation"] | undefined {
+function activationForPortSpec(port: PortSpecV01): PortV01["activation"] | undefined {
   if (port.triggerMode === "trigger" || port.triggerMode === "latched") {
     return port.triggerMode;
   }
@@ -285,7 +309,7 @@ function activationForPortSpec(port: PortSpecV02): PortV01["activation"] | undef
   return undefined;
 }
 
-function triggerModeFromGraphPort(port: PortV01): PortSpecV02["triggerMode"] | undefined {
+function triggerModeFromGraphPort(port: PortV01): PortSpecV01["triggerMode"] | undefined {
   if (port.activation === "trigger" || port.activation === "latched") {
     return port.activation;
   }
@@ -326,7 +350,7 @@ function isGenericValueDataKind(dataKind: string): boolean {
   ].includes(dataKind);
 }
 
-function portRateFromGraphPort(port: PortV01): PortSpecV02["rate"] | undefined {
+function portRateFromGraphPort(port: PortV01): PortSpecV01["rate"] | undefined {
   switch (port.type.flow) {
     case "event":
       return "event";
@@ -345,7 +369,7 @@ function portRateFromGraphPort(port: PortV01): PortSpecV02["rate"] | undefined {
   }
 }
 
-function flowForPortSpecType(type: string, rate: PortSpecV02["rate"]): DataFlow {
+function flowForPortSpecType(type: string, rate: PortSpecV01["rate"]): DataFlow {
   if (type === "event.bang" || type === "message.any" || rate === "event") {
     return "event";
   }
@@ -401,7 +425,7 @@ function defaultFormatForDataKind(dataKind: string): string | undefined {
   return undefined;
 }
 
-function uniqueSubpatchNodeId(patchId: string, existingNodes: GraphNodeV01[]): string {
+function uniqueSubpatchNodeId(patchId: string, existingNodes: DisplayGraphNodeV01[]): string {
   const baseId = slugForNodeId(patchId) || "subpatch";
   let index = existingNodes.length + 1;
   let id = `${baseId}_${index}`;
@@ -430,7 +454,7 @@ function labelForPatchPort(id: string): string {
     .join(" ");
 }
 
-function displayEdgeId(edge: EdgeV01): string {
+function displayEdgeId(edge: DisplayEdgeV01): string {
   return `edge_${edge.from.node}_${edge.from.port}_${edge.to.node}_${edge.to.port}`;
 }
 
@@ -439,5 +463,3 @@ function omitUndefined<T extends object>(value: T): T {
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
   ) as T;
 }
-
-type GraphNodeV02PortGroup = NonNullable<GraphDocumentV02["nodes"][number]["portGroups"]>[number];

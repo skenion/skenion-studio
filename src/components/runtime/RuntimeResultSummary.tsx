@@ -25,7 +25,7 @@ export function RuntimeResultSummary({ result }: { result: RuntimeActionResult }
 
       {diagnostics.length > 0 ? (
         <Stack gap={4}>
-          {diagnostics.slice(0, 5).map((diagnostic) => (
+          {diagnostics.slice(0, 5).map((diagnostic: { severity: string; message: string }) => (
             <Alert
               color={diagnostic.severity === "error" ? "red" : "yellow"}
               key={diagnostic.message}

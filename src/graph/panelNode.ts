@@ -1,9 +1,9 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 
 export const PANEL_NODE_KIND = "core.panel";
 export const DEFAULT_PANEL_COLOR = "transparent";
 
-export function isPanelNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isPanelNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === PANEL_NODE_KIND;
 }
 
@@ -14,7 +14,7 @@ export function defaultPanelParams(): Record<string, unknown> {
   };
 }
 
-export function readPanelParams(node: GraphNodeV01): { label: string; color: string } {
+export function readPanelParams(node: DisplayGraphNodeV01): { label: string; color: string } {
   return {
     label: typeof node.params.label === "string" ? node.params.label : "",
     color: readPanelColor(node.params.color)

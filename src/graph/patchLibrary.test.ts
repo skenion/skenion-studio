@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
-import type { PatchDefinitionV02 } from "./patchLibrary";
+import type { PatchDefinitionV01 } from "./patchLibrary";
 import {
-  createPatchLibraryV02,
+  createPatchLibrary,
   createSubpatchNodeFromDefinition,
   findPatchDefinition,
-  graphDocumentV01ToGraphDocumentV02,
-  graphDocumentV02ToDisplayGraph,
-  graphPortToPortSpecV02,
-  isPatchDefinitionV02,
+  displayGraphToContractGraph,
+  contractGraphToDisplayGraph,
+  graphPortToPortSpec,
+  isPatchDefinition,
   patchDisplayName,
   patchDefinitionToDisplayGraph,
   patchTags,
-  portSpecV02ToGraphPort,
+  portSpecToGraphPort,
   SUBPATCH_NODE_KIND
 } from "./patchLibrary";
 
 describe("patchLibrary", () => {
-  it("models and looks up internal v0.2 patch definitions", () => {
+  it("models and looks up internal current 0.1 patch definitions", () => {
     const patch = testPatchDefinition();
-    const library = createPatchLibraryV02([patch]);
+    const library = createPatchLibrary([patch]);
 
     expect(library).toEqual({ patches: [patch] });
-    expect(isPatchDefinitionV02(patch)).toBe(true);
-    expect(isPatchDefinitionV02({})).toBe(false);
+    expect(isPatchDefinition(patch)).toBe(true);
+    expect(isPatchDefinition({})).toBe(false);
     expect(findPatchDefinition(library, "voice")).toBe(patch);
     expect(findPatchDefinition(undefined, "voice")).toBeNull();
     expect(findPatchDefinition(library, "missing")).toBeNull();
@@ -40,7 +40,7 @@ describe("patchLibrary", () => {
     expect(node).toMatchObject({
       id: "voice_1",
       kind: SUBPATCH_NODE_KIND,
-      kindVersion: "0.2.0",
+      kindVersion: "0.1.0",
       params: {
         label: "p voice",
         objectText: "p voice",
@@ -82,7 +82,7 @@ describe("patchLibrary", () => {
   });
 
   it("omits optional subpatch node metadata when the patch does not provide it", () => {
-    const patch: PatchDefinitionV02 = {
+    const patch: PatchDefinitionV01 = {
       ...testPatchDefinition(),
       metadata: { title: "  ", description: "  " }
     };
@@ -96,7 +96,7 @@ describe("patchLibrary", () => {
   });
 
   it("uses default object text and a fallback node id for symbolic patch ids", () => {
-    const patch: PatchDefinitionV02 = {
+    const patch: PatchDefinitionV01 = {
       ...testPatchDefinition(),
       id: "---"
     };
@@ -107,9 +107,9 @@ describe("patchLibrary", () => {
     expect(node.params.objectText).toBe("p ---");
   });
 
-  it("maps standalone v0.2 color ports through the v0.1 display adapter", () => {
+  it("maps standalone current 0.1 color ports through the v0.1 display adapter", () => {
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "tint",
         direction: "input",
         type: "color",
@@ -121,7 +121,7 @@ describe("patchLibrary", () => {
     });
 
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "count",
         direction: "input",
         type: "number.int",
@@ -129,7 +129,7 @@ describe("patchLibrary", () => {
       }).type
     ).toEqual({ flow: "value", dataKind: "number.int", format: "i32" });
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "index",
         direction: "input",
         type: "number.uint",
@@ -137,7 +137,7 @@ describe("patchLibrary", () => {
       }).type
     ).toEqual({ flow: "value", dataKind: "number.uint", format: "u32" });
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "asset",
         direction: "output",
         type: "resource.asset.video",
@@ -145,28 +145,28 @@ describe("patchLibrary", () => {
       }).type
     ).toEqual({ flow: "resource", dataKind: "asset.video" });
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "frame",
         direction: "output",
         type: "video.frame"
       }).type
     ).toEqual({ flow: "stream", dataKind: "video.frame" });
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "velocity",
         direction: "input",
         type: "value.velocity"
       }).type
     ).toEqual({ flow: "value", dataKind: "velocity" });
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "depth",
         direction: "input",
         type: "stream.depth"
       }).type
     ).toEqual({ flow: "stream", dataKind: "depth" });
     expect(
-      portSpecV02ToGraphPort({
+      portSpecToGraphPort({
         id: "latched",
         direction: "input",
         type: "message.any",
@@ -175,8 +175,8 @@ describe("patchLibrary", () => {
     ).toBe("latched");
   });
 
-  it("maps display-only v0.1 port type hints back into v0.2 port specs", () => {
-    const graph = graphDocumentV01ToGraphDocumentV02({
+  it("maps display-only v0.1 port type hints back into current 0.1 port specs", () => {
+    const graph = displayGraphToContractGraph({
       schema: "skenion.graph",
       schemaVersion: "0.1.0",
       id: "port-types",
@@ -221,15 +221,15 @@ describe("patchLibrary", () => {
       { id: "custom", rate: "control", type: "value.custom.scalar" }
     ]);
     expect(
-      graphPortToPortSpecV02({
+      graphPortToPortSpec({
         id: "fallback-default",
         direction: "input",
         type: { flow: "value", dataKind: "number.float", format: "f32" },
         defaultValue: 0.5
-      } as Parameters<typeof graphPortToPortSpecV02>[0] & { defaultValue: number }).defaultValue
+      } as Parameters<typeof graphPortToPortSpec>[0] & { defaultValue: number }).defaultValue
     ).toBe(0.5);
     expect(
-      graphPortToPortSpecV02({
+      graphPortToPortSpec({
         id: "legacy-default",
         direction: "input",
         type: { flow: "value", dataKind: "number.float", format: "f32" },
@@ -238,7 +238,7 @@ describe("patchLibrary", () => {
     ).toBe(0.75);
   });
 
-  it("converts v0.2 graphs to readonly v0.1 display graphs", () => {
+  it("converts current 0.1 graphs to readonly v0.1 display graphs", () => {
     const patch = testPatchDefinition();
     const graph = patchDefinitionToDisplayGraph(patch);
 
@@ -272,9 +272,9 @@ describe("patchLibrary", () => {
     });
   });
 
-  it("converts bare v0.2 graph documents for helper consumers", () => {
-    const graph = graphDocumentV02ToDisplayGraph(testPatchDefinition().graph);
-    const plainEdgeGraph = graphDocumentV02ToDisplayGraph({
+  it("converts bare current 0.1 graph documents for helper consumers", () => {
+    const graph = contractGraphToDisplayGraph(testPatchDefinition().graph);
+    const plainEdgeGraph = contractGraphToDisplayGraph({
       ...testPatchDefinition().graph,
       edges: [
         {
@@ -289,11 +289,11 @@ describe("patchLibrary", () => {
     expect(plainEdgeGraph.edges[0]).not.toHaveProperty("feedback");
   });
 
-  it("converts display graphs back into active v0.2 graphs without losing metadata", () => {
+  it("converts display graphs back into active current 0.1 graphs without losing metadata", () => {
     const displayGraph = patchDefinitionToDisplayGraph(testPatchDefinition());
-    const activeGraph = graphDocumentV01ToGraphDocumentV02(displayGraph);
+    const activeGraph = displayGraphToContractGraph(displayGraph);
 
-    expect(activeGraph.schemaVersion).toBe("0.2.0");
+    expect(activeGraph.schemaVersion).toBe("0.1.0");
     expect(activeGraph.nodes[1]?.ports[0]).toMatchObject({
       id: "bang",
       type: "event.bang",
@@ -314,7 +314,7 @@ describe("patchLibrary", () => {
   });
 });
 
-function testPatchDefinition(): PatchDefinitionV02 {
+function testPatchDefinition(): PatchDefinitionV01 {
   return {
     id: "voice",
     revision: "3",
@@ -325,14 +325,14 @@ function testPatchDefinition(): PatchDefinitionV02 {
     },
     graph: {
       schema: "skenion.graph",
-      schemaVersion: "0.2.0",
+      schemaVersion: "0.1.0",
       id: "voice-help",
       revision: "3",
       nodes: [
         {
           id: "pitch_in",
           kind: "core.inlet",
-          kindVersion: "0.2.0",
+          kindVersion: "0.1.0",
           params: { portId: "pitch", label: "Pitch" },
           ports: [
             {
@@ -352,7 +352,7 @@ function testPatchDefinition(): PatchDefinitionV02 {
         {
           id: "trigger",
           kind: "core.bang",
-          kindVersion: "0.2.0",
+          kindVersion: "0.1.0",
           params: { label: "Trigger" },
           portGroups: [{ id: "control", direction: "output", type: "event.bang", minPorts: 1, label: "Control" }],
           ports: [
@@ -369,7 +369,7 @@ function testPatchDefinition(): PatchDefinitionV02 {
         {
           id: "audio_out",
           kind: "core.outlet",
-          kindVersion: "0.2.0",
+          kindVersion: "0.1.0",
           params: { portId: "audio", label: "Audio" },
           ports: [
             {
@@ -385,7 +385,7 @@ function testPatchDefinition(): PatchDefinitionV02 {
         {
           id: "display",
           kind: "render.output",
-          kindVersion: "0.2.0",
+          kindVersion: "0.1.0",
           params: { label: "Output" },
           ports: [
             {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 as GraphNodeV01 } from "./patchLibrary";
 import { renderSampleGraph } from "../data/sampleGraph";
 import { toNodeCardView, toPortView } from "./nodeCardView";
 
@@ -69,7 +69,7 @@ describe("nodeCardView", () => {
     const node: GraphNodeV01 = {
       id: "empty_1",
       kind: "core.empty",
-      kindVersion: "0.2.0",
+      kindVersion: "0.1.0",
       params: {},
       ports: []
     };
@@ -96,7 +96,7 @@ describe("nodeCardView", () => {
     const node: GraphNodeV01 = {
       id: "patch_1",
       kind: "core.subpatch",
-      kindVersion: "0.2.0",
+      kindVersion: "0.1.0",
       params: {},
       ports: [
         {

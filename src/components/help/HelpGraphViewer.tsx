@@ -7,11 +7,13 @@ import {
   type Node,
   type NodeTypes
 } from "@xyflow/react";
-import type { GraphDocumentV01, GraphFragmentV02, ViewStateV01 } from "@skenion/contracts";
+import type { GraphDocumentV01, GraphFragmentV01, ViewStateV01 } from "@skenion/contracts";
 import {
-  isPatchDefinitionV02,
+  contractGraphToDisplayGraph,
+  type DisplayGraphDocumentV01,
+  isPatchDefinition,
   patchDefinitionToDisplayGraph,
-  type PatchDefinitionV02
+  type PatchDefinitionV01
 } from "../../graph/patchLibrary";
 import { createViewStateFromPositions } from "../../graph/projectDocument";
 import { toReactFlowViewModel } from "../../graph/reactFlowAdapter";
@@ -26,7 +28,7 @@ const nodeTypes: NodeTypes = {
   skenion: ReactFlowNodeAdapter
 };
 
-export type HelpGraphViewerDocument = GraphDocumentV01 | PatchDefinitionV02;
+export type HelpGraphViewerDocument = GraphDocumentV01 | PatchDefinitionV01;
 
 export function HelpGraphViewer({
   graph,
@@ -36,7 +38,7 @@ export function HelpGraphViewer({
 }: {
   graph: HelpGraphViewerDocument;
   onClipboardWriteError?: (message: string) => void;
-  onCopyFragment?: (fragment: GraphFragmentV02, result: GraphFragmentBuildResult) => void;
+  onCopyFragment?: (fragment: GraphFragmentV01, result: GraphFragmentBuildResult) => void;
   onCopyFragmentError?: (message: string) => void;
 }) {
   const displayGraph = useMemo(() => helpGraphDisplayDocument(graph), [graph]);
@@ -125,14 +127,14 @@ export function HelpGraphViewer({
   );
 }
 
-export function helpGraphDisplayDocument(graph: HelpGraphViewerDocument): GraphDocumentV01 {
-  return isPatchDefinitionV02(graph) ? patchDefinitionToDisplayGraph(graph) : graph;
+export function helpGraphDisplayDocument(graph: HelpGraphViewerDocument): DisplayGraphDocumentV01 {
+  return isPatchDefinition(graph) ? patchDefinitionToDisplayGraph(graph) : contractGraphToDisplayGraph(graph);
 }
 
 export interface VolatileHelpWorkingCopy {
-  graph: GraphDocumentV01;
+  graph: DisplayGraphDocumentV01;
   readonlySource: false;
-  sourceGraph: GraphDocumentV01;
+  sourceGraph: DisplayGraphDocumentV01;
   sourcePatchId?: string;
   viewState: ViewStateV01;
   volatile: true;
@@ -146,7 +148,7 @@ export function createVolatileHelpWorkingCopy(
   const sourceDisplayGraph = helpGraphDisplayDocument(sourceGraph);
   const graph = cloneGraph(sourceDisplayGraph);
   const workingCopyId = options.workingCopyId ?? `${graph.id}-help-working-copy-${Date.now()}`;
-  const editableGraph: GraphDocumentV01 = {
+  const editableGraph: DisplayGraphDocumentV01 = {
     ...graph,
     id: workingCopyId,
     revision: "1"
@@ -162,6 +164,6 @@ export function createVolatileHelpWorkingCopy(
   };
 }
 
-function cloneGraph(graph: GraphDocumentV01): GraphDocumentV01 {
-  return JSON.parse(JSON.stringify(graph)) as GraphDocumentV01;
+function cloneGraph(graph: DisplayGraphDocumentV01): DisplayGraphDocumentV01 {
+  return JSON.parse(JSON.stringify(graph)) as DisplayGraphDocumentV01;
 }

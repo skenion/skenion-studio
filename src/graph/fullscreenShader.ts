@@ -3,10 +3,10 @@ import {
   shaderInterfaceToPortsV01
 } from "@skenion/contracts";
 import type {
-  GraphNodeV01,
   PortV01,
   ShaderInterfaceAnalysisV01
 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { GraphPatch } from "./skenionGraph";
 
 export const FULLSCREEN_SHADER_NODE_KIND = "render.fullscreen-shader";
@@ -27,7 +27,7 @@ fn fs_main() -> @location(0) vec4<f32> {
   return vec4<f32>(mix(base, skenion.tint.rgb, 0.45), skenion.tint.a);
 }`;
 
-export function isFullscreenShaderNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isFullscreenShaderNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === FULLSCREEN_SHADER_NODE_KIND;
 }
 
@@ -38,11 +38,11 @@ export function defaultFullscreenShaderParams(): Record<string, unknown> {
   };
 }
 
-export function readShaderLanguageParam(node: GraphNodeV01): string {
+export function readShaderLanguageParam(node: DisplayGraphNodeV01): string {
   return node.params.language === FULLSCREEN_SHADER_LANGUAGE ? FULLSCREEN_SHADER_LANGUAGE : "unsupported";
 }
 
-export function readShaderSourceParam(node: GraphNodeV01): string {
+export function readShaderSourceParam(node: DisplayGraphNodeV01): string {
   return typeof node.params.source === "string" && node.params.source.trim().length > 0
     ? node.params.source
     : DEFAULT_FULLSCREEN_SHADER_SOURCE;

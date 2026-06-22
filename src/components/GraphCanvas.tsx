@@ -16,9 +16,10 @@ import {
   type OnConnectStart,
   type Viewport
 } from "@xyflow/react";
-import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
+import type { ViewStateV01 } from "@skenion/contracts";
 import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
 import type { RuntimeControlMessage, RuntimeControlValue } from "../runtime/types";
+import type { DisplayGraphDocumentV01, DisplayGraphNodeV01 } from "../graph/patchLibrary";
 import {
   applyPatch,
   checkConnection,
@@ -43,7 +44,7 @@ const nodeTypes: NodeTypes = {
 type StudioFlowNode = Node<SkenionNodeData>;
 
 interface GraphCanvasProps {
-  graph: GraphDocumentV01;
+  graph: DisplayGraphDocumentV01;
   graphLocked?: boolean;
   viewState: ViewStateV01;
   selectedEdgeId: string | null;
@@ -56,7 +57,7 @@ interface GraphCanvasProps {
     position: { x: number; y: number },
     paramsOverride?: Record<string, unknown>
   ) => void;
-  onImportAsset?: (node: GraphDocumentV01["nodes"][number], file: File) => Promise<void> | void;
+  onImportAsset?: (node: DisplayGraphNodeV01, file: File) => Promise<void> | void;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
@@ -67,7 +68,7 @@ interface GraphCanvasProps {
   onShowNodeHelp?: (definitionId: string) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
   onSelectedEdgesChange?: (edgeIds: string[]) => void;
-  onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
+  onGraphChange: (graph: DisplayGraphDocumentV01, patches?: GraphPatch[]) => void;
   onViewStateChange: (viewState: ViewStateV01) => void;
   onSelectedNodeChange: (nodeId: string | null) => void;
   onSelectedNodesChange?: (nodeIds: string[]) => void;
@@ -859,7 +860,7 @@ function connectionFromFinalState(connectionState: FinalConnectionState): Connec
 }
 
 function connectionStartMessage(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   nodeId: string | null,
   portId: string | null
 ): string | null {

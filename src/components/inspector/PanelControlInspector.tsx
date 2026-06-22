@@ -1,5 +1,5 @@
 import { Group, Stack, Switch, Text, TextInput } from "@mantine/core";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "../../graph/patchLibrary";
 import {
   isBangControlNode,
   isSliderFloatNode,
@@ -12,7 +12,7 @@ import {
 import { DeferredNumberInput } from "./DeferredNumberInput";
 
 export interface PanelControlInspectorProps {
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }
 
@@ -55,7 +55,7 @@ function BangGraphParams({
   node,
   onSetNodeParam
 }: {
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }) {
   const params = readBangParams(node);
@@ -73,7 +73,7 @@ function SliderGraphParams({
   node,
   onSetNodeParam
 }: {
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }) {
   const params = readSliderFloatParams(node);

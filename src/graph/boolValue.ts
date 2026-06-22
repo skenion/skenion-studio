@@ -1,10 +1,10 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { GraphPatch } from "./skenionGraph";
 
 export const BOOL_VALUE_NODE_KIND = "core.bool";
 export const DEFAULT_BOOL_VALUE = false;
 
-export function isBoolValueNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isBoolValueNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === BOOL_VALUE_NODE_KIND;
 }
 
@@ -14,7 +14,7 @@ export function defaultBoolValueParams(): Record<string, unknown> {
   };
 }
 
-export function readBoolValueParam(node: GraphNodeV01): boolean {
+export function readBoolValueParam(node: DisplayGraphNodeV01): boolean {
   return typeof node.params.value === "boolean" ? node.params.value : DEFAULT_BOOL_VALUE;
 }
 

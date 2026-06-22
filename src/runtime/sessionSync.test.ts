@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GraphDocumentV02, ProjectDocumentV02, ViewStateV01 } from "@skenion/contracts";
+import type { GraphDocumentV01, ProjectDocumentV01, ViewStateV01 } from "@skenion/contracts";
 import {
   nextLoadedGraphFingerprint,
   runtimeGraphFingerprint,
@@ -8,9 +8,9 @@ import {
 } from "./sessionSync";
 import type { RuntimeSessionResponse } from "./types";
 
-const graph: GraphDocumentV02 = {
+const graph: GraphDocumentV01 = {
   schema: "skenion.graph",
-  schemaVersion: "0.2.0",
+  schemaVersion: "0.1.0",
   id: "graph",
   revision: "1",
   nodes: [],
@@ -24,9 +24,9 @@ const viewState: ViewStateV01 = {
     viewport: { x: 0, y: 0, zoom: 1 }
   }
 };
-const project: ProjectDocumentV02 = {
+const project: ProjectDocumentV01 = {
   schema: "skenion.project",
-  schemaVersion: "0.2.0",
+  schemaVersion: "0.1.0",
   id: "graph",
   revision: "1",
   graph,

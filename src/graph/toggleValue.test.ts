@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 as GraphNodeV01 } from "./patchLibrary";
 import {
   TOGGLE_NODE_KIND,
   defaultToggleParams,

@@ -1,5 +1,5 @@
 import { Stack, Text, TextInput } from "@mantine/core";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "../../graph/patchLibrary";
 import {
   isRoutingCapableObjectNode,
   readReceiveNameParam,
@@ -7,7 +7,7 @@ import {
 } from "../../graph/controlRouting";
 
 export interface RoutingNodeControlsProps {
-  node: GraphNodeV01;
+  node: DisplayGraphNodeV01;
   onSetNodeParam: (nodeId: string, key: string, value: unknown) => void;
 }
 

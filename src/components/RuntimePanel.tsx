@@ -1,6 +1,6 @@
 import { Alert, Divider, Stack, Text } from "@mantine/core";
 import { Activity } from "lucide-react";
-import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type { ValidationResult } from "@skenion/contracts";
 import type {
   ManagedSidecarStatus,
   RuntimeProfileId,
@@ -8,6 +8,7 @@ import type {
 } from "../desktop/runtimeProfiles";
 import type { StudioWindowMode } from "../desktop/windowRegistry";
 import type { GraphSemanticDiagnostic } from "../graph/portSemantics";
+import type { DisplayGraphDocumentV01 } from "../graph/patchLibrary";
 import type {
   RuntimeActionResult,
   RuntimeConnectionStatus,
@@ -65,7 +66,7 @@ interface RuntimeLogsPanelProps {
   session: RuntimeSessionResponse | null;
   status: RuntimeConnectionStatus;
   telemetry: RuntimeTelemetrySnapshot | null;
-  validation: ValidationResult<GraphDocumentV01>;
+  validation: ValidationResult<DisplayGraphDocumentV01>;
 }
 
 export function RuntimeSettingsPanel({

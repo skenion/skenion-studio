@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import { BOOL_VALUE_NODE_KIND } from "./boolValue";
 import { COLOR_NODE_KIND } from "./colorRgba";
 import { COMMENT_NODE_KIND } from "./commentNode";
@@ -32,7 +32,7 @@ export interface ObjectViewSpec {
   interaction: ObjectInteractionMode;
 }
 
-export function objectViewSpecForNode(node: GraphNodeV01): ObjectViewSpec {
+export function objectViewSpecForNode(node: DisplayGraphNodeV01): ObjectViewSpec {
   if (node.kind === COMMENT_NODE_KIND) {
     return { chromePolicy: "none", interaction: "text-edit" };
   }

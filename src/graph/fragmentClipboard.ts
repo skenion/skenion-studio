@@ -1,15 +1,19 @@
 import {
-  analyzeGraphFragmentV02,
-  validateGraphFragmentV02,
+  analyzeGraphFragmentV01,
+  validateGraphFragmentV01,
   type CanvasNodeViewV01,
-  type EdgeSpecV02,
-  type GraphDocumentV01,
-  type GraphFragmentDiagnosticV02,
-  type GraphFragmentOmittedEdgeV02,
-  type GraphFragmentV02,
+  type EdgeSpecV01,
+  type GraphFragmentDiagnosticV01,
+  type GraphFragmentOmittedEdgeV01,
+  type GraphFragmentV01,
   type ViewStateV01
 } from "@skenion/contracts";
-import { graphEdgeToEdgeSpecV02, graphNodeToGraphNodeV02 } from "./patchLibrary";
+import {
+  CURRENT_CONTRACT_SCHEMA_VERSION,
+  displayEdgeToEdgeSpec,
+  displayNodeToContractNode,
+  type DisplayGraphDocumentV01
+} from "./patchLibrary";
 import { edgeId } from "./portSemantics";
 
 export const SKENION_GRAPH_FRAGMENT_CLIPBOARD_TYPE = "application/vnd.skenion.graph-fragment+json";
@@ -20,9 +24,9 @@ export interface GraphSelection {
 }
 
 export interface GraphFragmentBuildResult {
-  diagnostics: GraphFragmentDiagnosticV02[];
-  fragment: GraphFragmentV02 | null;
-  omittedEdges: GraphFragmentOmittedEdgeV02[];
+  diagnostics: GraphFragmentDiagnosticV01[];
+  fragment: GraphFragmentV01 | null;
+  omittedEdges: GraphFragmentOmittedEdgeV01[];
 }
 
 export interface GraphClipboardShortcutEvent {
@@ -89,21 +93,21 @@ export function isEditableShortcutTarget(target: EventTarget | null): boolean {
 }
 
 export function createGraphFragmentFromSelection(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   viewState: ViewStateV01,
   selection: GraphSelection,
   options: { id?: string; source?: string } = {}
 ): GraphFragmentBuildResult {
   const nodeIds = new Set(selection.nodeIds);
   const selectedEdgeIds = new Set(selection.edgeIds);
-  const nodes = graph.nodes.filter((node) => nodeIds.has(node.id)).map(graphNodeToGraphNodeV02);
-  const edges: EdgeSpecV02[] = [];
-  const omittedEdges: GraphFragmentOmittedEdgeV02[] = [];
+  const nodes = graph.nodes.filter((node) => nodeIds.has(node.id)).map(displayNodeToContractNode);
+  const edges: EdgeSpecV01[] = [];
+  const omittedEdges: GraphFragmentOmittedEdgeV01[] = [];
 
   for (const edge of graph.edges) {
     const id = edgeId(edge);
     if (nodeIds.has(edge.from.node) && nodeIds.has(edge.to.node)) {
-      edges.push(graphEdgeToEdgeSpecV02(edge));
+      edges.push(displayEdgeToEdgeSpec(edge));
       continue;
     }
     if (selectedEdgeIds.has(id)) {
@@ -130,9 +134,9 @@ export function createGraphFragmentFromSelection(
     };
   }
 
-  const fragment: GraphFragmentV02 = {
+  const fragment: GraphFragmentV01 = {
     schema: "skenion.graph.fragment",
-    schemaVersion: "0.2.0",
+    schemaVersion: CURRENT_CONTRACT_SCHEMA_VERSION,
     id: options.id,
     nodes,
     edges,
@@ -145,8 +149,8 @@ export function createGraphFragmentFromSelection(
       copiedAt: new Date().toISOString()
     }
   };
-  const validation = validateGraphFragmentV02(fragment, { outsideEndpointPolicy: "omit" });
-  const analysis = analyzeGraphFragmentV02(fragment, { outsideEndpointPolicy: "omit" });
+  const validation = validateGraphFragmentV01(fragment, { outsideEndpointPolicy: "omit" });
+  const analysis = analyzeGraphFragmentV01(fragment, { outsideEndpointPolicy: "omit" });
 
   return {
     diagnostics: validation.ok ? analysis.diagnostics : analysis.diagnostics,
@@ -155,14 +159,14 @@ export function createGraphFragmentFromSelection(
   };
 }
 
-export function serializeGraphFragmentClipboard(fragment: GraphFragmentV02): string {
+export function serializeGraphFragmentClipboard(fragment: GraphFragmentV01): string {
   return JSON.stringify({
     type: SKENION_GRAPH_FRAGMENT_CLIPBOARD_TYPE,
     fragment
   });
 }
 
-export function parseGraphFragmentClipboard(text: string): GraphFragmentV02 | null {
+export function parseGraphFragmentClipboard(text: string): GraphFragmentV01 | null {
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -174,7 +178,7 @@ export function parseGraphFragmentClipboard(text: string): GraphFragmentV02 | nu
     isRecord(value) && value.type === SKENION_GRAPH_FRAGMENT_CLIPBOARD_TYPE
       ? value.fragment
       : value;
-  const result = validateGraphFragmentV02(candidate, { outsideEndpointPolicy: "omit" });
+  const result = validateGraphFragmentV01(candidate, { outsideEndpointPolicy: "omit" });
   return result.ok ? result.value : null;
 }
 

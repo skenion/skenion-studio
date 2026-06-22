@@ -38,12 +38,12 @@ import type {
 
 const project = {
   schema: "skenion.project",
-  schemaVersion: "0.2.0",
+  schemaVersion: "0.1.0",
   id: "test",
   revision: "1",
   graph: {
     schema: "skenion.graph",
-    schemaVersion: "0.2.0",
+    schemaVersion: "0.1.0",
     id: "test",
     revision: "1",
     nodes: [],
@@ -1626,7 +1626,6 @@ function sessionInfoResponse(overrides: Partial<RuntimeSessionInfoResponse> = {}
     },
     capabilities: {
       sessionAddressing: true,
-      defaultSessionAlias: true,
       eventReplay: true,
       multiWindow: true,
       profiles: ["local-managed", "local-shared", "remote"],
@@ -1654,12 +1653,12 @@ function sessionResponse(overrides: Partial<RuntimeSessionResponse> = {}): Runti
       controlRevision: 0,
       project: {
         schema: "skenion.project",
-        schemaVersion: "0.2.0",
+        schemaVersion: "0.1.0",
         id: "test",
         revision: "1",
         graph: {
           schema: "skenion.graph",
-          schemaVersion: "0.2.0",
+          schemaVersion: "0.1.0",
           id: "test",
           revision: "1",
           nodes: [
@@ -1752,7 +1751,7 @@ function pasteOperation(): RuntimeOperationEnvelope {
       },
       fragment: {
         schema: "skenion.graph.fragment",
-        schemaVersion: "0.2.0",
+        schemaVersion: "0.1.0",
         nodes: [
           {
             id: "value_1",

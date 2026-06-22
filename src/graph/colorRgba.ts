@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { GraphPatch } from "./skenionGraph";
 
 export const COLOR_NODE_KIND = "core.color";
@@ -11,7 +11,7 @@ export type ColorSpace = (typeof COLOR_SPACES)[number];
 export const DEFAULT_COLOR_SPACE: ColorSpace = "linear";
 export type RgbaColor = [number, number, number, number];
 
-export function isColorRgbaNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isColorRgbaNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === COLOR_NODE_KIND;
 }
 
@@ -23,7 +23,7 @@ export function defaultColorRgbaParams(): Record<string, unknown> {
   };
 }
 
-export function readColorRgbaParam(node: GraphNodeV01): RgbaColor {
+export function readColorRgbaParam(node: DisplayGraphNodeV01): RgbaColor {
   const color = node.params.value;
   if (!Array.isArray(color) || color.length !== 4) {
     return [...DEFAULT_COLOR_VALUE];
@@ -41,13 +41,13 @@ export function readColorRgbaParam(node: GraphNodeV01): RgbaColor {
   return values as RgbaColor;
 }
 
-export function readColorRepresentationParam(node: GraphNodeV01): ColorRepresentation {
+export function readColorRepresentationParam(node: DisplayGraphNodeV01): ColorRepresentation {
   return COLOR_REPRESENTATIONS.includes(node.params.representation as ColorRepresentation)
     ? node.params.representation as ColorRepresentation
     : DEFAULT_COLOR_REPRESENTATION;
 }
 
-export function readColorSpaceParam(node: GraphNodeV01): ColorSpace {
+export function readColorSpaceParam(node: DisplayGraphNodeV01): ColorSpace {
   return COLOR_SPACES.includes(node.params.colorSpace as ColorSpace)
     ? node.params.colorSpace as ColorSpace
     : DEFAULT_COLOR_SPACE;

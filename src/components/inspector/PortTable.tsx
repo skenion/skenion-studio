@@ -1,9 +1,9 @@
 import { Badge, Group, Table, Text } from "@mantine/core";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "../../graph/patchLibrary";
 import { portSemanticsForPort, semanticTypeColor } from "../../graph/portSemantics";
 import { typeLabel } from "../../graph/skenionGraph";
 
-export function PortTable({ node }: { node: GraphNodeV01 }) {
+export function PortTable({ node }: { node: DisplayGraphNodeV01 }) {
   return (
     <Table className="ports-table" highlightOnHover withColumnBorders={false} withRowBorders={false}>
       <Table.Thead>

@@ -4,7 +4,7 @@ import type {
   RuntimeControlReadResponse,
   PasteGraphFragmentResponse,
   RuntimeProjectRequest,
-  RuntimePatchResponse,
+  RuntimeMutationResponse,
   RuntimeSessionResponse
 } from "@skenion/contracts";
 
@@ -59,7 +59,6 @@ export type {
   RuntimeMutationResponse,
   RuntimeOperationEnvelope,
   PasteGraphFragmentResponse,
-  RuntimePatchResponse,
   RuntimePlan,
   RuntimePlanEdge,
   RuntimePlanEdgeMetadata,
@@ -89,6 +88,8 @@ export type {
   RuntimeViewPatch,
   RuntimeViewPatchOperation
 } from "@skenion/contracts";
+
+export type RuntimePatchResponse = RuntimeMutationResponse;
 
 export type RuntimeConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 

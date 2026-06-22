@@ -2,7 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 as GraphNodeV01 } from "../../graph/patchLibrary";
 import type { NodeCardView } from "../node/nodeTypes";
 import { genericObjectTextForNode } from "../../graph/objectTextDisplay";
 import { UNRESOLVED_OBJECT_NODE_KIND } from "../../graph/objectTextNode";

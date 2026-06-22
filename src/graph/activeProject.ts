@@ -1,28 +1,28 @@
 import type {
-  EdgeV01,
-  EdgeSpecV02,
-  GraphDocumentV02,
-  GraphNodeV02,
-  PortSpecV02,
-  ProjectDocumentV02,
+  EdgeSpecV01,
+  GraphDocumentV01,
+  GraphNodeV01,
+  PortSpecV01,
+  ProjectDocumentV01,
   ViewStateV01
 } from "@skenion/contracts";
 import type { GraphPatch } from "./skenionGraph";
 import {
-  graphDocumentV02ToDisplayGraph,
-  graphEdgeToEdgeSpecV02,
-  graphNodeToGraphNodeV02,
-  graphPortToPortSpecV02
+  contractGraphToDisplayGraph,
+  displayEdgeToEdgeSpec,
+  displayNodeToContractNode,
+  graphPortToPortSpec,
+  type DisplayEdgeV01
 } from "./patchLibrary";
 import { reconcileViewStateWithGraph } from "./projectDocument";
 
 export function applyActiveProjectPatches(
-  project: ProjectDocumentV02,
+  project: ProjectDocumentV01,
   patches: GraphPatch[],
   viewState: ViewStateV01 = project.viewState
-): ProjectDocumentV02 {
-  const graph = patches.reduce((currentGraph, patch) => applyGraphPatchV02(currentGraph, patch), project.graph);
-  const displayGraph = graphDocumentV02ToDisplayGraph(graph);
+): ProjectDocumentV01 {
+  const graph = patches.reduce((currentGraph, patch) => applyContractGraphPatch(currentGraph, patch), project.graph);
+  const displayGraph = contractGraphToDisplayGraph(graph);
 
   return {
     ...project,
@@ -33,12 +33,12 @@ export function applyActiveProjectPatches(
   };
 }
 
-function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphPatch): GraphDocumentV02 {
+function applyContractGraphPatch(graph: GraphDocumentV01, patch: GraphPatch): GraphDocumentV01 {
   if (patch.type === "addNode") {
     return {
       ...graph,
       revision: bumpRevision(graph.revision),
-      nodes: [...graph.nodes, graphNodeToGraphNodeV02(patch.node)]
+      nodes: [...graph.nodes, displayNodeToContractNode(patch.node)]
     };
   }
 
@@ -46,7 +46,7 @@ function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphPatch): GraphDo
     return {
       ...graph,
       revision: bumpRevision(graph.revision),
-      edges: [...graph.edges, graphEdgeToEdgeSpecV02(patch.edge)]
+      edges: [...graph.edges, displayEdgeToEdgeSpec(patch.edge)]
     };
   }
 
@@ -78,7 +78,7 @@ function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphPatch): GraphDo
 
   if (patch.type === "replaceNode") {
     const nodes = graph.nodes.map((node) =>
-      node.id === patch.nodeId ? graphNodeToGraphNodeV02(patch.node) : node
+      node.id === patch.nodeId ? displayNodeToContractNode(patch.node) : node
     );
     const nextGraph = { ...graph, nodes };
     return {
@@ -93,7 +93,7 @@ function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphPatch): GraphDo
       node.id === patch.nodeId
         ? {
             ...node,
-            ports: patch.ports.map(graphPortToPortSpecV02)
+            ports: patch.ports.map(graphPortToPortSpec)
           }
         : node
     );
@@ -116,9 +116,9 @@ function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphPatch): GraphDo
 }
 
 function edgeEndpointsRemainValid(
-  graph: GraphDocumentV02,
+  graph: GraphDocumentV01,
   replacedNodeId: string,
-  edge: EdgeSpecV02
+  edge: EdgeSpecV01
 ): boolean {
   if (edge.source.nodeId !== replacedNodeId && edge.target.nodeId !== replacedNodeId) {
     return true;
@@ -129,11 +129,11 @@ function edgeEndpointsRemainValid(
   return source?.direction === "output" && target?.direction === "input";
 }
 
-function findPort(graph: GraphDocumentV02, nodeId: string, portId: string): PortSpecV02 | undefined {
-  return graph.nodes.find((node: GraphNodeV02) => node.id === nodeId)?.ports.find((port) => port.id === portId);
+function findPort(graph: GraphDocumentV01, nodeId: string, portId: string): PortSpecV01 | undefined {
+  return graph.nodes.find((node: GraphNodeV01) => node.id === nodeId)?.ports.find((port) => port.id === portId);
 }
 
-function edgeEqualsDisplay(edge: EdgeSpecV02, displayEdge: EdgeV01): boolean {
+function edgeEqualsDisplay(edge: EdgeSpecV01, displayEdge: DisplayEdgeV01): boolean {
   return (
     edge.source.nodeId === displayEdge.from.node &&
     edge.source.portId === displayEdge.from.port &&

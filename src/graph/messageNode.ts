@@ -1,9 +1,9 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import { readStringValueParam } from "./stringValue";
 
 export const MESSAGE_NODE_KIND = "core.message";
 
-export function isMessageNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isMessageNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === MESSAGE_NODE_KIND;
 }
 
@@ -13,6 +13,6 @@ export function defaultMessageParams(): Record<string, unknown> {
   };
 }
 
-export function readMessageValueParam(node: GraphNodeV01): string {
+export function readMessageValueParam(node: DisplayGraphNodeV01): string {
   return readStringValueParam(node);
 }

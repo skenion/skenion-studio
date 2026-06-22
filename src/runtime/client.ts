@@ -13,7 +13,6 @@ import {
   isRuntimeInfo,
   isRuntimeIoDeviceListResponse,
   isRuntimeLogSnapshotResponse,
-  isRuntimePatchResponse,
   isPasteGraphFragmentResponse,
   isRuntimePreviewStatus,
   isRuntimeSessionInfoResponse,
@@ -398,6 +397,29 @@ async function postRuntimePatchResponse(
     },
     isRuntimePatchResponse
   );
+}
+
+function isRuntimePatchResponse(value: unknown): value is RuntimePatchResponse {
+  if (
+    !isRecord(value) ||
+    typeof value.ok !== "boolean" ||
+    typeof value.applied !== "boolean" ||
+    typeof value.conflict !== "boolean" ||
+    !isRuntimeHistory(value.history)
+  ) {
+    return false;
+  }
+
+  return isRuntimeSessionResponse({
+    ok: value.ok,
+    snapshot: value.snapshot,
+    diagnostics: value.diagnostics,
+    report: null
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function postRuntimeOperationResponse(

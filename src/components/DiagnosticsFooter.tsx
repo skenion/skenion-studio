@@ -1,6 +1,7 @@
 import { Group, Text, Tooltip } from "@mantine/core";
 import { CircleAlert, Lock, ScrollText, TriangleAlert, Unlock } from "lucide-react";
-import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type { ValidationResult } from "@skenion/contracts";
+import type { DisplayGraphDocumentV01 } from "../graph/patchLibrary";
 import type { GraphSemanticDiagnostic } from "../graph/portSemantics";
 import { IconButton } from "./core/IconButton/IconButton";
 import styles from "./DiagnosticsFooter.module.css";
@@ -11,7 +12,7 @@ export interface DiagnosticCounts {
 }
 
 export function diagnosticCounts(
-  validation: ValidationResult<GraphDocumentV01>,
+  validation: ValidationResult<DisplayGraphDocumentV01>,
   semanticDiagnostics: GraphSemanticDiagnostic[]
 ): DiagnosticCounts {
   const semanticErrors = semanticDiagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
@@ -33,7 +34,7 @@ export function DiagnosticsFooter({
   graphLockDisabled: boolean;
   graphLocked: boolean;
   semanticDiagnostics: GraphSemanticDiagnostic[];
-  validation: ValidationResult<GraphDocumentV01>;
+  validation: ValidationResult<DisplayGraphDocumentV01>;
   onToggleGraphLock: () => void;
   onOpenLogs: () => void;
 }) {

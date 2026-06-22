@@ -1,7 +1,7 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import { nativeAliasForObjectKind } from "./objectTextNode";
 
-export function genericObjectTextForNode(node: GraphNodeV01): string {
+export function genericObjectTextForNode(node: DisplayGraphNodeV01): string {
   return stringParam(node.params.objectText) ?? nativeAliasForObjectKind(node.kind) ?? stringParam(node.params.label) ?? node.kind;
 }
 

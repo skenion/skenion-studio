@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 
 export const VIDEO_ASSET_NODE_KIND = "core.video-asset";
 export const DEFAULT_VIDEO_ASSET_WIDTH = 320;
@@ -20,7 +20,7 @@ export interface VideoAssetParams {
   thumbnailDataUrl: string;
 }
 
-export function isVideoAssetNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isVideoAssetNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === VIDEO_ASSET_NODE_KIND;
 }
 
@@ -38,7 +38,7 @@ export function defaultVideoAssetParams(): Record<string, unknown> {
   };
 }
 
-export function readVideoAssetParams(node: GraphNodeV01): VideoAssetParams {
+export function readVideoAssetParams(node: DisplayGraphNodeV01): VideoAssetParams {
   const width = finiteNumberParam(node.params.width, DEFAULT_VIDEO_ASSET_WIDTH);
   const height = finiteNumberParam(node.params.height, DEFAULT_VIDEO_ASSET_HEIGHT);
   const aspectRatio = finiteNumberParam(

@@ -2,7 +2,6 @@ import { parseObjectTextV01 } from "@skenion/contracts";
 import type {
   DataFlow,
   DataTypeV01,
-  GraphNodeV01,
   NodeDefinitionManifestV01,
   ObjectTextAtomV01,
   ObjectTextDiagnosticV01,
@@ -13,12 +12,14 @@ import type {
 } from "@skenion/contracts";
 import {
   createSubpatchNodeFromDefinition,
+  CURRENT_CONTRACT_SCHEMA_VERSION,
   findPatchDefinition,
   patchDefinitionBoundaryPorts,
-  portSpecV02ToGraphPort,
+  portSpecToGraphPort,
   SUBPATCH_NODE_KIND,
-  type PatchDefinitionV02,
-  type PatchLibraryV02
+  type PatchDefinitionV01,
+  type PatchLibrary,
+  type DisplayGraphNodeV01
 } from "./patchLibrary";
 
 export const UNRESOLVED_OBJECT_NODE_KIND = "core.unresolved-object";
@@ -33,19 +34,19 @@ const NATIVE_OBJECT_ALIASES = new Map<string, string>([
 
 export interface ObjectTextNodeBuildResult {
   ok: boolean;
-  node: GraphNodeV01 | null;
+  node: DisplayGraphNodeV01 | null;
   parseResult: ObjectTextParseResultV01;
   diagnostics: ObjectTextDiagnosticV01[];
 }
 
 export interface ObjectTextNodeBuildOptions {
   nodeId?: string;
-  patchLibrary?: PatchLibraryV02;
+  patchLibrary?: PatchLibrary;
 }
 
 export function createGraphNodeFromObjectText(
   input: string,
-  existingNodes: GraphNodeV01[],
+  existingNodes: DisplayGraphNodeV01[],
   registry: NodeDefinitionManifestV01[] = [],
   options: ObjectTextNodeBuildOptions = {}
 ): ObjectTextNodeBuildResult {
@@ -151,7 +152,7 @@ export function createGraphNodeFromObjectText(
     );
   }
 
-  const node: GraphNodeV01 = {
+  const node: DisplayGraphNodeV01 = {
     id: options.nodeId ?? uniqueObjectNodeId(parseResult.resolvedKind, existingNodes),
     kind: parseResult.resolvedKind,
     kindVersion: parseResult.resolvedKindVersion,
@@ -171,7 +172,7 @@ export function createGraphNodeFromObjectText(
   };
 }
 
-export function isUnresolvedObjectNode(node: GraphNodeV01): boolean {
+export function isUnresolvedObjectNode(node: DisplayGraphNodeV01): boolean {
   return node.kind === UNRESOLVED_OBJECT_NODE_KIND;
 }
 
@@ -242,7 +243,7 @@ export function objectTextTypeToGraphType(type: string): DataTypeV01 {
   return graphType;
 }
 
-function uniqueObjectNodeId(kind: string, existingNodes: GraphNodeV01[]): string {
+function uniqueObjectNodeId(kind: string, existingNodes: DisplayGraphNodeV01[]): string {
   const baseId = kind.slice(kind.lastIndexOf(".") + 1);
   let index = existingNodes.length + 1;
   let id = `${baseId}_${index}`;
@@ -314,7 +315,7 @@ function subpatchObjectText(displayText: string): SubpatchObjectText | null {
 
 function diagnosticsForSubpatchObjectText(
   subpatchObject: SubpatchObjectText,
-  patchLibrary: PatchLibraryV02 | undefined
+  patchLibrary: PatchLibrary | undefined
 ): ObjectTextDiagnosticV01[] {
   if (subpatchObject.diagnostics.length > 0) {
     return subpatchObject.diagnostics;
@@ -343,21 +344,17 @@ function diagnosticsForSubpatchObjectText(
 
 function graphNodeFromDefinition(
   definition: NodeDefinitionManifestV01,
-  existingNodes: GraphNodeV01[],
+  existingNodes: DisplayGraphNodeV01[],
   paramsOverride: Record<string, unknown>,
   nodeId?: string
-): GraphNodeV01 {
+): DisplayGraphNodeV01 {
   return {
     id: nodeId ?? uniqueObjectNodeId(definition.id, existingNodes),
     kind: definition.id,
     kindVersion: definition.version,
     params: paramsOverride,
-    ports: definition.ports.map(clonePort)
+    ports: definition.ports.map(portSpecToGraphPort)
   };
-}
-
-function clonePort(port: PortV01): PortV01 {
-  return JSON.parse(JSON.stringify(port)) as PortV01;
 }
 
 function unresolvedObjectResult(
@@ -366,7 +363,7 @@ function unresolvedObjectResult(
   requestedKind: string,
   parseResult: ObjectTextParseResultV01,
   diagnostics: ObjectTextDiagnosticV01[],
-  existingNodes: GraphNodeV01[],
+  existingNodes: DisplayGraphNodeV01[],
   nodeId?: string
 ): ObjectTextNodeBuildResult {
   const diagnosticMessage = diagnostics[0].message;
@@ -451,16 +448,17 @@ function parseResultForNativeAlias(
     resolvedKindVersion: definition.version,
     params: {},
     instancePorts: definition.ports.map((port) => {
+      const graphPort = portSpecToGraphPort(port);
       const objectPort: ObjectTextPortV01 = {
         id: port.id,
         direction: port.direction,
-        type: port.type.dataKind
+        type: graphPort.type.dataKind
       };
-      if ("activation" in port) {
-        objectPort.activation = port.activation;
+      if (graphPort.activation) {
+        objectPort.activation = graphPort.activation;
       }
-      if ("default" in port) {
-        objectPort.defaultValue = port.default;
+      if (Object.hasOwn(graphPort, "default")) {
+        objectPort.defaultValue = graphPort.default;
       }
       return objectPort;
     }),
@@ -473,7 +471,7 @@ function parseResultForSubpatch(
   input: string,
   displayText: string,
   patchId: string,
-  definition: PatchDefinitionV02 | null,
+  definition: PatchDefinitionV01 | null,
   ok: boolean,
   diagnostics: ObjectTextDiagnosticV01[]
 ): ObjectTextParseResultV01 {
@@ -485,7 +483,7 @@ function parseResultForSubpatch(
     classSymbol: "p",
     creationArgs: patchId ? [{ type: "symbol", value: patchId } satisfies ObjectTextAtomV01] : [],
     resolvedKind: ok ? SUBPATCH_NODE_KIND : null,
-    resolvedKindVersion: ok ? "0.2.0" : null,
+    resolvedKindVersion: ok ? CURRENT_CONTRACT_SCHEMA_VERSION : null,
     params: patchId ? { patchId } : {},
     instancePorts: definition ? patchDefinitionBoundaryPorts(definition).map(patchPortSpecToObjectTextPort) : [],
     displayText,
@@ -493,8 +491,8 @@ function parseResultForSubpatch(
   };
 }
 
-function patchPortSpecToObjectTextPort(port: Parameters<typeof portSpecV02ToGraphPort>[0]): ObjectTextPortV01 {
-  const graphPort = portSpecV02ToGraphPort(port) as PortV01 & { rate?: ObjectTextPortV01["rate"]; description?: string };
+function patchPortSpecToObjectTextPort(port: Parameters<typeof portSpecToGraphPort>[0]): ObjectTextPortV01 {
+  const graphPort = portSpecToGraphPort(port) as PortV01 & { rate?: ObjectTextPortV01["rate"]; description?: string };
   const objectPort: ObjectTextPortV01 = {
     id: port.id,
     direction: port.direction,

@@ -4,10 +4,8 @@ import { CircleAlert, X } from "lucide-react";
 import {
   getBuiltinNodeHelpGraph,
   validateRuntimeOperationEnvelope,
-  type GraphDocumentV01,
-  type GraphFragmentV02,
-  type GraphNodeV01,
-  type ProjectDocumentV02,
+  type GraphFragmentV01,
+  type ProjectDocumentV01,
   type RuntimeOperationEnvelope,
   type ViewStateV01
 } from "@skenion/contracts";
@@ -59,7 +57,11 @@ import {
   analyzeGraphPortSemantics,
   findEdgeInspectorModel
 } from "./graph/portSemantics";
-import { createPatchLibraryV02 } from "./graph/patchLibrary";
+import {
+  createPatchLibrary,
+  type DisplayGraphDocumentV01,
+  type DisplayGraphNodeV01
+} from "./graph/patchLibrary";
 import {
   createGraphFragmentFromSelection,
   graphClipboardShortcutAction,
@@ -163,20 +165,20 @@ export default function App() {
       remoteRuntimeUrl: launchContext.runtimeUrl
     })
   );
-  const [activeProject, setActiveProject] = useState<ProjectDocumentV02>(() =>
+  const [activeProject, setActiveProject] = useState<ProjectDocumentV01>(() =>
     createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}))
   );
   const graph = useMemo(() => activeProjectDisplayGraph(activeProject), [activeProject]);
   const viewState = activeProject.viewState;
   const activePatchLibrary = useMemo(
-    () => createPatchLibraryV02(activeProject.patchLibrary),
+    () => createPatchLibrary(activeProject.patchLibrary),
     [activeProject.patchLibrary]
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>("value_1");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(["value_1"]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
-  const [graphFragmentClipboard, setGraphFragmentClipboard] = useState<GraphFragmentV02 | null>(null);
+  const [graphFragmentClipboard, setGraphFragmentClipboard] = useState<GraphFragmentV01 | null>(null);
   const [helpWorkingCopy, setHelpWorkingCopy] = useState<VolatileHelpWorkingCopy | null>(null);
   const [helpWorkingCopySelectedNodeIds, setHelpWorkingCopySelectedNodeIds] = useState<string[]>([]);
   const [helpWorkingCopySelectedEdgeIds, setHelpWorkingCopySelectedEdgeIds] = useState<string[]>([]);
@@ -637,7 +639,7 @@ export default function App() {
   }
 
   function recordCopiedGraphFragment(
-    fragment: GraphFragmentV02,
+    fragment: GraphFragmentV01,
     result: GraphFragmentBuildResult,
     sourceLabel: string
   ) {
@@ -648,7 +650,7 @@ export default function App() {
     appendClientLog("info", `Copied ${sourceLabel} fragment with ${fragment.nodes.length} node(s).`);
   }
 
-  async function writeGraphFragmentToSystemClipboard(fragment: GraphFragmentV02) {
+  async function writeGraphFragmentToSystemClipboard(fragment: GraphFragmentV01) {
     if (!navigator.clipboard?.writeText) {
       appendClientLog("warning", "Browser clipboard is unavailable; Studio kept the fragment in memory.");
       return;
@@ -660,7 +662,7 @@ export default function App() {
     }
   }
 
-  async function pasteGraphFragmentFromClipboard(fragmentOverride?: GraphFragmentV02) {
+  async function pasteGraphFragmentFromClipboard(fragmentOverride?: GraphFragmentV01) {
     let fragment = fragmentOverride ?? graphFragmentClipboard;
     if (!fragmentOverride) {
       try {
@@ -681,7 +683,7 @@ export default function App() {
     await pasteGraphFragmentToRuntime(fragment);
   }
 
-  async function pasteGraphFragmentToRuntime(fragment: GraphFragmentV02) {
+  async function pasteGraphFragmentToRuntime(fragment: GraphFragmentV01) {
     const availability = graphFragmentPasteAvailability({
       capabilities: runtimeInfo?.capabilities,
       connected: runtimeStatus === "connected",
@@ -906,7 +908,7 @@ export default function App() {
     openInspectSidePanel();
   }
 
-  function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
+  function updateGraph(nextGraph: DisplayGraphDocumentV01, patches: GraphPatch[] = []) {
     setActiveProject((currentProject) =>
       patches.length > 0
         ? applyActiveProjectPatches(currentProject, patches)
@@ -1014,7 +1016,7 @@ export default function App() {
     setPatchConflict(null);
   }
 
-  function acceptRuntimeProject(nextProject: ProjectDocumentV02) {
+  function acceptRuntimeProject(nextProject: ProjectDocumentV01) {
     const reconciledProject = parseProjectDocument(nextProject);
     const nextGraph = activeProjectDisplayGraph(reconciledProject);
     setActiveProject(reconciledProject);
@@ -1031,7 +1033,7 @@ export default function App() {
   }
 
   async function loadProjectIntoRuntime(
-    project: ProjectDocumentV02,
+    project: ProjectDocumentV01,
     kind: RuntimeResultKind = "loadSession"
   ) {
     if (runtimeStatus !== "connected") {
@@ -1200,7 +1202,7 @@ export default function App() {
     setRuntimeResult(null);
   }
 
-  function removeNode(node: GraphNodeV01) {
+  function removeNode(node: DisplayGraphNodeV01) {
     const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
     const nextGraph = applyPatch(graph, patch);
     setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
@@ -1273,7 +1275,7 @@ export default function App() {
     appendClientLog("info", `Opened volatile editable help copy ${helpWorkingCopy.workingCopyId}.`);
   }
 
-  function updateHelpWorkingCopyGraph(nextGraph: GraphDocumentV01) {
+  function updateHelpWorkingCopyGraph(nextGraph: DisplayGraphDocumentV01) {
     setHelpWorkingCopy((current) =>
       current
         ? {
@@ -1708,7 +1710,7 @@ export default function App() {
     }
   }
 
-  async function importRuntimeAsset(node: GraphNodeV01, file: File) {
+  async function importRuntimeAsset(node: DisplayGraphNodeV01, file: File) {
     if (runtimeStatus !== "connected" || !runtimeSupportsAssetImport(runtimeInfo)) {
       setRuntimeError("Runtime asset import is not available.");
       return;
@@ -1960,7 +1962,7 @@ export default function App() {
     return changed;
   }
 
-  function isOptimisticValueTarget(node: GraphNodeV01, value: RuntimeControlValue): boolean {
+  function isOptimisticValueTarget(node: DisplayGraphNodeV01, value: RuntimeControlValue): boolean {
     return (
       (value.type === "float" && node.kind === "core.float") ||
       (value.type === "int" && node.kind === "core.int") ||
@@ -2519,7 +2521,7 @@ export default function App() {
 }
 
 function createPasteGraphFragmentOperation(
-  fragment: GraphFragmentV02,
+  fragment: GraphFragmentV01,
   baseRevision: string
 ): RuntimeOperationEnvelope {
   const operation: RuntimeOperationEnvelope = {
@@ -2560,7 +2562,7 @@ function nodeViewStateChanged(before: ViewStateV01, after: ViewStateV01): boolea
 }
 
 function changedNodeViewOperations(
-  graph: GraphDocumentV01,
+  graph: DisplayGraphDocumentV01,
   before: ViewStateV01,
   after: ViewStateV01
 ): RuntimeViewPatchOperation[] {

@@ -72,7 +72,7 @@ export const LongLabels: Story = {
   args: longLabelCard
 };
 
-export const V02Metadata: Story = {
+export const CurrentMetadata: Story = {
   args: multiPortCard
 };
 

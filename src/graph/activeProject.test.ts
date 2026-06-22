@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PatchDefinitionV02 } from "@skenion/contracts";
+import type { PatchDefinitionV01 } from "@skenion/contracts";
 import { sampleGraph } from "../data/sampleGraph";
 import { createProjectDocument, createViewStateFromPositions, activeProjectDisplayGraph } from "./projectDocument";
 import { applyActiveProjectPatches } from "./activeProject";
@@ -7,8 +7,8 @@ import { createGraphNodeFromDefinition } from "./skenionGraph";
 import { nodeRegistry } from "../data/registry";
 import type { GraphPatch } from "./skenionGraph";
 
-describe("active project graph v0.2 mutations", () => {
-  it("applies Studio graph edits to the v0.2 project source of truth", () => {
+describe("active project graph current 0.1 mutations", () => {
+  it("applies Studio graph edits to the current 0.1 project source of truth", () => {
     const project = {
       ...createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {})),
       patchLibrary: [testPatchDefinition()]
@@ -21,14 +21,14 @@ describe("active project graph v0.2 mutations", () => {
     } satisfies GraphPatch;
     const nextProject = applyActiveProjectPatches(project, [patch]);
 
-    expect(nextProject.schemaVersion).toBe("0.2.0");
-    expect(nextProject.graph.schemaVersion).toBe("0.2.0");
+    expect(nextProject.schemaVersion).toBe("0.1.0");
+    expect(nextProject.graph.schemaVersion).toBe("0.1.0");
     expect(nextProject.graph.nodes.find((node) => node.id === "value_1")?.params.value).toBe(0.75);
     expect(nextProject.patchLibrary).toEqual(project.patchLibrary);
     expect(activeProjectDisplayGraph(nextProject).schemaVersion).toBe("0.1.0");
   });
 
-  it("removes invalid v0.2 edges when a node interface changes", () => {
+  it("removes invalid current 0.1 edges when a node interface changes", () => {
     const project = createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {}));
     const patch = {
       type: "replaceNodeInterface",
@@ -78,7 +78,7 @@ describe("active project graph v0.2 mutations", () => {
     expect(nextProject.graph.edges.some((edge) => edge.source.nodeId === "decode_1")).toBe(true);
   });
 
-  it("bumps non-numeric graph revisions without demoting the v0.2 graph", () => {
+  it("bumps non-numeric graph revisions without demoting the current 0.1 graph", () => {
     const project = {
       ...createProjectDocument(sampleGraph, createViewStateFromPositions(sampleGraph, {})),
       graph: {
@@ -100,13 +100,13 @@ describe("active project graph v0.2 mutations", () => {
   });
 });
 
-function testPatchDefinition(): PatchDefinitionV02 {
+function testPatchDefinition(): PatchDefinitionV01 {
   return {
     id: "voice",
     revision: "1",
     graph: {
       schema: "skenion.graph",
-      schemaVersion: "0.2.0",
+      schemaVersion: "0.1.0",
       id: "voice",
       revision: "1",
       nodes: [],

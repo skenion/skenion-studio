@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { GraphNodeV01, NodeDefinitionManifestV01 } from "@skenion/contracts";
+import type { NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { nodeRegistry } from "../data/registry";
-import { createPatchLibraryV02, type PatchDefinitionV02 } from "./patchLibrary";
+import {
+  createPatchLibrary,
+  type DisplayGraphNodeV01 as GraphNodeV01,
+  type PatchDefinitionV01
+} from "./patchLibrary";
 import {
   createGraphNodeFromObjectText,
   UNRESOLVED_OBJECT_NODE_KIND,
@@ -168,8 +172,8 @@ describe("object text graph node adapter", () => {
           index === 0
             ? {
                 ...port,
-                activation: "latched",
-                default: "fixture"
+                defaultValue: "fixture",
+                triggerMode: "latched"
               }
             : port
         )
@@ -227,7 +231,7 @@ describe("object text graph node adapter", () => {
   });
 
   it("resolves p object text through the internal patch library", () => {
-    const patch: PatchDefinitionV02 = {
+    const patch: PatchDefinitionV01 = {
       id: "voice",
       revision: "1",
       metadata: {
@@ -236,14 +240,14 @@ describe("object text graph node adapter", () => {
       },
       graph: {
         schema: "skenion.graph",
-        schemaVersion: "0.2.0",
+        schemaVersion: "0.1.0",
         id: "voice-help",
         revision: "1",
         nodes: [
           {
             id: "pitch_in",
             kind: "core.inlet",
-            kindVersion: "0.2.0",
+            kindVersion: "0.1.0",
             params: { portId: "pitch", label: "Pitch" },
             ports: [
               {
@@ -260,7 +264,7 @@ describe("object text graph node adapter", () => {
           {
             id: "audio_out",
             kind: "core.outlet",
-            kindVersion: "0.2.0",
+            kindVersion: "0.1.0",
             params: { portId: "out", label: "Out" },
             ports: [
               {
@@ -277,14 +281,14 @@ describe("object text graph node adapter", () => {
       }
     };
     const result = createGraphNodeFromObjectText("p voice", [], nodeRegistry, {
-      patchLibrary: createPatchLibraryV02([patch])
+      patchLibrary: createPatchLibrary([patch])
     });
 
     expect(result.ok).toBe(true);
     expect(result.node).toMatchObject({
       id: "voice_1",
       kind: "core.subpatch",
-      kindVersion: "0.2.0",
+      kindVersion: "0.1.0",
       params: {
         label: "p voice",
         objectText: "p voice",
@@ -313,7 +317,7 @@ describe("object text graph node adapter", () => {
       classSymbol: "p",
       creationArgs: [{ type: "symbol", value: "voice" }],
       resolvedKind: "core.subpatch",
-      resolvedKindVersion: "0.2.0",
+      resolvedKindVersion: "0.1.0",
       params: { patchId: "voice" },
       instancePorts: [
         {
@@ -329,19 +333,19 @@ describe("object text graph node adapter", () => {
   });
 
   it("keeps optional subpatch parse metadata absent for bare boundary ports", () => {
-    const patch: PatchDefinitionV02 = {
+    const patch: PatchDefinitionV01 = {
       id: "bare",
       revision: "1",
       graph: {
         schema: "skenion.graph",
-        schemaVersion: "0.2.0",
+        schemaVersion: "0.1.0",
         id: "bare-help",
         revision: "1",
         nodes: [
           {
             id: "input",
             kind: "core.inlet",
-            kindVersion: "0.2.0",
+            kindVersion: "0.1.0",
             params: { portId: "in" },
             ports: [
               {
@@ -356,7 +360,7 @@ describe("object text graph node adapter", () => {
       }
     };
     const result = createGraphNodeFromObjectText("p bare", [], nodeRegistry, {
-      patchLibrary: createPatchLibraryV02([patch])
+      patchLibrary: createPatchLibrary([patch])
     });
 
     expect(result.ok).toBe(true);
@@ -369,7 +373,7 @@ describe("object text graph node adapter", () => {
 
   it("keeps missing patch references editable as unresolved object nodes", () => {
     const missingLibrary = createGraphNodeFromObjectText("p missing", [], nodeRegistry, {
-      patchLibrary: createPatchLibraryV02([])
+      patchLibrary: createPatchLibrary([])
     });
     const unavailableLibrary = createGraphNodeFromObjectText("p missing", [], nodeRegistry);
 
@@ -389,10 +393,10 @@ describe("object text graph node adapter", () => {
     });
 
     const missingPatchId = createGraphNodeFromObjectText("p", [], nodeRegistry, {
-      patchLibrary: createPatchLibraryV02([])
+      patchLibrary: createPatchLibrary([])
     });
     const tooManyArgs = createGraphNodeFromObjectText("p voice extra", [], nodeRegistry, {
-      patchLibrary: createPatchLibraryV02([])
+      patchLibrary: createPatchLibrary([])
     });
 
     expect(missingPatchId.diagnostics[0]).toMatchObject({

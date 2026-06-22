@@ -3,6 +3,7 @@ import { Badge, Divider, Group, ScrollArea, Stack, Text, TextInput, Tooltip } fr
 import { HelpCircle, Plus } from "lucide-react";
 import { type NodeDefinitionManifestV01 } from "@skenion/contracts";
 import { paletteDirectDefinitions } from "../data/palette";
+import { dataTypeFromPortSpec } from "../graph/patchLibrary";
 import { flowColor, flowName } from "../graph/reactFlowAdapter";
 import { createGraphNodeFromObjectText, isUnresolvedObjectNode } from "../graph/objectTextNode";
 import { Button } from "./core/Button/Button";
@@ -111,7 +112,8 @@ export function PalettePanel({
                 .filter((definition) => definition.category === category)
                 .map((definition) => {
                   const primaryPort = definition.ports.find((port) => port.direction === "output") ?? definition.ports[0];
-                  const swatchColor = primaryPort ? flowColor(primaryPort.type.flow, primaryPort.type.dataKind) : "#868e96";
+                  const primaryType = primaryPort ? dataTypeFromPortSpec(primaryPort) : null;
+                  const swatchColor = primaryType ? flowColor(primaryType.flow, primaryType.dataKind) : "#868e96";
 
                   return (
                     <Group gap={6} key={definition.id} wrap="nowrap">
@@ -131,7 +133,7 @@ export function PalettePanel({
                             {definition.displayName}
                           </Text>
                           <Text c="dimmed" component="span" display="block" size="xs">
-                            {primaryPort ? flowName(primaryPort.type.flow, primaryPort.type.dataKind) : definition.execution.model}
+                            {primaryType ? flowName(primaryType.flow, primaryType.dataKind) : definition.execution.model}
                           </Text>
                         </span>
                       </Button>

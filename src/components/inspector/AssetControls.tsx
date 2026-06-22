@@ -1,14 +1,14 @@
 import { Alert, FileButton, Stack, Text, TextInput } from "@mantine/core";
 import { Upload } from "lucide-react";
-import type { GraphNodeV01 } from "@skenion/contracts";
 import { readVideoAssetParams } from "../../graph/videoAsset";
+import type { DisplayGraphNodeV01 } from "../../graph/patchLibrary";
 import { Button } from "../core/Button/Button";
 
 export interface AssetControlsProps {
   busy?: boolean;
   enabled: boolean;
-  node: GraphNodeV01;
-  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void>;
+  node: DisplayGraphNodeV01;
+  onImportAsset?: (node: DisplayGraphNodeV01, file: File) => Promise<void>;
 }
 
 export function AssetControls({

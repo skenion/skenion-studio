@@ -64,12 +64,8 @@ const shaderDiagnosticsHelpGraph: GraphDocumentV01 = {
           id: "out",
           direction: "output",
           label: "Out",
-          type: {
-            flow: "resource",
-            dataKind: "gpu.texture2d",
-            format: "rgba8unorm",
-            colorSpace: "srgb"
-          }
+          type: "gpu.texture2d",
+          rate: "gpu"
         }
       ]
     },
@@ -85,27 +81,24 @@ const shaderDiagnosticsHelpGraph: GraphDocumentV01 = {
           id: "in",
           direction: "input",
           label: "In",
-          type: {
-            flow: "resource",
-            dataKind: "gpu.texture2d",
-            format: "rgba8unorm",
-            colorSpace: "srgb"
-          },
+          type: "gpu.texture2d",
+          rate: "gpu",
           required: true,
-          activation: "latched"
+          triggerMode: "latched"
         }
       ]
     }
   ],
   edges: [
     {
-      from: {
-        node: "shader_1",
-        port: "out"
+      id: "edge_shader_output",
+      source: {
+        nodeId: "shader_1",
+        portId: "out"
       },
-      to: {
-        node: "output_1",
-        port: "in"
+      target: {
+        nodeId: "output_1",
+        portId: "in"
       }
     }
   ]

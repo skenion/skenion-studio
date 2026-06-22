@@ -7,11 +7,10 @@ function cloneDefinition(definition: NodeDefinitionManifestV01): NodeDefinitionM
   return {
     ...definition,
     ports: definition.ports.map((port) => {
-      const clonedPort = {
-        ...port,
-        type: { ...port.type }
-      };
-      return "default" in port ? { ...clonedPort, default: cloneDefault(port.default) } : clonedPort;
+      const clonedPort = { ...port };
+      return Object.hasOwn(port, "defaultValue")
+        ? { ...clonedPort, defaultValue: cloneDefault(port.defaultValue) }
+        : clonedPort;
     }),
     execution: { ...definition.execution },
     state: { ...definition.state },

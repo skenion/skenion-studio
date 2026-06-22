@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { GraphPatch } from "./skenionGraph";
 import { BOOL_VALUE_NODE_KIND, defaultBoolValueParams } from "./boolValue";
 import { COMMENT_NODE_KIND, defaultCommentParams } from "./commentNode";
@@ -17,7 +17,7 @@ export const CLEAR_COLOR_NODE_KIND = "render.clear-color";
 export const DEFAULT_CLEAR_COLOR = [0.05, 0.08, 0.12, 1] as const;
 export type ClearColor = [number, number, number, number];
 
-export function isClearColorNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isClearColorNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === CLEAR_COLOR_NODE_KIND;
 }
 
@@ -67,7 +67,7 @@ export function defaultParamsForNodeKind(kind: string): Record<string, unknown> 
   return {};
 }
 
-export function readClearColorParam(node: GraphNodeV01): ClearColor {
+export function readClearColorParam(node: DisplayGraphNodeV01): ClearColor {
   const color = node.params.color;
   if (!Array.isArray(color) || color.length !== 4) {
     return [...DEFAULT_CLEAR_COLOR];

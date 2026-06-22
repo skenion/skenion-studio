@@ -1,4 +1,4 @@
-import type { GraphNodeV01 } from "@skenion/contracts";
+import type { DisplayGraphNodeV01 } from "./patchLibrary";
 import type { GraphPatch } from "./skenionGraph";
 
 export const UINT_VALUE_NODE_KIND = "core.uint";
@@ -7,7 +7,7 @@ export const UINT_REPRESENTATIONS = ["u64", "u32", "u16", "u8"] as const;
 export type UIntRepresentation = (typeof UINT_REPRESENTATIONS)[number];
 export const DEFAULT_UINT_REPRESENTATION: UIntRepresentation = "u32";
 
-export function isUIntValueNode(node: GraphNodeV01 | null): node is GraphNodeV01 {
+export function isUIntValueNode(node: DisplayGraphNodeV01 | null): node is DisplayGraphNodeV01 {
   return node?.kind === UINT_VALUE_NODE_KIND;
 }
 
@@ -18,13 +18,13 @@ export function defaultUIntValueParams(): Record<string, unknown> {
   };
 }
 
-export function readUIntValueParam(node: GraphNodeV01): number {
+export function readUIntValueParam(node: DisplayGraphNodeV01): number {
   return typeof node.params.value === "number" && Number.isInteger(node.params.value) && node.params.value >= 0
     ? node.params.value
     : DEFAULT_UINT_VALUE;
 }
 
-export function readUIntRepresentationParam(node: GraphNodeV01): UIntRepresentation {
+export function readUIntRepresentationParam(node: DisplayGraphNodeV01): UIntRepresentation {
   return UINT_REPRESENTATIONS.includes(node.params.representation as UIntRepresentation)
     ? node.params.representation as UIntRepresentation
     : DEFAULT_UINT_REPRESENTATION;
