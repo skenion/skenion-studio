@@ -1,9 +1,21 @@
 name: Release Please
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      release-as:
+        description: Version to pass to Release Please, such as 0.43.0
+        required: true
+        type: string
+      train-version:
+        description: Lockstep product train version, such as 0.43.0
+        required: true
+        type: string
+      release-train-mode:
+        description: Release train mode; only publish invokes Release Please
+        default: publish
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -14,9 +26,82 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release-please:
+  validate_release_train:
+    name: Validate Release Train
+    runs-on: ubuntu-latest
+    outputs:
+      release-version: ${{ steps.validate.outputs['release-version'] }}
+      should-publish: ${{ steps.validate.outputs['should-publish'] }}
+    steps:
+      - name: Validate conductor inputs
+        id: validate
+        shell: bash
+        env:
+          RELEASE_AS: ${{ inputs['release-as'] }}
+          RELEASE_TRAIN_MODE: ${{ inputs['release-train-mode'] }}
+          TRAIN_VERSION: ${{ inputs['train-version'] }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${RELEASE_TRAIN_MODE}" != "publish" ]]; then
+            echo "Release train mode '${RELEASE_TRAIN_MODE}' is not 'publish'; skipping Release Please."
+            echo "should-publish=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${RELEASE_AS}" != "${TRAIN_VERSION}" ]]; then
+            echo "::error::release-as (${RELEASE_AS}) must match train-version (${TRAIN_VERSION})."
+            exit 1
+          fi
+
+          if [[ ! "${RELEASE_AS}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::release-as must use x.y.z SemVer form; got '${RELEASE_AS}'."
+            exit 1
+          fi
+
+          echo "release-version=${RELEASE_AS}" >> "${GITHUB_OUTPUT}"
+          echo "should-publish=true" >> "${GITHUB_OUTPUT}"
+
+  skip_non_publish:
+    name: Skip Non-Publish Mode
+    needs: validate_release_train
+    if: ${{ needs.validate_release_train.outputs['should-publish'] == 'false' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v5
+      - name: Report skipped train mode
+        shell: bash
+        env:
+          RELEASE_TRAIN_MODE: ${{ inputs['release-train-mode'] }}
+        run: |
+          echo "Release train mode '${RELEASE_TRAIN_MODE}' does not create or update a Release Please release."
+
+  release-please:
+    name: Release Please
+    needs: validate_release_train
+    if: ${{ needs.validate_release_train.outputs['should-publish'] == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub releases
+        uses: googleapis/release-please-action@v5
         with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+          target-branch: main
           token: ${{ secrets.SKENION_RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Create or update train release PR
+        shell: bash
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.SKENION_RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.validate_release_train.outputs['release-version'] }}
+        run: |
+          set -euo pipefail
+
+          npm exec --yes --package release-please@17.9.0 -- release-please release-pr \
+            --repo-url "${GITHUB_REPOSITORY}" \
+            --target-branch main \
+            --config-file release-please-config.json \
+            --manifest-file .release-please-manifest.json \
+            --release-as "${RELEASE_VERSION}" \
+            --token "${RELEASE_PLEASE_TOKEN}"
