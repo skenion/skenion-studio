@@ -13,6 +13,7 @@
     "dev": "vite --host localhost",
     "lint": "eslint .",
     "package-runtime-sidecar": "node scripts/package-runtime-sidecar.mjs",
+    "prepare-studio-npm-artifacts": "node scripts/prepare-studio-npm-artifacts.mjs",
     "preview": "vite preview --host localhost",
     "stage-runtime-sidecar": "node scripts/stage-runtime-sidecar.mjs",
     "storybook": "storybook dev -p 6006 --host localhost",
