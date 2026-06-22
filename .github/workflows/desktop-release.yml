@@ -332,13 +332,28 @@ jobs:
           const fs = require("node:fs");
           const target = process.env.TARGET;
           const bundleArgs = process.env.TAURI_BUNDLE_ARGS ?? "";
-          const config = JSON.parse(fs.readFileSync("src-tauri/tauri.release.conf.json", "utf8"));
+          const baseConfig = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+          const releaseConfig = JSON.parse(fs.readFileSync("src-tauri/tauri.release.conf.json", "utf8"));
+          const config = mergeConfig(baseConfig, releaseConfig);
           if (!config.bundle?.externalBin?.includes("binaries/skenion-runtime")) {
             console.error("::error::Release Tauri bundle.externalBin must include binaries/skenion-runtime.");
             process.exit(1);
           }
+          const icons = config.bundle?.icon ?? [];
+          for (const icon of icons) {
+            const iconPath = `src-tauri/${icon}`;
+            if (!fs.existsSync(iconPath)) {
+              console.error(`::error::Tauri bundle.icon entry '${icon}' must exist at ${iconPath}.`);
+              process.exit(1);
+            }
+          }
           if (target.includes("windows")) {
-            const iconPath = "src-tauri/icons/icon.ico";
+            const windowsIcon = "icons/icon.ico";
+            const iconPath = `src-tauri/${windowsIcon}`;
+            if (!icons.includes(windowsIcon)) {
+              console.error(`::error::Windows desktop releases require Tauri bundle.icon to include ${windowsIcon}.`);
+              process.exit(1);
+            }
             if (!fs.existsSync(iconPath)) {
               console.error("::error::Windows desktop releases require src-tauri/icons/icon.ico for the Tauri Windows resource file.");
               process.exit(1);
@@ -413,6 +428,28 @@ jobs:
 
           function decodeIcoDimension(value) {
             return value === 0 ? 256 : value;
+          }
+
+          function mergeConfig(base, overlay) {
+            if (!isPlainObject(base) || !isPlainObject(overlay)) {
+              return overlay;
+            }
+
+            const merged = { ...base };
+            for (const [key, value] of Object.entries(overlay)) {
+              if (value === null) {
+                delete merged[key];
+              } else if (isPlainObject(value) && isPlainObject(merged[key])) {
+                merged[key] = mergeConfig(merged[key], value);
+              } else {
+                merged[key] = value;
+              }
+            }
+            return merged;
+          }
+
+          function isPlainObject(value) {
+            return Object.prototype.toString.call(value) === "[object Object]";
           }
 
           function fail(message) {
