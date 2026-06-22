@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const BOOL_VALUE_NODE_KIND = "core.bool";
 export const DEFAULT_BOOL_VALUE = false;
@@ -18,7 +18,7 @@ export function readBoolValueParam(node: GraphNodeV01): boolean {
   return typeof node.params.value === "boolean" ? node.params.value : DEFAULT_BOOL_VALUE;
 }
 
-export function setBoolValueParamPatch(nodeId: string, value: boolean): GraphPatch {
+export function setBoolValueParamPatch(nodeId: string, value: boolean): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

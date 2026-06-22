@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const INT_VALUE_NODE_KIND = "core.int";
 export const DEFAULT_INT_VALUE = 0;
@@ -30,7 +30,7 @@ export function readIntRepresentationParam(node: GraphNodeV01): IntRepresentatio
     : DEFAULT_INT_REPRESENTATION;
 }
 
-export function setIntValueParamPatch(nodeId: string, value: number): GraphPatch {
+export function setIntValueParamPatch(nodeId: string, value: number): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

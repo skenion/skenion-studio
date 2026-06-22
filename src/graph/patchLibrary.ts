@@ -125,6 +125,8 @@ export function graphDocumentV01ToGraphDocumentV02(graph: GraphDocumentV01): Gra
   };
 }
 
+export const graphDisplayDocumentToGraphDocumentV02 = graphDocumentV01ToGraphDocumentV02;
+
 export function graphNodeToGraphNodeV02(node: GraphNodeV01): GraphDocumentV02["nodes"][number] {
   return {
     id: node.id,
@@ -157,6 +159,8 @@ export function graphDocumentV02ToDisplayGraph(graph: GraphDocumentV02): GraphDo
     edges: graph.edges.map(edgeSpecV02ToGraphEdge)
   };
 }
+
+export const graphDocumentV02ToGraphDisplayDocument = graphDocumentV02ToDisplayGraph;
 
 export function portSpecV02ToGraphPort(port: PortSpecV02): PortV01 {
   const graphPort: PortV01 & PortV02DisplayExtras = {

@@ -17,7 +17,7 @@ import {
   shaderUniformSampleViewState
 } from "../../data/sampleGraph";
 import { createViewStateFromPositions, reconcileViewStateWithGraph } from "../../graph/projectDocument";
-import type { ConnectionCheck, GraphPatch } from "../../graph/skenionGraph";
+import type { ConnectionCheck, GraphEditorPatch } from "../../graph/skenionGraph";
 
 const meta = {
   title: "Graph/ReactFlowCanvas",
@@ -144,7 +144,7 @@ function GraphCanvasStory({
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(
     initialConnectionCheck
   );
-  const [, setPatches] = useState<GraphPatch[]>([]);
+  const [, setPatches] = useState<GraphEditorPatch[]>([]);
 
   return (
     <div style={{ height: "680px", position: "relative", width: "100vw" }}>

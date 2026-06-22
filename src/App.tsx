@@ -4,9 +4,7 @@ import { CircleAlert, X } from "lucide-react";
 import {
   getBuiltinNodeHelpGraph,
   validateRuntimeOperationEnvelope,
-  type GraphDocumentV01,
   type GraphFragmentV02,
-  type GraphNodeV01,
   type ProjectDocumentV02,
   type RuntimeOperationEnvelope,
   type ViewStateV01
@@ -40,7 +38,9 @@ import {
   graphSummary,
   validateGraph,
   type ConnectionCheck,
-  type GraphPatch
+  type GraphDisplayDocument,
+  type GraphDisplayNode,
+  type GraphEditorPatch
 } from "./graph/skenionGraph";
 import { applyActiveProjectPatches } from "./graph/activeProject";
 import { createGraphNodeFromObjectText } from "./graph/objectTextNode";
@@ -765,10 +765,10 @@ export default function App() {
     }
 
     const node = createGraphNodeFromDefinition(definition, graph.nodes, paramsOverride);
-    const patch = { type: "addNode", node } satisfies GraphPatch;
+    const patch = { type: "addNode", node } satisfies GraphEditorPatch;
     const nextGraph = applyPatch(graph, patch);
     setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
-    recordGraphPatches([patch]);
+    recordGraphEditorPatches([patch]);
     setViewState((currentViewState) =>
       reconcileViewStateWithGraph(nextGraph, {
         ...currentViewState,
@@ -806,10 +806,10 @@ export default function App() {
     }
 
     const node = createGraphNodeFromDefinition(definition, graph.nodes, paramsOverride);
-    const patch = { type: "addNode", node } satisfies GraphPatch;
+    const patch = { type: "addNode", node } satisfies GraphEditorPatch;
     const nextGraph = applyPatch(graph, patch);
     setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
-    recordGraphPatches([patch]);
+    recordGraphEditorPatches([patch]);
     setViewState((currentViewState) =>
       reconcileViewStateWithGraph(nextGraph, {
         ...currentViewState,
@@ -845,10 +845,10 @@ export default function App() {
     appendObjectTextDiagnostics("object box create", result.diagnostics);
     const node = result.node;
 
-    const patch = { type: "addNode", node } satisfies GraphPatch;
+    const patch = { type: "addNode", node } satisfies GraphEditorPatch;
     const nextGraph = applyPatch(graph, patch);
     setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
-    recordGraphPatches([patch]);
+    recordGraphEditorPatches([patch]);
     setViewState((currentViewState) =>
       reconcileViewStateWithGraph(nextGraph, {
         ...currentViewState,
@@ -898,7 +898,7 @@ export default function App() {
       nodeId,
       node: result.node,
       edgePolicy: "removeInvalidEdges"
-    } satisfies GraphPatch;
+    } satisfies GraphEditorPatch;
     const nextGraph = applyPatch(graph, patch);
     updateGraph(nextGraph, [patch]);
     selectSingleNode(nodeId);
@@ -906,19 +906,19 @@ export default function App() {
     openInspectSidePanel();
   }
 
-  function updateGraph(nextGraph: GraphDocumentV01, patches: GraphPatch[] = []) {
+  function updateGraph(nextGraph: GraphDisplayDocument, patches: GraphEditorPatch[] = []) {
     setActiveProject((currentProject) =>
       patches.length > 0
         ? applyActiveProjectPatches(currentProject, patches)
         : replaceProjectRootGraphFromDisplay(currentProject, nextGraph)
     );
     setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
-    recordGraphPatches(patches);
+    recordGraphEditorPatches(patches);
     setConnectionCheck(null);
     setRuntimeResult(null);
   }
 
-  function recordGraphPatches(patches: GraphPatch[]) {
+  function recordGraphEditorPatches(patches: GraphEditorPatch[]) {
     if (patches.length === 0) {
       return;
     }
@@ -1200,19 +1200,19 @@ export default function App() {
     setRuntimeResult(null);
   }
 
-  function removeNode(node: GraphNodeV01) {
-    const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
+  function removeNode(node: GraphDisplayNode) {
+    const patch = { type: "removeNode", nodeId: node.id } satisfies GraphEditorPatch;
     const nextGraph = applyPatch(graph, patch);
     setActiveProject((currentProject) => applyActiveProjectPatches(currentProject, [patch]));
     setViewState((currentViewState) => reconcileViewStateWithGraph(nextGraph, currentViewState));
-    recordGraphPatches([patch]);
+    recordGraphEditorPatches([patch]);
     selectSingleNode(null);
     setActiveHelpNodeId(null);
     setRuntimeResult(null);
   }
 
   function setNodeParam(nodeId: string, key: string, value: unknown) {
-    const patch = { type: "setNodeParam", nodeId, key, value } satisfies GraphPatch;
+    const patch = { type: "setNodeParam", nodeId, key, value } satisfies GraphEditorPatch;
     updateGraph(applyPatch(graph, patch), [patch]);
     setConnectionCheck(null);
     setRuntimeResult(null);
@@ -1227,7 +1227,7 @@ export default function App() {
       nodeId,
       key,
       value
-    }) satisfies GraphPatch);
+    }) satisfies GraphEditorPatch);
     const nextGraph = patches.reduce((currentGraph, patch) => applyPatch(currentGraph, patch), graph);
     updateGraph(nextGraph, patches);
   }
@@ -1273,7 +1273,7 @@ export default function App() {
     appendClientLog("info", `Opened volatile editable help copy ${helpWorkingCopy.workingCopyId}.`);
   }
 
-  function updateHelpWorkingCopyGraph(nextGraph: GraphDocumentV01) {
+  function updateHelpWorkingCopyGraph(nextGraph: GraphDisplayDocument) {
     setHelpWorkingCopy((current) =>
       current
         ? {
@@ -1708,7 +1708,7 @@ export default function App() {
     }
   }
 
-  async function importRuntimeAsset(node: GraphNodeV01, file: File) {
+  async function importRuntimeAsset(node: GraphDisplayNode, file: File) {
     if (runtimeStatus !== "connected" || !runtimeSupportsAssetImport(runtimeInfo)) {
       setRuntimeError("Runtime asset import is not available.");
       return;
@@ -1960,7 +1960,7 @@ export default function App() {
     return changed;
   }
 
-  function isOptimisticValueTarget(node: GraphNodeV01, value: RuntimeControlValue): boolean {
+  function isOptimisticValueTarget(node: GraphDisplayNode, value: RuntimeControlValue): boolean {
     return (
       (value.type === "float" && node.kind === "core.float") ||
       (value.type === "int" && node.kind === "core.int") ||
@@ -2560,7 +2560,7 @@ function nodeViewStateChanged(before: ViewStateV01, after: ViewStateV01): boolea
 }
 
 function changedNodeViewOperations(
-  graph: GraphDocumentV01,
+  graph: GraphDisplayDocument,
   before: ViewStateV01,
   after: ViewStateV01
 ): RuntimeViewPatchOperation[] {

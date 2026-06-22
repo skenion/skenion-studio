@@ -7,9 +7,9 @@ import type {
   ProjectDocumentV02,
   ViewStateV01
 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 import {
-  graphDocumentV02ToDisplayGraph,
+  graphDocumentV02ToGraphDisplayDocument,
   graphEdgeToEdgeSpecV02,
   graphNodeToGraphNodeV02,
   graphPortToPortSpecV02
@@ -18,11 +18,11 @@ import { reconcileViewStateWithGraph } from "./projectDocument";
 
 export function applyActiveProjectPatches(
   project: ProjectDocumentV02,
-  patches: GraphPatch[],
+  patches: GraphEditorPatch[],
   viewState: ViewStateV01 = project.viewState
 ): ProjectDocumentV02 {
   const graph = patches.reduce((currentGraph, patch) => applyGraphPatchV02(currentGraph, patch), project.graph);
-  const displayGraph = graphDocumentV02ToDisplayGraph(graph);
+  const displayGraph = graphDocumentV02ToGraphDisplayDocument(graph);
 
   return {
     ...project,
@@ -33,7 +33,7 @@ export function applyActiveProjectPatches(
   };
 }
 
-function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphPatch): GraphDocumentV02 {
+function applyGraphPatchV02(graph: GraphDocumentV02, patch: GraphEditorPatch): GraphDocumentV02 {
   if (patch.type === "addNode") {
     return {
       ...graph,

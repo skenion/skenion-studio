@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const COLOR_NODE_KIND = "core.color";
 export const DEFAULT_COLOR_VALUE = [1, 1, 1, 1] as const;
@@ -53,7 +53,7 @@ export function readColorSpaceParam(node: GraphNodeV01): ColorSpace {
     : DEFAULT_COLOR_SPACE;
 }
 
-export function setColorRgbaParamPatch(nodeId: string, color: RgbaColor): GraphPatch {
+export function setColorRgbaParamPatch(nodeId: string, color: RgbaColor): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

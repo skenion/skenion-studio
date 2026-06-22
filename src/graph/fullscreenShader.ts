@@ -7,7 +7,7 @@ import type {
   PortV01,
   ShaderInterfaceAnalysisV01
 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const FULLSCREEN_SHADER_NODE_KIND = "render.fullscreen-shader";
 export const FULLSCREEN_SHADER_LANGUAGE = "wgsl";
@@ -48,7 +48,7 @@ export function readShaderSourceParam(node: GraphNodeV01): string {
     : DEFAULT_FULLSCREEN_SHADER_SOURCE;
 }
 
-export function setShaderSourceParamPatch(nodeId: string, source: string): GraphPatch {
+export function setShaderSourceParamPatch(nodeId: string, source: string): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,
@@ -97,7 +97,7 @@ export function createReplaceShaderInterfacePatch(
   nodeId: string,
   source: string,
   language: string = FULLSCREEN_SHADER_LANGUAGE
-): GraphPatch | null {
+): GraphEditorPatch | null {
   const analysis = analyzeFullscreenShaderInterface(source, language);
   if (!analysis.ok) {
     return null;

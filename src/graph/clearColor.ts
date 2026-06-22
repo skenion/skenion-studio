@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 import { BOOL_VALUE_NODE_KIND, defaultBoolValueParams } from "./boolValue";
 import { COMMENT_NODE_KIND, defaultCommentParams } from "./commentNode";
 import { COLOR_NODE_KIND, defaultColorRgbaParams } from "./colorRgba";
@@ -85,7 +85,7 @@ export function readClearColorParam(node: GraphNodeV01): ClearColor {
   return values as ClearColor;
 }
 
-export function setClearColorParamPatch(nodeId: string, color: ClearColor): GraphPatch {
+export function setClearColorParamPatch(nodeId: string, color: ClearColor): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

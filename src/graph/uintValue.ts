@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const UINT_VALUE_NODE_KIND = "core.uint";
 export const DEFAULT_UINT_VALUE = 0;
@@ -30,7 +30,7 @@ export function readUIntRepresentationParam(node: GraphNodeV01): UIntRepresentat
     : DEFAULT_UINT_REPRESENTATION;
 }
 
-export function setUIntValueParamPatch(nodeId: string, value: number): GraphPatch {
+export function setUIntValueParamPatch(nodeId: string, value: number): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

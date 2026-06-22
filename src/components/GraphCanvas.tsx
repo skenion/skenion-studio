@@ -16,7 +16,7 @@ import {
   type OnConnectStart,
   type Viewport
 } from "@xyflow/react";
-import type { GraphDocumentV01, ViewStateV01 } from "@skenion/contracts";
+import type { ViewStateV01 } from "@skenion/contracts";
 import { ReactFlowNodeAdapter } from "./graph/ReactFlowNodeAdapter";
 import type { RuntimeControlMessage, RuntimeControlValue } from "../runtime/types";
 import {
@@ -25,7 +25,9 @@ import {
   edgeFromReactFlow,
   isValidSkenionConnection,
   toSkenionPatch,
-  type GraphPatch,
+  type GraphDisplayDocument,
+  type GraphDisplayNode,
+  type GraphEditorPatch,
   type ConnectionCheck
 } from "../graph/skenionGraph";
 import { updateViewStateNodePosition, updateViewStateViewport } from "../graph/projectDocument";
@@ -43,7 +45,7 @@ const nodeTypes: NodeTypes = {
 type StudioFlowNode = Node<SkenionNodeData>;
 
 interface GraphCanvasProps {
-  graph: GraphDocumentV01;
+  graph: GraphDisplayDocument;
   graphLocked?: boolean;
   viewState: ViewStateV01;
   selectedEdgeId: string | null;
@@ -56,7 +58,7 @@ interface GraphCanvasProps {
     position: { x: number; y: number },
     paramsOverride?: Record<string, unknown>
   ) => void;
-  onImportAsset?: (node: GraphDocumentV01["nodes"][number], file: File) => Promise<void> | void;
+  onImportAsset?: (node: GraphDisplayNode, file: File) => Promise<void> | void;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
@@ -67,7 +69,7 @@ interface GraphCanvasProps {
   onShowNodeHelp?: (definitionId: string) => void;
   onSelectedEdgeChange: (edgeId: string | null) => void;
   onSelectedEdgesChange?: (edgeIds: string[]) => void;
-  onGraphChange: (graph: GraphDocumentV01, patches?: GraphPatch[]) => void;
+  onGraphChange: (graph: GraphDisplayDocument, patches?: GraphEditorPatch[]) => void;
   onViewStateChange: (viewState: ViewStateV01) => void;
   onSelectedNodeChange: (nodeId: string | null) => void;
   onSelectedNodesChange?: (nodeIds: string[]) => void;
@@ -312,14 +314,14 @@ export function GraphCanvas({
         return;
       }
       let nextGraph = graph;
-      const patches: GraphPatch[] = [];
+      const patches: GraphEditorPatch[] = [];
       for (const edge of deletedEdges) {
         if (deletingNodeIdsRef.current.has(edge.source) || deletingNodeIdsRef.current.has(edge.target)) {
           continue;
         }
         const skenionEdge = edgeFromReactFlow(edge);
         if (skenionEdge) {
-          const patch = { type: "removeEdge", edge: skenionEdge } satisfies GraphPatch;
+          const patch = { type: "removeEdge", edge: skenionEdge } satisfies GraphEditorPatch;
           nextGraph = applyPatch(nextGraph, patch);
           patches.push(patch);
         }
@@ -339,13 +341,13 @@ export function GraphCanvas({
         return;
       }
       let nextGraph = graph;
-      const patches: GraphPatch[] = [];
+      const patches: GraphEditorPatch[] = [];
       deletingNodeIdsRef.current = new Set(deletedNodes.map((node) => node.id));
       window.queueMicrotask(() => {
         deletingNodeIdsRef.current = new Set();
       });
       for (const node of deletedNodes) {
-        const patch = { type: "removeNode", nodeId: node.id } satisfies GraphPatch;
+        const patch = { type: "removeNode", nodeId: node.id } satisfies GraphEditorPatch;
         nextGraph = applyPatch(nextGraph, patch);
         patches.push(patch);
       }
@@ -385,7 +387,7 @@ export function GraphCanvas({
         });
         return;
       }
-      const patch = { type: "removeNode", nodeId } satisfies GraphPatch;
+      const patch = { type: "removeNode", nodeId } satisfies GraphEditorPatch;
       onGraphChange(applyPatch(graph, patch), [patch]);
       onSelectedNodeChange(null);
       onSelectedEdgeChange(null);
@@ -409,7 +411,7 @@ export function GraphCanvas({
       if (!skenionEdge) {
         return;
       }
-      const patch = { type: "removeEdge", edge: skenionEdge } satisfies GraphPatch;
+      const patch = { type: "removeEdge", edge: skenionEdge } satisfies GraphEditorPatch;
       onGraphChange(applyPatch(graph, patch), [patch]);
       onSelectedEdgeChange(null);
       setContextMenu(null);
@@ -437,7 +439,7 @@ export function GraphCanvas({
         ...JSON.parse(JSON.stringify(source)),
         id: nextId
       } as typeof source;
-      const patch = { type: "addNode", node } satisfies GraphPatch;
+      const patch = { type: "addNode", node } satisfies GraphEditorPatch;
       const nextGraph = applyPatch(graph, patch);
       onGraphChange(nextGraph, [patch]);
       onViewStateChange(
@@ -859,7 +861,7 @@ function connectionFromFinalState(connectionState: FinalConnectionState): Connec
 }
 
 function connectionStartMessage(
-  graph: GraphDocumentV01,
+  graph: GraphDisplayDocument,
   nodeId: string | null,
   portId: string | null
 ): string | null {

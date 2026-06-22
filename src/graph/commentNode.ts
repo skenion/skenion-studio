@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const COMMENT_NODE_KIND = "core.comment";
 export const DEFAULT_COMMENT_TEXT = "";
@@ -18,7 +18,7 @@ export function readCommentTextParam(node: GraphNodeV01): string {
   return typeof node.params.text === "string" ? node.params.text : DEFAULT_COMMENT_TEXT;
 }
 
-export function setCommentTextParamPatch(nodeId: string, text: string): GraphPatch {
+export function setCommentTextParamPatch(nodeId: string, text: string): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

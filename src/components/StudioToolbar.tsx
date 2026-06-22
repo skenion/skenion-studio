@@ -25,14 +25,15 @@ import {
   Sun,
   Upload
 } from "lucide-react";
-import type { GraphDocumentV01, ValidationResult } from "@skenion/contracts";
+import type { ValidationResult } from "@skenion/contracts";
+import type { GraphDisplayDocument } from "../graph/skenionGraph";
 import { IconButton } from "./core/IconButton/IconButton";
 
 interface StudioToolbarProps {
-  graph: GraphDocumentV01;
+  graph: GraphDisplayDocument;
   runtimeGraphAvailable: boolean;
   summary: string;
-  validation: ValidationResult<GraphDocumentV01>;
+  validation: ValidationResult<GraphDisplayDocument>;
   onExport: () => void;
   onImport: (file: File | null) => void;
   onOpenProject: (file: File | null) => void;
@@ -87,7 +88,7 @@ export function StudioToolbar({
             </Badge>
           </Group>
           <Text c="dimmed" size="xs">
-            {runtimeGraphAvailable ? `${graph.id} · ${summary} · graph v0.1` : "No Runtime session"}
+            {runtimeGraphAvailable ? `${graph.id} · ${summary} · graph v0.2` : "No Runtime session"}
           </Text>
         </div>
       </Group>

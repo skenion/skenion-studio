@@ -1,5 +1,5 @@
 import type { GraphNodeV01 } from "@skenion/contracts";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 export const FLOAT_VALUE_NODE_KIND = "core.float";
 export const DEFAULT_FLOAT_VALUE = 0.5;
@@ -30,7 +30,7 @@ export function readFloatRepresentationParam(node: GraphNodeV01): FloatRepresent
     : DEFAULT_FLOAT_REPRESENTATION;
 }
 
-export function setFloatValueParamPatch(nodeId: string, value: number): GraphPatch {
+export function setFloatValueParamPatch(nodeId: string, value: number): GraphEditorPatch {
   return {
     type: "setNodeParam",
     nodeId,

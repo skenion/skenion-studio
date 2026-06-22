@@ -5,7 +5,7 @@ import { createProjectDocument, createViewStateFromPositions, activeProjectDispl
 import { applyActiveProjectPatches } from "./activeProject";
 import { createGraphNodeFromDefinition } from "./skenionGraph";
 import { nodeRegistry } from "../data/registry";
-import type { GraphPatch } from "./skenionGraph";
+import type { GraphEditorPatch } from "./skenionGraph";
 
 describe("active project graph v0.2 mutations", () => {
   it("applies Studio graph edits to the v0.2 project source of truth", () => {
@@ -18,7 +18,7 @@ describe("active project graph v0.2 mutations", () => {
       nodeId: "value_1",
       key: "value",
       value: 0.75
-    } satisfies GraphPatch;
+    } satisfies GraphEditorPatch;
     const nextProject = applyActiveProjectPatches(project, [patch]);
 
     expect(nextProject.schemaVersion).toBe("0.2.0");
@@ -35,7 +35,7 @@ describe("active project graph v0.2 mutations", () => {
       nodeId: "value_1",
       ports: [],
       edgePolicy: "removeInvalidEdges"
-    } satisfies GraphPatch;
+    } satisfies GraphEditorPatch;
     const nextProject = applyActiveProjectPatches(project, [patch]);
 
     expect(nextProject.graph.edges.some((edge) => edge.source.nodeId === "value_1")).toBe(false);
@@ -51,15 +51,15 @@ describe("active project graph v0.2 mutations", () => {
       ...createGraphNodeFromDefinition(floatDefinition, sampleGraph.nodes),
       id: "extra_value"
     };
-    const addNode = { type: "addNode", node: extraNode } satisfies GraphPatch;
+    const addNode = { type: "addNode", node: extraNode } satisfies GraphEditorPatch;
     const addEdge = {
       type: "addEdge",
       edge: {
         from: { node: "extra_value", port: "value" },
         to: { node: "target_1", port: "in" }
       }
-    } satisfies GraphPatch;
-    const removeEdge = { type: "removeEdge", edge: addEdge.edge } satisfies GraphPatch;
+    } satisfies GraphEditorPatch;
+    const removeEdge = { type: "removeEdge", edge: addEdge.edge } satisfies GraphEditorPatch;
     const replaceNode = {
       type: "replaceNode",
       nodeId: "target_1",
@@ -68,8 +68,8 @@ describe("active project graph v0.2 mutations", () => {
         ports: []
       },
       edgePolicy: "removeInvalidEdges"
-    } satisfies GraphPatch;
-    const removeNode = { type: "removeNode", nodeId: "extra_value" } satisfies GraphPatch;
+    } satisfies GraphEditorPatch;
+    const removeNode = { type: "removeNode", nodeId: "extra_value" } satisfies GraphEditorPatch;
     const nextProject = applyActiveProjectPatches(project, [addNode, addEdge, removeEdge, replaceNode, removeNode]);
 
     expect(nextProject.graph.nodes.some((node) => node.id === "extra_value")).toBe(false);

@@ -2,11 +2,10 @@ import type { CSSProperties } from "react";
 import type {
   DataFlow,
   EdgeV01,
-  GraphDocumentV01,
-  GraphNodeV01,
   ViewStateV01
 } from "@skenion/contracts";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
+import type { GraphDisplayDocument, GraphDisplayNode } from "./graphDisplay";
 import { typeKey } from "./skenionGraph";
 import { viewPositionsFromViewState } from "./projectDocument";
 import {
@@ -21,12 +20,12 @@ import type { RuntimeControlMessage, RuntimeControlValue } from "../runtime/type
 
 export interface SkenionNodeData extends Record<string, unknown> {
   card: NodeCardView;
-  node: GraphNodeV01;
+  node: GraphDisplayNode;
   label: string;
   kind: string;
   kindVersion: string;
   layoutEditable?: boolean;
-  onImportAsset?: (node: GraphNodeV01, file: File) => Promise<void> | void;
+  onImportAsset?: (node: GraphDisplayNode, file: File) => Promise<void> | void;
   onObjectControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectLiveControl?: (nodeId: string, portId: string, message: RuntimeControlMessage) => void;
   onObjectParamChange?: (nodeId: string, key: string, value: unknown) => void;
@@ -48,7 +47,7 @@ export interface ReactFlowViewModel {
 }
 
 export function toReactFlowViewModel(
-  graph: GraphDocumentV01,
+  graph: GraphDisplayDocument,
   viewState: ViewStateV01
 ): ReactFlowViewModel {
   const positions = viewPositionsFromViewState(viewState);
@@ -97,7 +96,7 @@ export function flowName(flow: DataFlow, dataKind?: string): string {
 }
 
 function toReactFlowNode(
-  node: GraphNodeV01,
+  node: GraphDisplayNode,
   index: number,
   position?: { x: number; y: number }
 ): Node<SkenionNodeData> {
@@ -120,7 +119,7 @@ function toReactFlowNode(
   };
 }
 
-function toReactFlowEdge(edge: EdgeV01, graph: GraphDocumentV01): Edge {
+function toReactFlowEdge(edge: EdgeV01, graph: GraphDisplayDocument): Edge {
   const sourceNode = graph.nodes.find((node) => node.id === edge.from.node);
   const sourcePort = sourceNode?.ports.find((port) => port.id === edge.from.port);
   const inspector = edgeInspectorModel(graph, edge);
