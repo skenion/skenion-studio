@@ -52,6 +52,17 @@ Studio currently targets the Contracts `0.45` line:
 the compatibility range. Release artifacts must be produced through GitHub
 Actions and Release Please, not local publishing.
 
+All Studio release-state writes must run only from GitHub Actions workflows.
+Do not create, edit, delete, promote, demote, or repair Studio GitHub Releases,
+release assets, tags, prerelease/draft flags, release notes, web-bundle
+metadata, desktop artifact metadata, or compatibility promotion state from a
+local shell. This includes `gh release edit`, `gh release upload`,
+`gh release delete`, manual tag mutation, local registry publish, or one-off
+release metadata patches with a locally exported token. Local commands may
+inspect release state, run dry-run/package checks, create normal code PRs, or
+trigger approved `workflow_dispatch` jobs; the actual release mutation must
+happen inside CI with reviewed workflow code and auditable logs.
+
 ## Manager, Worker, And Review Gate Defaults
 
 Codex should operate as a manager/orchestrator on Skenion work. The manager owns
