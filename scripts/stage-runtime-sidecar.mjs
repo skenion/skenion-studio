@@ -205,15 +205,15 @@ async function verifySha256(filePath, expected, label) {
 }
 
 async function githubFetch(url, init = {}) {
-  const token =
-    process.env.SKENION_RELEASE_TRAIN_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const token = process.env.GH_TOKEN;
+  if (!token) {
+    fail("GH_TOKEN is required to read Runtime GitHub release assets for sidecar staging.");
+  }
   const headers = {
     "User-Agent": "skenion-studio-sidecar-stager",
     ...init.headers
   };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+  headers.Authorization = `Bearer ${token}`;
   return fetch(url, {
     ...init,
     headers
