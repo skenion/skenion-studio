@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.44.1](https://github.com/skenion/skenion-studio/compare/skenion-studio-v0.44.0...skenion-studio-v0.44.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* **ci:** keep desktop verifier tag-compatible ([c115d72](https://github.com/skenion/skenion-studio/commit/c115d72a4fabad5138e9ca8ba1da96351764a579)), closes [#136](https://github.com/skenion/skenion-studio/issues/136)
+* **ci:** require explicit unsigned desktop preview mode ([a4c1616](https://github.com/skenion/skenion-studio/commit/a4c161613838d592b0f7558105567940b94ad4f4)), closes [#136](https://github.com/skenion/skenion-studio/issues/136)
+
 ## [0.44.0](https://github.com/skenion/skenion-studio/compare/skenion-studio-v0.43.0...skenion-studio-v0.44.0) (2026-06-23)
 
 
