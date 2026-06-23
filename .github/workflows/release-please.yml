@@ -20,9 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create or update Studio release
+        id: release
         uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: main
           token: ${{ secrets.GH_TOKEN }}
+
+      - uses: actions/checkout@v6
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+
+      - name: Mark new Studio release as metadata-only
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: node scripts/update-studio-release-status.mjs --mode release-please-created --tag "${RELEASE_TAG}"

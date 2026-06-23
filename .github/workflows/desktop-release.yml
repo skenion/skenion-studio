@@ -675,3 +675,30 @@ jobs:
               echo "- Windows installer signing mode: ${DESKTOP_SIGNING_MODE}"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  desktop-release-status:
+    name: desktop release status
+    needs:
+      - release
+      - desktop-package
+    if: needs.release.outputs.upload_release_assets == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release status tools
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+
+      - name: Mark release as desktop artifact evidence
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+          RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
+          DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
+        run: |
+          node .release-tools/scripts/update-studio-release-status.mjs \
+            --mode desktop-artifacts-published \
+            --tag "${RELEASE_TAG}" \
+            --runtime-tag "${RUNTIME_TAG}" \
+            --desktop-signing-mode "${DESKTOP_SIGNING_MODE}"

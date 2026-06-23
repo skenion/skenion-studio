@@ -3,6 +3,7 @@
   "packages": {
     ".": {
       "package-name": "skenion-studio",
+      "prerelease": true,
       "extra-files": [
         {
           "type": "toml",
