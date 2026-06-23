@@ -1,10 +1,47 @@
-node_modules/
-dist/
-storybook-static/
-artifacts/
-.deps/
-src-tauri/gen/
-src-tauri/binaries/
-src-tauri/target/
-.DS_Store
+# Dependencies
+/node_modules/
+/packages/*/node_modules/
+/.pnpm-store/
+/.deps/
+
+# Frontend build, test, and cache output
+/dist/
+/packages/*/dist/
+/coverage/
+/.vite/
+/storybook-static/
+/test-report/
+/test-results/
+/playwright-report/
+/vitest-results.xml
+/junit.xml
+/*.tsbuildinfo
+/.eslintcache
+
+# Release and desktop artifacts
+/artifacts/
+/packages/studio-web/studio-web-manifest.json
+/packages/studio-desktop/studio-desktop-manifest.json
+/src-tauri/gen/
+/src-tauri/binaries/
+/src-tauri/target/
+
+# Release-train scratch
+/.skenion-train/
+/.skenion-ci/
+/.caller/
+
+# Local environment and logs
+/.env
+/.env.*
+!/.env.example
 *.local
+/*.log
+/logs/
+/npm-debug.log*
+/pnpm-debug.log*
+/yarn-debug.log*
+/yarn-error.log*
+
+# OS metadata
+.DS_Store
