@@ -23,6 +23,6 @@ export default tseslint.config(
     }
   },
   {
-    ignores: ["dist", "storybook-static", "node_modules", ".deps", "src-tauri/target"]
+    ignores: ["dist", "packages/*/dist", "storybook-static", "node_modules", ".deps", "src-tauri/target"]
   }
 );

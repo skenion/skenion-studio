@@ -1,6 +1,6 @@
-# Skenion Studio Frontend Component Architecture
+# skenion studio Frontend Component Architecture
 
-Skenion Studio keeps graph semantics separate from the visual canvas integration. Components that render node, port, inspector, runtime, or telemetry state should be reusable without a running Runtime server and without React Flow context.
+skenion studio keeps graph semantics separate from the visual canvas integration. Components that render node, port, inspector, runtime, or telemetry state should be reusable without a running Runtime server and without React Flow context.
 
 ## Component Boundaries
 
@@ -9,7 +9,7 @@ Skenion Studio keeps graph semantics separate from the visual canvas integration
 - `NodePortRow` renders port label, type, tooltip metadata, compatibility states, and a handle slot.
 - `NodePortHandle` is only a visual placeholder for pure component rendering and Storybook.
 - React Flow `Handle` usage belongs only in `src/components/graph/ReactFlowNodeAdapter.tsx`.
-- `src/graph/nodeCardView.ts` converts Skenion graph nodes into pure `NodeCardView` data.
+- `src/graph/nodeCardView.ts` converts skenion graph nodes into pure `NodeCardView` data.
 - `GraphCanvas` owns React Flow state wiring and calls the adapter-generated view model.
 
 ## Inspector Panels

@@ -214,7 +214,7 @@ fn open_studio_window(
     );
     let url = WebviewUrl::App(format!("index.html?{query}").into());
     WebviewWindowBuilder::new(&app, request.window_id.clone(), url)
-        .title("Skenion Studio")
+        .title("skenion studio")
         .inner_size(1280.0, 860.0)
         .min_inner_size(960.0, 640.0)
         .build()
@@ -243,7 +243,7 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running Skenion Studio desktop shell");
+        .expect("error while running skenion studio desktop shell");
 }
 
 impl RuntimeSidecarManager {

@@ -157,7 +157,7 @@ describe("skenion graph helpers", () => {
     ]);
   });
 
-  it("converts React Flow connections and edges to Skenion patches", () => {
+  it("converts React Flow connections and edges to skenion patches", () => {
     const connection = {
       source: "value_1",
       sourceHandle: "value",

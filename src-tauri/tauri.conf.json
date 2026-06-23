@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Skenion Studio",
+  "productName": "skenion studio",
   "version": "0.43.0",
-  "identifier": "lab.echovision.skenion-studio",
+  "identifier": "org.skenion.studio",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
@@ -16,7 +16,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Skenion Studio",
+        "title": "skenion studio",
         "width": 1440,
         "height": 960,
         "minWidth": 1024,

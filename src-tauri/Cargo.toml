@@ -1,8 +1,8 @@
 [package]
 name = "skenion-studio"
 version = "0.43.0"
-description = "Desktop shell for Skenion Studio"
-authors = ["EchoVisionLab"]
+description = "Desktop shell for skenion studio"
+authors = ["skenion contributors"]
 edition = "2021"
 license = "Apache-2.0"
 

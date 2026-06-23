@@ -93,7 +93,7 @@ jobs:
         with:
           ref: ${{ steps.validate.outputs.tag_ref }}
 
-      - name: Validate Studio package versions
+      - name: Validate skenion studio package versions
         shell: bash
         env:
           EXPECTED_VERSION: ${{ steps.validate.outputs.version }}
@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Studio Desktop Release"
+            echo "## skenion studio Desktop Release"
             echo ""
             echo "- Studio tag: ${{ steps.validate.outputs.tag }}"
             echo "- Studio version: ${{ steps.validate.outputs.version }}"
@@ -312,7 +312,7 @@ jobs:
             exit 1
           fi
 
-      - name: Install Studio dependencies from released packages
+      - name: Install studio dependencies from released packages
         run: |
           set -euo pipefail
           pnpm install --no-frozen-lockfile
@@ -354,7 +354,7 @@ jobs:
           pnpm run stage-runtime-sidecar -- "${args[@]}"
 
       - id: package_runtime_sidecar
-        name: Package Studio Runtime sidecar release asset
+        name: Package skenion runtime sidecar release asset
         run: pnpm run package-runtime-sidecar -- --target "${TARGET}"
 
       - name: Verify Windows installer artifact classification
@@ -380,10 +380,10 @@ jobs:
             echo "- User-facing Windows app installer: Tauri NSIS setup executable (-setup.exe)"
             echo "- Additional installer, if emitted: Tauri MSI"
             echo "- Runtime sidecar ZIP: ${SIDECAR_ASSET_NAME}"
-            echo "- Sidecar ZIP installer status: not a Studio Windows installer"
+            echo "- Sidecar ZIP installer status: not a skenion studio Windows installer"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Upload Studio Runtime sidecar release asset
+      - name: Upload skenion runtime sidecar release asset
         if: needs.release.outputs.upload_release_assets == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -525,8 +525,8 @@ jobs:
           }
           NODE
 
-      - name: Build and upload Tauri desktop package (macOS)
-        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS'
+      - name: Build Tauri desktop package (macOS)
+        if: runner.os == 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -538,39 +538,13 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ needs.release.outputs.tag }}
-          releaseName: Skenion Studio v${{ needs.release.outputs.version }}
-          releaseBody: |
-            Skenion Studio desktop package for ${{ matrix.target }}.
-
-            Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.
-            Signing/notarization/updater status is tracked in docs/ci-release-policy.md.
           includeUpdaterJson: false
           projectPath: .
           tauriScript: pnpm tauri
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
-      - name: Build and upload Tauri desktop package (non-macOS)
-        if: needs.release.outputs.upload_release_assets == 'true' && runner.os != 'macOS'
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PNPM_HOME: ${{ env.PNPM_HOME }}
-        with:
-          tagName: ${{ needs.release.outputs.tag }}
-          releaseName: Skenion Studio v${{ needs.release.outputs.version }}
-          releaseBody: |
-            Skenion Studio desktop package for ${{ matrix.target }}.
-
-            Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.
-            Signing/notarization/updater status is tracked in docs/ci-release-policy.md.
-          includeUpdaterJson: false
-          projectPath: .
-          tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
-
-      - name: Build Tauri desktop package
-        if: needs.release.outputs.upload_release_assets != 'true'
+      - name: Build Tauri desktop package (non-macOS)
+        if: runner.os != 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -580,11 +554,26 @@ jobs:
           projectPath: .
           tauriScript: pnpm tauri
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
+
+      - id: package_studio_desktop
+        name: Package canonical skenion studio desktop release asset
+        if: needs.release.outputs.upload_release_assets == 'true'
+        run: pnpm run package-studio-desktop -- --target "${TARGET}" --version "${VERSION}"
+
+      - name: Upload canonical skenion studio desktop release asset
+        if: needs.release.outputs.upload_release_assets == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ needs.release.outputs.tag }}" \
+            "${{ steps.package_studio_desktop.outputs.asset_path }}" \
+            "${{ steps.package_studio_desktop.outputs.checksum_path }}" \
+            --clobber
 
       - name: Summarize desktop package
         run: |
           {
-            echo "## Studio Desktop Package"
+            echo "## skenion studio Desktop Package"
             echo ""
             echo "- Target: ${TARGET}"
             echo "- Tier: ${{ matrix.tier }}"
@@ -592,6 +581,11 @@ jobs:
             echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
             echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"
+            if [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" ]]; then
+              echo "- Desktop package release asset: ${{ steps.package_studio_desktop.outputs.asset_name }}"
+              echo "- Desktop package checksum: ${{ steps.package_studio_desktop.outputs.asset_name }}.sha256"
+              echo "- Desktop package contents: ${{ steps.package_studio_desktop.outputs.artifact_count }} Tauri artifact(s)"
+            fi
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
               echo "- Windows app installer family: primary NSIS setup executable (-setup.exe), secondary MSI when emitted"
               echo "- Windows installer signing mode: ${WINDOWS_INSTALLER_SIGNING_MODE:-verify-mode-not-required}"

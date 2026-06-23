@@ -1,4 +1,4 @@
-# Skenion Studio CI and Release Policy
+# skenion studio CI and Release Policy
 
 Studio treats graph UX and runtime-compatibility gates as release-relevant behavior. A change that makes a gate stricter, changes canonical builtin consumption, or changes the graph editing contract should ship as a real patch or minor release through Release Please.
 
@@ -37,6 +37,12 @@ The visual gate is expected to generate exactly fifteen PNG artifacts:
 app build. `pnpm run visual-gate` is the explicit visual QA command and should
 be run when a graph editor change needs screenshot review.
 
+Studio preserves pnpm's minimum-release-age policy for third-party
+dependencies. The only workspace-level age-policy exclusion is the first-party
+same-train `@skenion/contracts` package, so PR CI can validate against the
+freshly published train package while still building the sibling Contracts
+checkout used for integration checks.
+
 ## Release Hygiene
 
 Do not bump `package.json` manually to describe compatibility. Use Conventional Commits and let Release Please produce the version bump.
@@ -64,14 +70,29 @@ workflow packages these targets:
 
 The workflow produces two different artifact classes:
 
-- Studio desktop packages are the user-facing Tauri app distribution artifacts
-  for each OS, such as signed/notarized macOS App/DMG output, Windows MSI or
-  NSIS `-setup.exe` installers, and Linux package output.
+- skenion studio desktop packages are canonical release-train archives named
+  `skenion-studio-<target>.tar.gz` for macOS/Linux and
+  `skenion-studio-<target>.zip` for Windows, each with a sibling `.sha256`
+  file. These archives contain the Tauri-generated app distribution artifacts
+  for that target: signed/notarized macOS DMG/App archive output, Windows NSIS
+  `-setup.exe` output with MSI included only when Tauri emits it, and Linux
+  deb/rpm package output.
 - Runtime sidecar archives are same-train Runtime transport assets consumed by
-  Studio desktop packaging and release-train verification. They are not desktop
+  skenion studio desktop packaging and release-train verification. They are not desktop
   installers, standalone app downloads, or Windows installer substitutes, and
   must be named as sidecar archives or sidecar assets in release manifests,
   package manifests, and release evidence.
+
+Tauri action builds are used only to produce the platform bundle outputs. The
+desktop release workflow then runs `scripts/package-studio-desktop.mjs` in
+publish mode to create and upload the canonical `skenion-studio-<target>`
+archive plus checksum with `gh release upload`. Verify mode builds the Tauri
+packages but does not upload release assets. Linux desktop release assets are
+the canonical archives containing deb/rpm output; the v0 workflow does not
+claim or manifest AppImage assets. Windows desktop release assets are canonical
+ZIP archives containing the installer output that Tauri actually produced; the
+release train does not claim a standalone `.msi` asset unless MSI output is
+present inside that archive.
 
 Before Tauri packaging, `scripts/stage-runtime-sidecar.mjs` downloads the
 matching `skenion-runtime-vx.y.z-<target>.tar.gz` asset from the same-train
@@ -79,21 +100,21 @@ Runtime GitHub Release, verifies the SHA-256 checksum, extracts the Runtime
 binary, and stages it for `bundle.externalBin`. Publish and verify modes fail
 closed when the Runtime asset or checksum is missing or mismatched.
 `scripts/package-runtime-sidecar.mjs` then repackages that staged binary as the
-Studio release sidecar asset expected by the train manifest:
+skenion studio release sidecar asset expected by the train manifest:
 `skenion-runtime-sidecar-<target>.tar.gz` for macOS/Linux and
 `skenion-runtime-sidecar-<target>.zip` for Windows, with a sibling `.sha256`
 file. Windows sidecars use ZIP because the transported payload is a `.exe` and
 Windows tooling handles ZIP natively; that ZIP is internal release-train
-transport only, not the Studio Windows installer. macOS and Linux sidecars use
+transport only, not the skenion studio Windows installer. macOS and Linux sidecars use
 `tar.gz` so Unix executable mode and path semantics survive archive creation,
 upload, and extraction. Publish mode uploads those sidecar assets to the Studio
 GitHub Release.
 
-Windows Studio distribution is installer-based. The primary v0 user-facing
+Windows studio distribution is installer-based. The primary v0 user-facing
 Windows artifact family is the Tauri NSIS setup executable ending in
 `-setup.exe`; MSI output may be published as an additional installer when it is
 stable. A `skenion-runtime-sidecar-*-windows-*.zip` asset is never evidence of a
-Windows Studio installer, even though it transports a Windows `.exe` sidecar.
+Windows studio installer, even though it transports a Windows `.exe` sidecar.
 The desktop release workflow records this split in the Windows package summary
 and fails the classification check if the sidecar asset stops being named as an
 internal Runtime sidecar ZIP.
@@ -108,9 +129,17 @@ Desktop packaging uploads artifacts only from GitHub Actions publish mode.
 Local commands may build or stage artifacts for verification, but they must not
 publish Studio desktop packages or Runtime sidecars.
 
-Web Studio release behavior remains remote-runtime compatible: Vite builds do
-not require the sidecar, and browser deployments continue to use explicit
-Runtime URLs.
+skenion studio web release behavior remains remote-runtime compatible: Vite
+builds do not require the sidecar, and browser deployments continue to use
+explicit Runtime URLs. The web build is distributed as a Studio web bundle
+GitHub Release artifact named `skenion-studio-web-bundle-vx.y.z.tar.gz`, with a
+sibling `skenion-studio-web-bundle-vx.y.z.tar.gz.sha256` checksum, not as an npm
+package.
+
+skenion studio desktop is distributed as signed desktop artifacts from GitHub
+Releases. The private `packages/studio-desktop` workspace package exists only
+to stage release metadata and dry-run pack checks; it must not be published to
+npm.
 
 macOS desktop distribution is release-complete only when the release-blocking
 macOS arm64 (`aarch64-apple-darwin`) and macOS x64 (`x86_64-apple-darwin`)
@@ -135,6 +164,6 @@ variable because it is a packaging smoke test, not release evidence.
 
 Full application auto-updater rollout remains out of v0 scope. Missing updater
 feed publication or updater signing keys must be reported with the desktop
-assets, but they must not block v0 while same-train Studio desktop packages and
+assets, but they must not block v0 while same-train studio desktop packages and
 Runtime sidecar archives are available, checksummed, and otherwise satisfy the
 release train gates.

@@ -287,7 +287,7 @@ export function runtimeConnectionProfileForStudioProfile(
   switch (profile.mode) {
     case "local-managed":
       return {
-        displayName: "Skenion Runtime local-managed sidecar",
+        displayName: "skenion runtime local-managed sidecar",
         endpoint,
         mode: "local-managed",
         ownership: "owned-child",
@@ -295,7 +295,7 @@ export function runtimeConnectionProfileForStudioProfile(
       };
     case "local-shared":
       return {
-        displayName: "Skenion Runtime local-shared",
+        displayName: "skenion runtime local-shared",
         endpoint,
         mode: "local-shared",
         ownership: "external",
@@ -303,7 +303,7 @@ export function runtimeConnectionProfileForStudioProfile(
       };
     case "remote":
       return {
-        displayName: "Skenion Runtime remote",
+        displayName: "skenion runtime remote",
         endpoint,
         mode: "remote",
         ownership: "remote",

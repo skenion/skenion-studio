@@ -1,13 +1,14 @@
 {
   "name": "@skenion/studio-web",
   "version": "0.43.0",
-  "description": "Versioned Skenion Studio web static artifact",
+  "description": "Release metadata for the skenion studio web bundle artifact",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/echovisionlab/skenion-studio"
+    "url": "https://github.com/skenion/skenion-studio"
   },
   "type": "module",
+  "private": true,
   "sideEffects": false,
   "peerDependencies": {
     "@skenion/contracts": "0.43.0"
@@ -25,8 +26,5 @@
     "dist",
     "studio-web-manifest.json",
     "README.md"
-  ],
-  "publishConfig": {
-    "access": "public"
-  }
+  ]
 }

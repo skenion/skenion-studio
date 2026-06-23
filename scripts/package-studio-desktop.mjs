@@ -1,100 +1,232 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { deflateRaw } from "node:zlib";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
-const defaultInputDir = path.join(rootDir, "src-tauri", "binaries");
-const defaultOutputDir = path.join(rootDir, "artifacts", "runtime-sidecars");
+const defaultOutputDir = path.join(rootDir, "artifacts", "studio-desktop");
 const deflateRawAsync = promisify(deflateRaw);
 const crc32Table = createCrc32Table();
-const supportedTargets = new Set([
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "x86_64-pc-windows-msvc",
-  "aarch64-pc-windows-msvc",
-  "x86_64-unknown-linux-gnu",
-  "aarch64-unknown-linux-gnu"
+const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const targetConfigs = new Map([
+  [
+    "aarch64-apple-darwin",
+    {
+      archiveExtension: "tar.gz",
+      requiredFamilies: ["dmg"],
+      isArtifact(relativePath) {
+        const lower = relativePath.toLowerCase();
+        return lower.endsWith(".dmg") || lower.endsWith(".app.tar.gz") || lower.endsWith(".app.tar.gz.sig");
+      },
+      familyFor(relativePath) {
+        return relativePath.toLowerCase().endsWith(".dmg") ? "dmg" : "macos-app-archive";
+      }
+    }
+  ],
+  [
+    "x86_64-apple-darwin",
+    {
+      archiveExtension: "tar.gz",
+      requiredFamilies: ["dmg"],
+      isArtifact(relativePath) {
+        const lower = relativePath.toLowerCase();
+        return lower.endsWith(".dmg") || lower.endsWith(".app.tar.gz") || lower.endsWith(".app.tar.gz.sig");
+      },
+      familyFor(relativePath) {
+        return relativePath.toLowerCase().endsWith(".dmg") ? "dmg" : "macos-app-archive";
+      }
+    }
+  ],
+  [
+    "x86_64-pc-windows-msvc",
+    {
+      archiveExtension: "zip",
+      requiredFamilies: ["nsis-setup"],
+      isArtifact(relativePath) {
+        const normalized = normalizeArchivePath(relativePath).toLowerCase();
+        return (
+          normalized.endsWith(".msi") ||
+          normalized.endsWith("-setup.exe") ||
+          (normalized.includes("/nsis/") && normalized.endsWith(".exe"))
+        );
+      },
+      familyFor(relativePath) {
+        return relativePath.toLowerCase().endsWith(".msi") ? "msi" : "nsis-setup";
+      }
+    }
+  ],
+  [
+    "aarch64-pc-windows-msvc",
+    {
+      archiveExtension: "zip",
+      requiredFamilies: ["nsis-setup"],
+      isArtifact(relativePath) {
+        const normalized = normalizeArchivePath(relativePath).toLowerCase();
+        return (
+          normalized.endsWith(".msi") ||
+          normalized.endsWith("-setup.exe") ||
+          (normalized.includes("/nsis/") && normalized.endsWith(".exe"))
+        );
+      },
+      familyFor(relativePath) {
+        return relativePath.toLowerCase().endsWith(".msi") ? "msi" : "nsis-setup";
+      }
+    }
+  ],
+  [
+    "x86_64-unknown-linux-gnu",
+    {
+      archiveExtension: "tar.gz",
+      requiredFamilies: ["deb", "rpm"],
+      isArtifact(relativePath) {
+        const lower = relativePath.toLowerCase();
+        return lower.endsWith(".deb") || lower.endsWith(".rpm");
+      },
+      familyFor(relativePath) {
+        return relativePath.toLowerCase().endsWith(".deb") ? "deb" : "rpm";
+      }
+    }
+  ],
+  [
+    "aarch64-unknown-linux-gnu",
+    {
+      archiveExtension: "tar.gz",
+      requiredFamilies: ["deb", "rpm"],
+      isArtifact(relativePath) {
+        const lower = relativePath.toLowerCase();
+        return lower.endsWith(".deb") || lower.endsWith(".rpm");
+      },
+      familyFor(relativePath) {
+        return relativePath.toLowerCase().endsWith(".deb") ? "deb" : "rpm";
+      }
+    }
+  ]
 ]);
 
 const options = parseArgs(process.argv.slice(2));
 const target = requireOption(options.target, "--target");
-const inputDir = path.resolve(rootDir, options.inputDir ?? defaultInputDir);
-const outputDir = path.resolve(rootDir, options.outputDir ?? defaultOutputDir);
+const config = targetConfigs.get(target);
 
-if (!supportedTargets.has(target)) {
-  fail(`--target must be one of ${[...supportedTargets].join(", ")}; got '${target}'.`);
+if (!config) {
+  fail(`--target must be one of ${[...targetConfigs.keys()].join(", ")}; got '${target}'.`);
 }
 
-const isWindows = target.includes("windows");
-const stagedBinaryName = `skenion-runtime-${target}${isWindows ? ".exe" : ""}`;
-const packagedBinaryName = isWindows ? "skenion-runtime.exe" : "skenion-runtime";
-const extension = isWindows ? "zip" : "tar.gz";
-const assetName = `skenion-runtime-sidecar-${target}.${extension}`;
+const rootPackage = await readJson("package.json");
+const version = options.version ?? rootPackage.version;
+if (!semverPattern.test(version)) {
+  fail(`--version must use x.y.z SemVer form; got '${version}'.`);
+}
+if (rootPackage.version !== version) {
+  fail(`package.json version ${rootPackage.version} does not match requested desktop package version ${version}.`);
+}
+
+const bundleDir = path.resolve(
+  rootDir,
+  options.inputDir ?? path.join("src-tauri", "target", target, "release", "bundle")
+);
+const outputDir = path.resolve(rootDir, options.outputDir ?? defaultOutputDir);
+const assetName = `skenion-studio-${target}.${config.archiveExtension}`;
 const assetPath = path.join(outputDir, assetName);
 const checksumPath = `${assetPath}.sha256`;
-const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-studio-sidecar-"));
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-studio-desktop-"));
 
 try {
-  const stagedBinary = path.join(inputDir, stagedBinaryName);
-  await fs.access(stagedBinary);
+  const discoveredFiles = await collectRegularFiles(bundleDir);
+  failIfUnexpectedLinuxAppImage(target, discoveredFiles);
+
+  const artifacts = discoveredFiles
+    .filter((candidate) => config.isArtifact(candidate.relativePath))
+    .map((candidate) => ({
+      ...candidate,
+      family: config.familyFor(candidate.relativePath),
+      archiveRelativePath: normalizeArchivePath(candidate.relativePath)
+    }))
+    .sort((left, right) => left.archiveRelativePath.localeCompare(right.archiveRelativePath));
+
+  if (artifacts.length === 0) {
+    fail(`Tauri bundle directory ${path.relative(rootDir, bundleDir)} does not contain package artifacts for ${target}.`);
+  }
+
+  const artifactFamilies = new Set(artifacts.map((artifact) => artifact.family));
+  for (const requiredFamily of config.requiredFamilies) {
+    if (!artifactFamilies.has(requiredFamily)) {
+      fail(`Tauri bundle directory ${path.relative(rootDir, bundleDir)} is missing required ${requiredFamily} output for ${target}.`);
+    }
+  }
+
   await fs.mkdir(outputDir, { recursive: true });
 
-  const packageDir = path.join(tempDir, `skenion-runtime-sidecar-${target}`);
-  await fs.mkdir(packageDir, { recursive: true });
-  await fs.copyFile(stagedBinary, path.join(packageDir, packagedBinaryName));
-  if (!isWindows) {
-    await fs.chmod(path.join(packageDir, packagedBinaryName), 0o755);
-  }
+  const packageDirName = `skenion-studio-${target}`;
+  const packageDir = path.join(tempDir, packageDirName);
+  await fs.mkdir(path.join(packageDir, "tauri"), { recursive: true });
+
+  const readmePath = path.join(packageDir, "README.txt");
   await fs.writeFile(
-    path.join(packageDir, "README.txt"),
-    `skenion runtime sidecar\nTarget: ${target}\n`,
+    readmePath,
+    [
+      "skenion studio desktop package",
+      `Version: ${version}`,
+      `Target: ${target}`,
+      `Canonical asset: ${assetName}`,
+      "Contents: Tauri-generated desktop package artifacts for this target.",
+      ""
+    ].join("\n"),
     "utf8"
   );
 
-  const tempAssetPath = path.join(tempDir, assetName);
-  const packageDirName = path.basename(packageDir);
-  const expectedArchiveEntries = [
-    `${packageDirName}/README.txt`,
-    `${packageDirName}/${packagedBinaryName}`
+  const archiveEntries = [
+    {
+      entryName: `${packageDirName}/README.txt`,
+      filePath: readmePath
+    }
   ];
 
-  if (isWindows) {
-    await writeZipArchive(
-      tempAssetPath,
-      expectedArchiveEntries.map((entryName) => ({
-        entryName,
-        filePath: path.join(tempDir, entryName)
-      }))
-    );
-  } else {
-    await run("tar", ["-czf", assetName, packageDirName], { cwd: tempDir });
-  }
-  await fs.copyFile(tempAssetPath, assetPath);
-  if (isWindows) {
-    await validateZipArchive(assetPath, expectedArchiveEntries);
-  } else {
-    await validateTarGzArchive(assetPath, expectedArchiveEntries);
+  for (const artifact of artifacts) {
+    const destination = path.join(packageDir, "tauri", ...artifact.archiveRelativePath.split("/"));
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.copyFile(artifact.filePath, destination);
+    archiveEntries.push({
+      entryName: `${packageDirName}/tauri/${artifact.archiveRelativePath}`,
+      filePath: destination
+    });
   }
 
+  const tempAssetPath = path.join(tempDir, assetName);
+  if (config.archiveExtension === "zip") {
+    await writeZipArchive(tempAssetPath, archiveEntries);
+    await validateZipArchive(tempAssetPath, archiveEntries.map((entry) => entry.entryName));
+  } else {
+    await run("tar", ["-czf", assetName, packageDirName], { cwd: tempDir });
+    await validateTarGzArchive(tempAssetPath, archiveEntries.map((entry) => entry.entryName));
+  }
+
+  await fs.copyFile(tempAssetPath, assetPath);
   const checksum = await sha256(assetPath);
   await fs.writeFile(checksumPath, `${checksum}  ${assetName}\n`, "utf8");
 
   if (process.env.GITHUB_OUTPUT) {
     await fs.appendFile(
       process.env.GITHUB_OUTPUT,
-      `asset_name=${assetName}\nasset_path=${assetPath}\nchecksum_path=${checksumPath}\nsha256=${checksum}\n`,
+      [
+        `asset_name=${assetName}`,
+        `asset_path=${assetPath}`,
+        `checksum_path=${checksumPath}`,
+        `sha256=${checksum}`,
+        `artifact_count=${artifacts.length}`,
+        ""
+      ].join("\n"),
       "utf8"
     );
   }
 
   console.log(`packaged ${path.relative(rootDir, assetPath)}`);
   console.log(`wrote ${path.relative(rootDir, checksumPath)}`);
+  console.log(`included ${artifacts.length} Tauri artifact(s) for ${target}`);
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
@@ -127,10 +259,58 @@ function requireOption(value, name) {
   return value;
 }
 
+async function collectRegularFiles(directory) {
+  try {
+    await fs.access(directory);
+  } catch {
+    fail(`Tauri bundle directory ${path.relative(rootDir, directory)} does not exist.`);
+  }
+
+  const files = [];
+  await walk(directory);
+  return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+  async function walk(currentDirectory) {
+    const entries = await fs.readdir(currentDirectory, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(currentDirectory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(entryPath);
+      } else if (entry.isFile()) {
+        files.push({
+          filePath: entryPath,
+          relativePath: path.relative(directory, entryPath)
+        });
+      }
+    }
+  }
+}
+
+function failIfUnexpectedLinuxAppImage(targetName, files) {
+  if (!targetName.endsWith("-unknown-linux-gnu")) {
+    return;
+  }
+
+  const appImage = files.find((file) => file.relativePath.toLowerCase().endsWith(".appimage"));
+  if (appImage) {
+    fail(
+      `Linux release packaging is intentionally limited to deb/rpm, but Tauri emitted ${normalizeArchivePath(appImage.relativePath)}.`
+    );
+  }
+}
+
 async function sha256(filePath) {
   const hash = createHash("sha256");
   hash.update(await fs.readFile(filePath));
   return hash.digest("hex");
+}
+
+async function readJson(relativePath) {
+  return JSON.parse(await fs.readFile(path.join(rootDir, relativePath), "utf8"));
+}
+
+function normalizeArchivePath(filePath) {
+  return filePath.split(path.sep).join("/");
 }
 
 async function writeZipArchive(destination, entries) {
@@ -159,7 +339,6 @@ async function writeZipArchive(destination, entries) {
     localHeader.writeUInt32LE(body.length, 22);
     localHeader.writeUInt16LE(nameBuffer.length, 26);
     localHeader.writeUInt16LE(0, 28);
-
     localParts.push(localHeader, nameBuffer, compressedBody);
 
     const centralHeader = Buffer.alloc(46);
@@ -272,7 +451,7 @@ async function listTarGzEntries(filePath) {
 
 function assertZip32Size(size, label) {
   if (size > 0xffffffff) {
-    fail(`ZIP entry ${label} is too large for the release sidecar archive format.`);
+    fail(`ZIP entry ${label} is too large for the release desktop archive format.`);
   }
 }
 

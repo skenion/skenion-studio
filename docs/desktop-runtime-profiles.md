@@ -1,12 +1,12 @@
 # Desktop Runtime Profiles
 
-Skenion Studio desktop uses Tauri as the shell. Runtime graph/session authority stays in
+skenion studio desktop uses Tauri as the shell. Runtime graph/session authority stays in
 `skenion-runtime`; Tauri owns only windows and local child process lifecycle.
 
 ## Profiles
 
 - `local-managed`: Tauri starts `skenion-runtime serve --host 127.0.0.1 --port 0 --startup-json`,
-  reads the startup JSON, and connects Studio to the bound endpoint. Tauri stops only the child
+  reads the startup JSON, and connects studio to the bound endpoint. Tauri stops only the child
   process it started when switching away from the profile or when the owning window closes.
 - `local-shared`: Studio connects to an already-running local Runtime endpoint and never stops it.
 - `remote`: Studio connects to the configured Runtime URL and starts no local process.
@@ -36,5 +36,5 @@ skenion-runtime serve --host 127.0.0.1 --port 3761
 pnpm dev
 ```
 
-Multiple shared Studio windows use the same Runtime URL and session id. Isolated demo windows launch
+Multiple shared studio windows use the same Runtime URL and session id. Isolated demo windows launch
 with their own local-managed profile key so they can own a separate Runtime child.

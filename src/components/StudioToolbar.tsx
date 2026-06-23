@@ -81,7 +81,7 @@ export function StudioToolbar({
         <div>
           <Group gap="xs" wrap="nowrap">
             <Text fw={800} size="sm">
-              Skenion Studio
+              skenion studio
             </Text>
             <Badge color={validation.ok ? "green" : "red"} variant="light">
               {validation.ok ? "valid" : "invalid"}

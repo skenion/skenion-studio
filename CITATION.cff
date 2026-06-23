@@ -1,11 +1,11 @@
 cff-version: 1.2.0
-message: "If this Skenion repository helps your artwork, research, publication, installation, or tool, please cite it."
-title: "Skenion Studio"
+message: "If this skenion repository helps your artwork, research, publication, installation, or tool, please cite it."
+title: "skenion studio"
 type: software
 authors:
-  - name: "EchoVisionLab"
+  - name: "skenion contributors"
 date-released: 2026-06-15
-url: "https://github.com/echovisionlab/skenion-studio"
-repository-code: "https://github.com/echovisionlab/skenion-studio"
+url: "https://github.com/skenion/skenion-studio"
+repository-code: "https://github.com/skenion/skenion-studio"
 license: "Apache-2.0"
-abstract: "Mantine-based browser editor, controller, and viewer for Skenion runtimes."
+abstract: "Mantine-based browser editor, controller, and viewer for skenion runtimes."

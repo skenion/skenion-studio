@@ -1611,7 +1611,7 @@ function sessionInfoResponse(overrides: Partial<RuntimeSessionInfoResponse> = {}
     lifecycle: "ready",
     snapshot: sessionResponse().snapshot,
     profile: {
-      displayName: "Skenion Runtime local-managed sidecar",
+      displayName: "skenion runtime local-managed sidecar",
       endpoint: {
         canonicalUrl: "http://127.0.0.1:49152",
         host: "127.0.0.1",

@@ -66,7 +66,7 @@ export function createWindowRegistry(options: {
     id: options.windowId,
     now,
     scope: options.scope,
-    title: options.title ?? "Skenion Studio"
+    title: options.title ?? "skenion studio"
   });
   return {
     activeWindowId: options.windowId,
@@ -89,7 +89,7 @@ export function registerRuntimeWindow(
     id: options.windowId,
     now: options.now,
     scope: options.scope,
-    title: options.title ?? "Skenion Studio"
+    title: options.title ?? "skenion studio"
   });
 }
 

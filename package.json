@@ -1,7 +1,7 @@
 {
   "name": "skenion-studio",
   "version": "0.43.0",
-  "description": "Mantine and React Flow studio shell for Skenion graphs",
+  "description": "Mantine and React Flow studio shell for skenion graphs",
   "type": "module",
   "license": "Apache-2.0",
   "private": true,
@@ -13,7 +13,8 @@
     "dev": "vite --host localhost",
     "lint": "eslint .",
     "package-runtime-sidecar": "node scripts/package-runtime-sidecar.mjs",
-    "prepare-studio-npm-artifacts": "node scripts/prepare-studio-npm-artifacts.mjs",
+    "package-studio-desktop": "node scripts/package-studio-desktop.mjs",
+    "prepare-studio-release-artifacts": "node scripts/prepare-studio-release-artifacts.mjs",
     "preview": "vite preview --host localhost",
     "stage-runtime-sidecar": "node scripts/stage-runtime-sidecar.mjs",
     "storybook": "storybook dev -p 6006 --host localhost",

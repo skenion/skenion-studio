@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const studioRepo = "echovisionlab/skenion-studio";
+const studioRepo = "skenion/skenion-studio";
 const studioRepoUrl = `https://github.com/${studioRepo}`;
-const runtimeRepo = "echovisionlab/skenion-runtime";
-const packageDefinitions = [
+const runtimeRepo = "skenion/skenion-runtime";
+const artifactPackageDefinitions = [
   {
     name: "@skenion/studio-web",
     directory: "packages/studio-web",
@@ -71,10 +71,10 @@ if (!checkOnly) {
   await copyWebDist(distDir, path.join(rootDir, "packages/studio-web/dist"));
   await writeJson("packages/studio-web/studio-web-manifest.json", webManifest);
   await writeJson("packages/studio-desktop/studio-desktop-manifest.json", desktopManifest);
-  console.log(`prepared @skenion/studio-web@${version}`);
-  console.log(`prepared @skenion/studio-desktop@${version}`);
+  console.log(`prepared skenion studio web bundle metadata for ${version}`);
+  console.log(`prepared skenion studio desktop release metadata for ${version}`);
 } else {
-  console.log(`validated Studio npm artifact metadata for ${releaseTag}`);
+  console.log(`validated skenion studio release artifact metadata for ${releaseTag}`);
 }
 
 function parseArgs(args) {
@@ -117,7 +117,7 @@ async function validatePackageVersions(expectedVersion, rootPackageJson) {
   const cargoVersion = cargoToml.match(/^version = "([^"]+)"$/m)?.[1];
   assertEqual(cargoVersion, expectedVersion, "src-tauri/Cargo.toml package.version");
 
-  for (const definition of packageDefinitions) {
+  for (const definition of artifactPackageDefinitions) {
     const packageJson = await readJson(`${definition.directory}/package.json`);
     assertEqual(packageJson.name, definition.name, `${definition.directory}/package.json name`);
     assertEqual(packageJson.version, expectedVersion, `${definition.directory}/package.json version`);
@@ -126,14 +126,12 @@ async function validatePackageVersions(expectedVersion, rootPackageJson) {
       expectedVersion,
       `${definition.directory}/package.json peerDependencies.@skenion/contracts`
     );
-    if (packageJson.private === true) {
-      fail(`${definition.directory}/package.json must be publishable, but private is true.`);
+    if (packageJson.private !== true) {
+      fail(`${definition.directory}/package.json must be private because Studio artifacts are not npm packages.`);
     }
-    assertEqual(
-      packageJson.publishConfig?.access,
-      "public",
-      `${definition.directory}/package.json publishConfig.access`
-    );
+    if (packageJson.publishConfig !== undefined) {
+      fail(`${definition.directory}/package.json must not define publishConfig.`);
+    }
     assertEqual(
       packageJson.repository?.url,
       studioRepoUrl,
@@ -157,7 +155,7 @@ function validateReleaseInputs(expectedVersion, releaseTagValue) {
 function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
   return {
     schemaVersion: "0.1",
-    package: "@skenion/studio-web",
+    component: "studio-web",
     version: versionValue,
     trainId: trainIdValue,
     contracts: {
@@ -170,7 +168,11 @@ function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
       url: `https://github.com/${studioRepo}/releases/tag/${releaseTagValue}`
     },
     artifact: {
-      kind: "vite-static-site",
+      kind: "studio-web-bundle",
+      name: `skenion-studio-web-bundle-v${versionValue}.tar.gz`,
+      checksumName: `skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
+      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz`,
+      checksumUrl: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
       directory: "dist",
       entrypoint: "dist/index.html"
     }
@@ -181,7 +183,7 @@ function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
   const runtimeTag = `skenion-runtime-v${versionValue}`;
   return {
     schemaVersion: "0.1",
-    package: "@skenion/studio-desktop",
+    component: "studio-desktop",
     version: versionValue,
     trainId: trainIdValue,
     contracts: {
@@ -193,13 +195,37 @@ function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
       tag: releaseTagValue,
       url: `https://github.com/${studioRepo}/releases/tag/${releaseTagValue}`
     },
+    artifact: {
+      kind: "tauri-desktop-release",
+      distribution: "github-release-assets",
+      desktopPackagePattern: "skenion-studio-<target>.<tar.gz|zip>",
+      checksumPattern: "skenion-studio-<target>.<tar.gz|zip>.sha256",
+      linuxPackageContents: ["deb", "rpm"],
+      windowsPackageContents: ["nsis-setup-exe", "msi-if-emitted"]
+    },
     runtime: {
       repository: runtimeRepo,
       version: versionValue,
       tag: runtimeTag,
       url: `https://github.com/${runtimeRepo}/releases/tag/${runtimeTag}`
     },
+    desktopPackages: desktopTargets.map((target) => createDesktopPackageTarget(releaseTagValue, target)),
     sidecars: desktopTargets.map((target) => createSidecarTarget(versionValue, releaseTagValue, runtimeTag, target))
+  };
+}
+
+function createDesktopPackageTarget(releaseTagValue, targetConfig) {
+  const packageAssetName = `skenion-studio-${targetConfig.target}.${desktopPackageExtension(targetConfig.target)}`;
+  return {
+    target: targetConfig.target,
+    tier: targetConfig.tier,
+    tauriBundleArgs: targetConfig.tauriBundleArgs,
+    packageAsset: {
+      name: packageAssetName,
+      checksumName: `${packageAssetName}.sha256`,
+      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}`,
+      checksumUrl: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}.sha256`
+    }
   };
 }
 
@@ -224,6 +250,10 @@ function createSidecarTarget(versionValue, releaseTagValue, runtimeTag, targetCo
       checksumUrl: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${studioSidecarAssetName}.sha256`
     }
   };
+}
+
+function desktopPackageExtension(target) {
+  return target.includes("windows") ? "zip" : "tar.gz";
 }
 
 async function copyWebDist(source, destination) {

@@ -1,0 +1,345 @@
+name: Studio Release Artifacts
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Studio release tag to package, for example skenion-studio-v0.43.0
+        required: true
+        type: string
+      train-version:
+        description: Lockstep product train version, such as 0.43.0
+        required: true
+        type: string
+      release-train-mode:
+        description: Release train mode; publish uploads release assets, verify packs only
+        default: verify
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-release-artifacts-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NPM_REGISTRY: https://registry.npmjs.org/
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  RELEASE_TRAIN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-train-mode'] }}
+
+jobs:
+  release-artifacts:
+    name: release artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      web_asset: ${{ steps.release_assets.outputs.web_asset }}
+      web_checksum_asset: ${{ steps.release_assets.outputs.web_checksum_asset }}
+      desktop_manifest_asset: ${{ steps.release_assets.outputs.desktop_manifest_asset }}
+      desktop_manifest_checksum_asset: ${{ steps.release_assets.outputs.desktop_manifest_checksum_asset }}
+      checksum_asset: ${{ steps.release_assets.outputs.checksum_asset }}
+    steps:
+      - id: validate
+        name: Validate release request
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          RELEASE_TRAIN_MODE: ${{ env.RELEASE_TRAIN_MODE }}
+          TRAIN_VERSION: ${{ inputs['train-version'] }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_TAG}" =~ ^skenion-studio-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::release tag must be skenion-studio-vx.y.z; got '${RELEASE_TAG}'."
+            exit 1
+          fi
+
+          version="${RELEASE_TAG#skenion-studio-v}"
+          if [[ -n "${TRAIN_VERSION}" && "${TRAIN_VERSION}" != "${version}" ]]; then
+            echo "::error::train-version (${TRAIN_VERSION}) must match release tag version (${version})."
+            exit 1
+          fi
+
+          case "${RELEASE_TRAIN_MODE}" in
+            publish)
+              upload_release_assets=true
+              ;;
+            verify)
+              upload_release_assets=false
+              ;;
+            *)
+              echo "::error::release-train-mode must be publish or verify; got '${RELEASE_TRAIN_MODE}'."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "tag_ref=refs/tags/${RELEASE_TAG}"
+            echo "version=${version}"
+            echo "upload_release_assets=${upload_release_assets}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.validate.outputs.tag_ref }}
+
+      - name: Validate release tag artifact source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const releaseTag = process.env.RELEASE_TAG;
+          const version = process.env.VERSION;
+          const studioRepoUrl = "https://github.com/skenion/skenion-studio";
+          const failures = [];
+          const missingFiles = new Set();
+          const requiredFiles = [
+            ".github/workflows/studio-release-artifacts.yml",
+            "package.json",
+            "pnpm-lock.yaml",
+            "scripts/package-studio-desktop.mjs",
+            "scripts/prepare-studio-release-artifacts.mjs",
+            "packages/studio-web/package.json",
+            "packages/studio-web/README.md",
+            "packages/studio-desktop/package.json",
+            "packages/studio-desktop/README.md"
+          ];
+          const artifactPackages = [
+            {
+              name: "@skenion/studio-web",
+              directory: "packages/studio-web",
+              requiredFiles: ["dist", "studio-web-manifest.json", "README.md"]
+            },
+            {
+              name: "@skenion/studio-desktop",
+              directory: "packages/studio-desktop",
+              requiredFiles: ["studio-desktop-manifest.json", "README.md"]
+            }
+          ];
+
+          for (const filePath of requiredFiles) {
+            if (!fs.existsSync(path.join(process.cwd(), filePath))) {
+              missingFiles.add(filePath);
+              fail(`missing required file: ${filePath}`);
+            }
+          }
+
+          const rootPackage = readJson("package.json");
+          if (rootPackage) {
+            expectEqual(rootPackage.version, version, "package.json version");
+            expectEqual(
+              rootPackage.dependencies?.["@skenion/contracts"],
+              version,
+              "package.json dependencies.@skenion/contracts"
+            );
+            requireScript(rootPackage, "build");
+            requireScript(rootPackage, "package-studio-desktop");
+            requireScript(rootPackage, "prepare-studio-release-artifacts");
+          }
+
+          for (const artifactPackage of artifactPackages) {
+            const packageJsonPath = `${artifactPackage.directory}/package.json`;
+            const packageJson = readJson(packageJsonPath);
+            if (!packageJson) {
+              continue;
+            }
+
+            expectEqual(packageJson.name, artifactPackage.name, `${packageJsonPath} name`);
+            expectEqual(packageJson.version, version, `${packageJsonPath} version`);
+            expectEqual(
+              packageJson.peerDependencies?.["@skenion/contracts"],
+              version,
+              `${packageJsonPath} peerDependencies.@skenion/contracts`
+            );
+            expectEqual(
+              packageJson.repository?.url,
+              studioRepoUrl,
+              `${packageJsonPath} repository.url`
+            );
+
+            if (packageJson.private !== true) {
+              fail(`${packageJsonPath} must be private because Studio artifacts are not npm packages`);
+            }
+            if (packageJson.publishConfig !== undefined) {
+              fail(`${packageJsonPath} must not define publishConfig`);
+            }
+
+            for (const packageFile of artifactPackage.requiredFiles) {
+              if (!packageJson.files?.includes(packageFile)) {
+                fail(`${packageJsonPath} files must include ${packageFile}`);
+              }
+            }
+          }
+
+          if (failures.length > 0) {
+            for (const failure of failures) {
+              console.error(`::error::${failure}`);
+            }
+            console.error(
+              `::error::Checked-out release tag ${releaseTag} cannot package skenion studio release artifacts. ` +
+                "Retarget or recreate the release tag to a commit containing the release artifact " +
+                "workflow, private package metadata, and prepare script before dispatching Studio Release Artifacts."
+            );
+            process.exit(1);
+          }
+
+          console.log(`Validated skenion studio release artifact source in ${releaseTag}.`);
+
+          function readJson(relativePath) {
+            try {
+              if (!fs.existsSync(path.join(process.cwd(), relativePath))) {
+                if (!missingFiles.has(relativePath)) {
+                  fail(`missing required file: ${relativePath}`);
+                }
+                return undefined;
+              }
+              return JSON.parse(fs.readFileSync(path.join(process.cwd(), relativePath), "utf8"));
+            } catch (error) {
+              fail(`cannot parse ${relativePath}: ${error.message}`);
+              return undefined;
+            }
+          }
+
+          function requireScript(packageJson, scriptName) {
+            if (typeof packageJson.scripts?.[scriptName] !== "string") {
+              fail(`package.json scripts.${scriptName} is required`);
+            }
+          }
+
+          function expectEqual(actual, expected, label) {
+            if (actual !== expected) {
+              fail(`${label} is ${actual ?? "<missing>"}, expected ${expected}`);
+            }
+          }
+
+          function fail(message) {
+            failures.push(message);
+          }
+          NODE
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Verify released Contracts npm package
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! released_version="$(pnpm view "@skenion/contracts@${VERSION}" version --silent --registry "${NPM_REGISTRY}")"; then
+            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+            exit 1
+          fi
+          if [[ "${released_version}" != "${VERSION}" ]]; then
+            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+            exit 1
+          fi
+
+      - name: Install studio dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build studio web bundle
+        run: pnpm run build
+
+      - name: Prepare release artifact metadata
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: pnpm run prepare-studio-release-artifacts -- --version "${VERSION}" --tag "${RELEASE_TAG}"
+
+      - name: Pack private artifact metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run ./packages/studio-web
+          npm pack --dry-run ./packages/studio-desktop
+
+      - id: release_assets
+        name: Create release assets
+        shell: bash
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          asset_dir="$(mktemp -d)"
+          web_asset="skenion-studio-web-bundle-v${VERSION}.tar.gz"
+          web_checksum_asset="${web_asset}.sha256"
+          desktop_manifest_asset="skenion-studio-desktop-manifest-v${VERSION}.json"
+          desktop_manifest_checksum_asset="${desktop_manifest_asset}.sha256"
+          checksum_asset="skenion-studio-release-artifacts-v${VERSION}.sha256"
+
+          tar -czf "${asset_dir}/${web_asset}" \
+            -C packages/studio-web \
+            dist \
+            studio-web-manifest.json \
+            README.md
+          cp packages/studio-desktop/studio-desktop-manifest.json "${asset_dir}/${desktop_manifest_asset}"
+
+          (
+            cd "${asset_dir}"
+            sha256sum "${web_asset}" > "${web_checksum_asset}"
+            sha256sum "${desktop_manifest_asset}" > "${desktop_manifest_checksum_asset}"
+            sha256sum "${web_asset}" "${desktop_manifest_asset}" > "${checksum_asset}"
+          )
+
+          {
+            echo "asset_dir=${asset_dir}"
+            echo "web_asset=${web_asset}"
+            echo "web_checksum_asset=${web_checksum_asset}"
+            echo "desktop_manifest_asset=${desktop_manifest_asset}"
+            echo "desktop_manifest_checksum_asset=${desktop_manifest_checksum_asset}"
+            echo "checksum_asset=${checksum_asset}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Upload release assets
+        if: steps.validate.outputs.upload_release_assets == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release upload "${RELEASE_TAG}" \
+            "${{ steps.release_assets.outputs.asset_dir }}/${{ steps.release_assets.outputs.web_asset }}" \
+            "${{ steps.release_assets.outputs.asset_dir }}/${{ steps.release_assets.outputs.web_checksum_asset }}" \
+            "${{ steps.release_assets.outputs.asset_dir }}/${{ steps.release_assets.outputs.desktop_manifest_asset }}" \
+            "${{ steps.release_assets.outputs.asset_dir }}/${{ steps.release_assets.outputs.desktop_manifest_checksum_asset }}" \
+            "${{ steps.release_assets.outputs.asset_dir }}/${{ steps.release_assets.outputs.checksum_asset }}" \
+            --clobber
+
+      - name: Summarize release artifacts
+        shell: bash
+        run: |
+          {
+            echo "## skenion studio Release Artifacts"
+            echo ""
+            echo "- Version: ${{ steps.validate.outputs.version }}"
+            echo "- Web bundle artifact: ${{ steps.release_assets.outputs.web_asset }}"
+            echo "- Web bundle checksum: ${{ steps.release_assets.outputs.web_checksum_asset }}"
+            echo "- Desktop release metadata: ${{ steps.release_assets.outputs.desktop_manifest_asset }}"
+            echo "- Desktop release metadata checksum: ${{ steps.release_assets.outputs.desktop_manifest_checksum_asset }}"
+            echo "- Combined artifact checksum manifest: ${{ steps.release_assets.outputs.checksum_asset }}"
+            echo "- Mode: ${RELEASE_TRAIN_MODE}"
+            echo "- Upload release assets: ${{ steps.validate.outputs.upload_release_assets }}"
+            echo "- npm publish: disabled"
+          } >> "${GITHUB_STEP_SUMMARY}"

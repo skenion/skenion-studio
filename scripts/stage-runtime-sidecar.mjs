@@ -24,7 +24,7 @@ const options = parseArgs(process.argv.slice(2));
 const version = requireOption(options.version, "--version");
 const target = requireOption(options.target, "--target");
 const mode = options.mode ?? "verify";
-const runtimeRepo = options.repo ?? "echovisionlab/skenion-runtime";
+const runtimeRepo = options.repo ?? "skenion/skenion-runtime";
 const releaseTag = options.tag ?? `skenion-runtime-v${version}`;
 const outputDir = path.resolve(rootDir, options.outputDir ?? defaultOutputDir);
 

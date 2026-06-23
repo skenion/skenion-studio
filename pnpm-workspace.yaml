@@ -1,5 +1,8 @@
 packages:
   - packages/*
 
+minimumReleaseAgeExclude:
+  - "@skenion/contracts"
+
 allowBuilds:
   esbuild: set this to true or false

@@ -17,7 +17,7 @@ import { createViewStateFromPositions } from "./projectDocument";
 import { defaultPosition, flowColor, flowName, toReactFlowViewModel } from "./reactFlowAdapter";
 
 describe("React Flow adapter", () => {
-  it("derives React Flow nodes and edges from a Skenion graph", () => {
+  it("derives React Flow nodes and edges from a skenion graph", () => {
     const viewModel = toReactFlowViewModel(
       sampleGraph,
       createViewStateFromPositions(sampleGraph, {
