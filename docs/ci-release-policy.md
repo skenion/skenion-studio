@@ -58,9 +58,9 @@ The canonical builtin registry migration is compatibility-affecting. If the curr
 Studio remains a React/Vite web client. Desktop packaging uses the Tauri shell
 only; there is no Electron fallback in the v0 release path.
 
-The desktop release workflow is manually dispatched with a Studio release tag
-plus an exact Runtime release tag. It checks out the Studio tag and packages
-these targets:
+The desktop release workflow is manually dispatched with a Studio release tag,
+an exact Runtime release tag, and a desktop signing mode. It checks out the
+Studio tag and packages these targets:
 
 - release-blocking macOS arm64 / Apple Silicon: `aarch64-apple-darwin`.
 - release-blocking macOS x64 / Intel: `x86_64-apple-darwin`.
@@ -147,22 +147,26 @@ macOS desktop distribution is release-complete only when the release-blocking
 macOS arm64 (`aarch64-apple-darwin`) and macOS x64 (`x86_64-apple-darwin`)
 publish jobs produce signed and notarized Tauri App/DMG artifacts. Unsigned
 macOS artifacts are useful build or preview evidence, but they do not satisfy
-the desktop release-completion gate. Publish mode fails closed before Tauri
+the desktop release-completion gate. The workflow defaults to
+`desktop-signing-mode=signed-required`; `unsigned-preview` must be passed
+explicitly in the dispatch input and is allowed only for non-release-complete
+internal or pre-alpha evidence. Signed publish mode fails closed before Tauri
 packaging if `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, and
 `APPLE_SIGNING_IDENTITY` are absent, or if notarization credentials are absent.
 Notarization currently uses the Apple ID credential path and requires
 `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` so the Tauri publish step can
 submit App/DMG artifacts to Apple from the macOS packaging jobs.
 
-Windows desktop publish mode also fails closed unless the repository variable
-`WINDOWS_INSTALLER_SIGNING_MODE` is explicitly set. The only currently
-permitted non-signing value is `unsigned-preview`, which may publish installer
-artifacts as explicit preview evidence but does not satisfy Windows desktop
-release completion. `signed-required` and `azure-trusted-signing` are reserved
-for real signed-installer release paths and must not pass until Tauri Windows
-signing is wired with the matching certificate, signing service, timestamp, or
-custom signing command configuration. Verify mode does not require this
-variable because it is a packaging smoke test, not release evidence.
+Windows desktop publish mode uses the validated `desktop-signing-mode` dispatch
+input. Empty or unknown signing modes are rejected. The only currently
+permitted non-signing value is an explicitly dispatched `unsigned-preview`,
+which may publish installer artifacts as explicit preview evidence but does not
+satisfy Windows desktop release completion.
+`signed-required` and `azure-trusted-signing` are reserved for real
+signed-installer release paths and must not pass until Tauri Windows signing is
+wired with the matching certificate, signing service, timestamp, or custom
+signing command configuration. Verify mode does not require signed artifacts
+because it is a packaging smoke test, not release evidence.
 
 Full application auto-updater rollout remains out of v0 scope. Missing updater
 feed publication or updater signing keys must be reported with the desktop

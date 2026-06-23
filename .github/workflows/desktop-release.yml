@@ -20,6 +20,11 @@ on:
         description: Optional path to a checked-in compatibility manifest with Runtime sidecar checksums
         required: false
         type: string
+      desktop-signing-mode:
+        description: Desktop signing mode; unsigned-preview must be explicitly selected only for internal/pre-alpha gate evidence
+        default: signed-required
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -34,7 +39,7 @@ env:
   RELEASE_MODE: ${{ inputs['release-mode'] }}
   RELEASE_MANIFEST: ${{ inputs['release-manifest'] }}
   RUNTIME_TAG: ${{ inputs['runtime-tag'] }}
-  WINDOWS_INSTALLER_SIGNING_MODE: ${{ vars.WINDOWS_INSTALLER_SIGNING_MODE }}
+  DESKTOP_SIGNING_MODE: ${{ inputs['desktop-signing-mode'] }}
 
 jobs:
   release:
@@ -45,6 +50,7 @@ jobs:
       tag_ref: ${{ steps.validate.outputs.tag_ref }}
       version: ${{ steps.validate.outputs.version }}
       runtime_tag: ${{ steps.validate.outputs.runtime_tag }}
+      desktop_signing_mode: ${{ steps.validate.outputs.desktop_signing_mode }}
       upload_release_assets: ${{ steps.validate.outputs.upload_release_assets }}
     steps:
       - id: validate
@@ -54,6 +60,7 @@ jobs:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
           RELEASE_MODE: ${{ env.RELEASE_MODE }}
           RUNTIME_TAG: ${{ env.RUNTIME_TAG }}
+          DESKTOP_SIGNING_MODE: ${{ env.DESKTOP_SIGNING_MODE }}
         run: |
           set -euo pipefail
 
@@ -86,11 +93,26 @@ jobs:
               ;;
           esac
 
+          desktop_signing_mode="${DESKTOP_SIGNING_MODE}"
+          if [[ -z "${desktop_signing_mode}" ]]; then
+            echo "::error::desktop-signing-mode is required. Use signed-required for release-complete signing gates or explicitly pass unsigned-preview only for internal/pre-alpha gate evidence."
+            exit 1
+          fi
+          case "${desktop_signing_mode}" in
+            unsigned-preview|signed-required|azure-trusted-signing)
+              ;;
+            *)
+              echo "::error::desktop-signing-mode must be unsigned-preview, signed-required, or azure-trusted-signing; got '${desktop_signing_mode}'."
+              exit 1
+              ;;
+          esac
+
           {
             echo "tag=${RELEASE_TAG}"
             echo "tag_ref=refs/tags/${RELEASE_TAG}"
             echo "version=${version}"
             echo "runtime_tag=${RUNTIME_TAG}"
+            echo "desktop_signing_mode=${desktop_signing_mode}"
             echo "upload_release_assets=${upload_release_assets}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -157,6 +179,7 @@ jobs:
             echo "- Contracts npm package: @skenion/contracts@0.45.0"
             echo "- Contracts compatibility: >=0.45.0 <0.46.0"
             echo "- Mode: ${RELEASE_MODE}"
+            echo "- Desktop signing mode: ${{ steps.validate.outputs.desktop_signing_mode }}"
             echo "- Upload release assets: ${{ steps.validate.outputs.upload_release_assets }}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -207,6 +230,7 @@ jobs:
       TARGET: ${{ matrix.target }}
       VERSION: ${{ needs.release.outputs.version }}
       RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
+      DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
       TAURI_BUNDLE_ARGS: ${{ matrix.tauri_bundle_args }}
     steps:
       - uses: actions/checkout@v6
@@ -214,7 +238,7 @@ jobs:
           ref: ${{ needs.release.outputs.tag_ref }}
 
       - name: Preflight macOS signing and notarization secrets
-        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true
+        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode != 'unsigned-preview'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -251,16 +275,28 @@ jobs:
           fi
           echo "macOS signing and notarization secret preflight passed."
 
+      - name: Summarize unsigned macOS preview mode
+        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
+        run: |
+          {
+            echo "## macOS Signing Gate"
+            echo ""
+            echo "- Target: ${TARGET}"
+            echo "- Desktop signing mode: unsigned-preview"
+            echo "- macOS release-completion status: blocked"
+            echo "- Reason: unsigned internal/pre-alpha artifact evidence does not satisfy signed/notarized desktop release completion."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Preflight Windows installer signing policy
         if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'Windows'
         env:
-          WINDOWS_INSTALLER_SIGNING_MODE: ${{ env.WINDOWS_INSTALLER_SIGNING_MODE }}
+          DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
         run: |
           set -euo pipefail
 
-          mode="${WINDOWS_INSTALLER_SIGNING_MODE:-}"
+          mode="${DESKTOP_SIGNING_MODE}"
           if [[ -z "${mode}" ]]; then
-            echo "::error::Windows publish mode requires repository variable WINDOWS_INSTALLER_SIGNING_MODE. Use unsigned-preview only for explicit non-release-complete evidence, or add a signed mode after Tauri signing is wired."
+            echo "::error::Windows publish mode requires desktop-signing-mode. Use unsigned-preview only for explicit non-release-complete evidence, or add a signed mode after Tauri signing is wired."
             exit 1
           fi
 
@@ -270,11 +306,11 @@ jobs:
               release_completion="blocked"
               ;;
             signed-required|azure-trusted-signing)
-              echo "::error::WINDOWS_INSTALLER_SIGNING_MODE=${mode} is reserved for signed Windows installer releases, but this workflow does not yet configure Tauri Windows signing. Wire signing first instead of publishing artifacts that only claim to be signed."
+              echo "::error::desktop signing mode '${mode}' is reserved for signed Windows installer releases, but this workflow does not yet configure Tauri Windows signing. Wire signing first instead of publishing artifacts that only claim to be signed."
               exit 1
               ;;
             *)
-              echo "::error::WINDOWS_INSTALLER_SIGNING_MODE must be unsigned-preview, signed-required, or azure-trusted-signing; got '${mode}'."
+              echo "::error::desktop signing mode must be unsigned-preview, signed-required, or azure-trusted-signing; got '${mode}'."
               exit 1
               ;;
           esac
@@ -611,6 +647,7 @@ jobs:
             echo "- Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}"
             echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
+            echo "- Desktop signing mode: ${DESKTOP_SIGNING_MODE}"
             echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"
             if [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" ]]; then
               echo "- Desktop package release asset: ${{ steps.package_studio_desktop.outputs.asset_name }}"
@@ -619,6 +656,6 @@ jobs:
             fi
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
               echo "- Windows app installer family: primary NSIS setup executable (-setup.exe), secondary MSI when emitted"
-              echo "- Windows installer signing mode: ${WINDOWS_INSTALLER_SIGNING_MODE:-verify-mode-not-required}"
+              echo "- Windows installer signing mode: ${DESKTOP_SIGNING_MODE}"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
