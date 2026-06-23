@@ -53,6 +53,43 @@ Do not bump `package.json` manually to describe compatibility. Use Conventional 
 
 The canonical builtin registry migration is compatibility-affecting. If the current published Studio version predates that migration, the next Studio release notes should explicitly mention that Studio consumes canonical builtin node definitions from `@skenion/contracts`.
 
+## Release Status States
+
+Release Please remains responsible for versioning, changelog updates, tag
+creation, and initial GitHub Release creation. That initial GitHub Release is
+metadata, not distribution. The Release Please config creates newly created
+Studio GitHub Releases as prerelease by default, so if status annotation fails
+or is interrupted, an empty release remains prerelease/unpromoted and is not
+release-complete. The Release Please workflow then prepends a status block that
+says the release has no product artifacts yet. A Release Please metadata
+release must not be described as release-complete, even when the changelog
+contains CI or packaging fixes.
+
+The Studio release artifact workflows then replace that status block as product
+evidence appears:
+
+- Studio Release Artifacts publish mode uploads the canonical web bundle,
+  checksum, desktop manifest, desktop manifest checksum, and combined checksum
+  manifest. This is web artifact evidence, not full Studio distribution
+  completion, because release-blocking desktop packages can still be missing.
+- Desktop Release publish mode uploads Runtime sidecar assets plus canonical
+  desktop package archives and checksums for each successful target. A final
+  status step verifies the release-blocking desktop asset set before it updates
+  the release notes.
+
+A Studio GitHub Release is release-complete only when the release has the
+canonical web bundle, release-blocking desktop packages, required checksums,
+Runtime sidecar evidence, and the applicable signing/notarization evidence.
+Unsigned preview desktop artifacts keep the release prerelease/unpromoted, even
+when they are useful internal or pre-alpha evidence. If the release has only a
+partial asset set, the release notes must keep an explicit non-distribution
+marker instead of implying product availability.
+
+Compatibility promotion is a separate product-level step. Do not report a
+promoted Studio compatibility line until the `skenion/skenion` compatibility
+matrix verifier records the intended Contracts line, Runtime evidence, Studio
+artifacts, and Examples/Manual evidence.
+
 ## Desktop Packaging
 
 Studio remains a React/Vite web client. Desktop packaging uses the Tauri shell

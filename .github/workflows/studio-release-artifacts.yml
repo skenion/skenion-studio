@@ -343,6 +343,23 @@ jobs:
             "${{ steps.release_assets.outputs.asset_dir }}/${{ steps.release_assets.outputs.checksum_asset }}" \
             --clobber
 
+      - name: Checkout release status tools
+        if: steps.validate.outputs.upload_release_assets == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+
+      - name: Mark release as web artifact evidence
+        if: steps.validate.outputs.upload_release_assets == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          node .release-tools/scripts/update-studio-release-status.mjs \
+            --mode web-artifacts-published \
+            --tag "${RELEASE_TAG}" \
+            --runtime-tag "${RUNTIME_TAG}"
+
       - name: Summarize release artifacts
         shell: bash
         run: |
