@@ -7,7 +7,7 @@ Studio treats graph UX and runtime-compatibility gates as release-relevant behav
 - Unit: lint and coverage.
 - Build: TypeScript and Vite production build.
 - Desktop Release: release-tag or conductor-dispatched Tauri packaging with
-  same-train Runtime sidecars.
+  exact Runtime sidecar release tag/checksum evidence.
 
 Visual Gate is intentionally not part of default GitHub CI. It is a local,
 human-in-the-loop QA surface for graph editor changes where the Studio stays
@@ -39,9 +39,9 @@ be run when a graph editor change needs screenshot review.
 
 Studio preserves pnpm's minimum-release-age policy for third-party
 dependencies. The only workspace-level age-policy exclusion is the first-party
-same-train `@skenion/contracts` package, so PR CI can validate against the
-freshly published train package while still building the sibling Contracts
-checkout used for integration checks.
+`@skenion/contracts` package, so PR CI can validate against freshly published
+Contracts patches while still building the sibling Contracts checkout used for
+integration checks.
 
 ## Release Hygiene
 
@@ -58,9 +58,9 @@ The canonical builtin registry migration is compatibility-affecting. If the curr
 Studio remains a React/Vite web client. Desktop packaging uses the Tauri shell
 only; there is no Electron fallback in the v0 release path.
 
-The desktop release workflow runs from `skenion-studio-vx.y.z` release tags or
-from conductor dispatch inputs that name the same lockstep train version. The
-workflow packages these targets:
+The desktop release workflow is manually dispatched with a Studio release tag
+plus an exact Runtime release tag. It checks out the Studio tag and packages
+these targets:
 
 - release-blocking macOS arm64 / Apple Silicon: `aarch64-apple-darwin`.
 - release-blocking macOS x64 / Intel: `x86_64-apple-darwin`.
@@ -70,15 +70,15 @@ workflow packages these targets:
 
 The workflow produces two different artifact classes:
 
-- skenion studio desktop packages are canonical release-train archives named
+- skenion studio desktop packages are canonical release archives named
   `skenion-studio-<target>.tar.gz` for macOS/Linux and
   `skenion-studio-<target>.zip` for Windows, each with a sibling `.sha256`
   file. These archives contain the Tauri-generated app distribution artifacts
   for that target: signed/notarized macOS DMG/App archive output, Windows NSIS
   `-setup.exe` output with MSI included only when Tauri emits it, and Linux
   deb/rpm package output.
-- Runtime sidecar archives are same-train Runtime transport assets consumed by
-  skenion studio desktop packaging and release-train verification. They are not desktop
+- Runtime sidecar archives are Runtime transport assets consumed by skenion
+  studio desktop packaging and compatibility verification. They are not desktop
   installers, standalone app downloads, or Windows installer substitutes, and
   must be named as sidecar archives or sidecar assets in release manifests,
   package manifests, and release evidence.
@@ -91,20 +91,20 @@ packages but does not upload release assets. Linux desktop release assets are
 the canonical archives containing deb/rpm output; the v0 workflow does not
 claim or manifest AppImage assets. Windows desktop release assets are canonical
 ZIP archives containing the installer output that Tauri actually produced; the
-release train does not claim a standalone `.msi` asset unless MSI output is
+release flow does not claim a standalone `.msi` asset unless MSI output is
 present inside that archive.
 
 Before Tauri packaging, `scripts/stage-runtime-sidecar.mjs` downloads the
-matching `skenion-runtime-vx.y.z-<target>.tar.gz` asset from the same-train
-Runtime GitHub Release, verifies the SHA-256 checksum, extracts the Runtime
-binary, and stages it for `bundle.externalBin`. Publish and verify modes fail
-closed when the Runtime asset or checksum is missing or mismatched.
+`skenion-runtime-vx.y.z-<target>.tar.gz` asset selected by the exact Runtime
+release tag, verifies the SHA-256 checksum, extracts the Runtime binary, and
+stages it for `bundle.externalBin`. Publish and verify modes fail closed when
+the Runtime asset or checksum is missing or mismatched.
 `scripts/package-runtime-sidecar.mjs` then repackages that staged binary as the
-skenion studio release sidecar asset expected by the train manifest:
+skenion studio release sidecar asset expected by the desktop manifest:
 `skenion-runtime-sidecar-<target>.tar.gz` for macOS/Linux and
 `skenion-runtime-sidecar-<target>.zip` for Windows, with a sibling `.sha256`
 file. Windows sidecars use ZIP because the transported payload is a `.exe` and
-Windows tooling handles ZIP natively; that ZIP is internal release-train
+Windows tooling handles ZIP natively; that ZIP is internal Runtime sidecar
 transport only, not the skenion studio Windows installer. macOS and Linux sidecars use
 `tar.gz` so Unix executable mode and path semantics survive archive creation,
 upload, and extraction. Publish mode uploads those sidecar assets to the Studio
@@ -120,9 +120,11 @@ and fails the classification check if the sidecar asset stops being named as an
 internal Runtime sidecar ZIP.
 
 Desktop release packaging consumes `@skenion/contracts` from npm, not from a
-sibling checkout. The release tag must declare `@skenion/contracts` as the exact
-train version, the package must already exist on npm, and the installed package
-version is verified before Tauri packaging starts.
+sibling checkout. Studio currently targets Contracts line `0.45`, expressed as
+`>=0.45.0 <0.46.0`; app builds may pin a concrete released patch such as
+`0.45.0`, and release metadata records the compatibility range. The selected
+package must already exist on npm, and the installed package line is verified
+before Tauri packaging starts.
 
 Release Please remains responsible for versioning and GitHub release creation.
 Desktop packaging uploads artifacts only from GitHub Actions publish mode.
@@ -164,6 +166,6 @@ variable because it is a packaging smoke test, not release evidence.
 
 Full application auto-updater rollout remains out of v0 scope. Missing updater
 feed publication or updater signing keys must be reported with the desktop
-assets, but they must not block v0 while same-train studio desktop packages and
-Runtime sidecar archives are available, checksummed, and otherwise satisfy the
-release train gates.
+assets, but they must not block v0 while Studio desktop packages and Runtime
+sidecar archives are available, checksummed, and otherwise satisfy the
+compatibility gates.

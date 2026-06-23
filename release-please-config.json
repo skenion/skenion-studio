@@ -16,28 +16,13 @@
         },
         {
           "type": "json",
-          "path": "package.json",
-          "jsonpath": "$.dependencies[\"@skenion/contracts\"]"
-        },
-        {
-          "type": "json",
           "path": "packages/studio-web/package.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/studio-web/package.json",
-          "jsonpath": "$.peerDependencies[\"@skenion/contracts\"]"
-        },
-        {
-          "type": "json",
           "path": "packages/studio-desktop/package.json",
           "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": "packages/studio-desktop/package.json",
-          "jsonpath": "$.peerDependencies[\"@skenion/contracts\"]"
         }
       ]
     }

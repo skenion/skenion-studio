@@ -21,24 +21,21 @@ const supportedTargets = new Set([
 ]);
 
 const options = parseArgs(process.argv.slice(2));
-const version = requireOption(options.version, "--version");
+const releaseTag = requireOption(options.runtimeTag ?? options.tag, "--runtime-tag");
+const version = runtimeVersionFromTag(releaseTag);
 const target = requireOption(options.target, "--target");
 const mode = options.mode ?? "verify";
 const runtimeRepo = options.repo ?? "skenion/skenion-runtime";
-const releaseTag = options.tag ?? `skenion-runtime-v${version}`;
 const outputDir = path.resolve(rootDir, options.outputDir ?? defaultOutputDir);
 
-if (!semverPattern.test(version)) {
-  fail(`--version must use x.y.z SemVer form; got '${version}'.`);
+if (options.version && options.version !== version) {
+  fail(`--version (${options.version}) must match Runtime release tag version (${version}).`);
 }
 if (!supportedTargets.has(target)) {
   fail(`--target must be one of ${[...supportedTargets].join(", ")}; got '${target}'.`);
 }
 if (!releaseModeNames.has(mode) && mode !== "local") {
   fail("--mode must be publish, verify, or local.");
-}
-if (releaseTag !== `skenion-runtime-v${version}`) {
-  fail(`Runtime release tag ${releaseTag} must match same-train version ${version}.`);
 }
 
 const assetName = `skenion-runtime-v${version}-${target}.tar.gz`;
@@ -127,6 +124,14 @@ function requireOption(value, name) {
   return value;
 }
 
+function runtimeVersionFromTag(tag) {
+  const match = tag.match(/^skenion-runtime-v(.+)$/);
+  if (!match || !semverPattern.test(match[1])) {
+    fail(`--runtime-tag must use skenion-runtime-vx.y.z form; got '${tag}'.`);
+  }
+  return match[1];
+}
+
 async function getRelease(repo, tag) {
   const response = await githubFetch(`https://api.github.com/repos/${repo}/releases/tags/${tag}`, {
     headers: {
@@ -177,21 +182,30 @@ async function checksumFromReleaseAsset(release, checksumName, destination, expe
 
 async function checksumFromTrainManifest(manifestPath, targetName, expectedAssetName) {
   const manifest = JSON.parse(await fs.readFile(path.resolve(rootDir, manifestPath), "utf8"));
-  const candidate = manifest?.components?.runtime?.binaries?.[targetName];
+  const candidate = findRuntimeManifestCandidate(manifest, targetName);
   if (!candidate) {
     return null;
   }
 
-  const artifactName = candidate.name ?? candidate["asset-name"] ?? path.basename(candidate.url ?? "");
+  const artifact = candidate["runtime-release-asset"] ?? candidate.asset ?? candidate;
+  const artifactName = artifact.name ?? artifact["asset-name"] ?? path.basename(artifact.url ?? "");
   if (artifactName && artifactName !== expectedAssetName) {
     fail(`Manifest runtime binary for ${targetName} points at ${artifactName}, expected ${expectedAssetName}.`);
   }
 
-  const checksum = candidate.sha256 ?? candidate.checksum?.sha256 ?? candidate.checksum?.value;
+  const checksum = artifact.sha256 ?? artifact.checksum?.sha256 ?? artifact.checksum?.value;
   if (typeof checksum !== "string" || !/^[a-fA-F0-9]{64}$/.test(checksum)) {
     return null;
   }
   return checksum.toLowerCase();
+}
+
+function findRuntimeManifestCandidate(manifest, targetName) {
+  const generatedSidecar = manifest?.["runtime-sidecars"]?.find((candidate) => candidate.target === targetName);
+  if (generatedSidecar) {
+    return generatedSidecar;
+  }
+  return manifest?.components?.runtime?.binaries?.[targetName] ?? null;
 }
 
 async function verifySha256(filePath, expected, label) {

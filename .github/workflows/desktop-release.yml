@@ -1,26 +1,23 @@
 name: Desktop Release
 
 on:
-  release:
-    types:
-      - published
   workflow_dispatch:
     inputs:
       tag:
-        description: Studio release tag to package, for example skenion-studio-v0.43.0
+        description: Studio release tag to package, for example skenion-studio-v0.46.0
         required: true
         type: string
-      train-version:
-        description: Lockstep product train version, such as 0.43.0
+      runtime-tag:
+        description: Exact Runtime release tag to stage as the desktop sidecar, for example skenion-runtime-v0.45.2
         required: true
         type: string
-      release-train-mode:
-        description: Release train mode; publish uploads to the GitHub Release, verify builds only
+      release-mode:
+        description: Release mode; publish uploads to the GitHub Release, verify builds only
         default: verify
         required: false
         type: string
       release-manifest:
-        description: Optional path to a checked-in release train manifest with Runtime sidecar checksums
+        description: Optional path to a checked-in compatibility manifest with Runtime sidecar checksums
         required: false
         type: string
 
@@ -28,14 +25,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: studio-desktop-release-${{ github.event.release.tag_name || inputs.tag }}
+  group: studio-desktop-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
-  RELEASE_TRAIN_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-train-mode'] }}
+  RELEASE_TAG: ${{ inputs.tag }}
+  RELEASE_MODE: ${{ inputs['release-mode'] }}
   RELEASE_MANIFEST: ${{ inputs['release-manifest'] }}
+  RUNTIME_TAG: ${{ inputs['runtime-tag'] }}
   WINDOWS_INSTALLER_SIGNING_MODE: ${{ vars.WINDOWS_INSTALLER_SIGNING_MODE }}
 
 jobs:
@@ -46,6 +44,7 @@ jobs:
       tag: ${{ steps.validate.outputs.tag }}
       tag_ref: ${{ steps.validate.outputs.tag_ref }}
       version: ${{ steps.validate.outputs.version }}
+      runtime_tag: ${{ steps.validate.outputs.runtime_tag }}
       upload_release_assets: ${{ steps.validate.outputs.upload_release_assets }}
     steps:
       - id: validate
@@ -53,8 +52,8 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
-          RELEASE_TRAIN_MODE: ${{ env.RELEASE_TRAIN_MODE }}
-          TRAIN_VERSION: ${{ inputs['train-version'] }}
+          RELEASE_MODE: ${{ env.RELEASE_MODE }}
+          RUNTIME_TAG: ${{ env.RUNTIME_TAG }}
         run: |
           set -euo pipefail
 
@@ -64,12 +63,17 @@ jobs:
           fi
 
           version="${RELEASE_TAG#skenion-studio-v}"
-          if [[ -n "${TRAIN_VERSION}" && "${TRAIN_VERSION}" != "${version}" ]]; then
-            echo "::error::train-version (${TRAIN_VERSION}) must match release tag version (${version})."
+
+          if [[ -z "${RUNTIME_TAG}" ]]; then
+            echo "::error::runtime-tag is required so desktop packaging stages exact Runtime sidecar release evidence."
+            exit 1
+          fi
+          if [[ ! "${RUNTIME_TAG}" =~ ^skenion-runtime-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::runtime-tag must be skenion-runtime-vx.y.z; got '${RUNTIME_TAG}'."
             exit 1
           fi
 
-          case "${RELEASE_TRAIN_MODE}" in
+          case "${RELEASE_MODE}" in
             publish)
               upload_release_assets=true
               ;;
@@ -77,7 +81,7 @@ jobs:
               upload_release_assets=false
               ;;
             *)
-              echo "::error::release-train-mode must be publish or verify; got '${RELEASE_TRAIN_MODE}'."
+              echo "::error::release-mode must be publish or verify; got '${RELEASE_MODE}'."
               exit 1
               ;;
           esac
@@ -86,6 +90,7 @@ jobs:
             echo "tag=${RELEASE_TAG}"
             echo "tag_ref=refs/tags/${RELEASE_TAG}"
             echo "version=${version}"
+            echo "runtime_tag=${RUNTIME_TAG}"
             echo "upload_release_assets=${upload_release_assets}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -102,6 +107,7 @@ jobs:
           node <<'NODE'
           const fs = require("node:fs");
           const expected = process.env.EXPECTED_VERSION;
+          const contractsRange = ">=0.45.0 <0.46.0";
           const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
           const tauriConfig = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
           const cargoToml = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
@@ -112,15 +118,28 @@ jobs:
           const versions = {
             "package.json": packageJson.version,
             "src-tauri/tauri.conf.json": tauriConfig.version,
-            "src-tauri/Cargo.toml": cargoVersion,
-            "package.json dependencies.@skenion/contracts": contractsDependency
+            "src-tauri/Cargo.toml": cargoVersion
           };
-          if (contractsPeerDependency !== undefined) {
-            versions["package.json peerDependencies.@skenion/contracts"] = contractsPeerDependency;
-          }
           for (const [source, actual] of Object.entries(versions)) {
             if (actual !== expected) {
               console.error(`::error::${source} version ${actual} does not match release ${expected}.`);
+              process.exit(1);
+            }
+          }
+          expectContractsLine(contractsDependency, "package.json dependencies.@skenion/contracts");
+          if (contractsPeerDependency !== undefined && contractsPeerDependency !== contractsRange) {
+            console.error(`::error::package.json peerDependencies.@skenion/contracts ${contractsPeerDependency} does not match ${contractsRange}.`);
+            process.exit(1);
+          }
+
+          function expectContractsLine(actual, label) {
+            if (typeof actual !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(actual)) {
+              console.error(`::error::${label} must be a concrete 0.45.x package version, got ${actual ?? "<missing>"}.`);
+              process.exit(1);
+            }
+            const [major, minor] = actual.split(".").map(Number);
+            if (major !== 0 || minor !== 45) {
+              console.error(`::error::${label} ${actual} must satisfy ${contractsRange}.`);
               process.exit(1);
             }
           }
@@ -134,9 +153,10 @@ jobs:
             echo ""
             echo "- Studio tag: ${{ steps.validate.outputs.tag }}"
             echo "- Studio version: ${{ steps.validate.outputs.version }}"
-            echo "- Runtime sidecar release: skenion-runtime-v${{ steps.validate.outputs.version }}"
-            echo "- Contracts npm package: @skenion/contracts@${{ steps.validate.outputs.version }}"
-            echo "- Mode: ${RELEASE_TRAIN_MODE}"
+            echo "- Runtime sidecar release: ${{ steps.validate.outputs.runtime_tag }}"
+            echo "- Contracts npm package: @skenion/contracts@0.45.0"
+            echo "- Contracts compatibility: >=0.45.0 <0.46.0"
+            echo "- Mode: ${RELEASE_MODE}"
             echo "- Upload release assets: ${{ steps.validate.outputs.upload_release_assets }}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -186,6 +206,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
       VERSION: ${{ needs.release.outputs.version }}
+      RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
       TAURI_BUNDLE_ARGS: ${{ matrix.tauri_bundle_args }}
     steps:
       - uses: actions/checkout@v6
@@ -265,7 +286,7 @@ jobs:
             echo "- App installer artifact class: Tauri Windows installer bundle"
             echo "- Primary Windows installer family: NSIS setup executable (-setup.exe)"
             echo "- Secondary Windows installer family: MSI, when emitted by Tauri"
-            echo "- Runtime sidecar asset class: internal release-train transport ZIP"
+            echo "- Runtime sidecar asset class: internal Runtime sidecar transport ZIP"
             echo "- Windows installer signing mode: ${signing_status}"
             echo "- Windows release-completion status: ${release_completion}"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -301,14 +322,16 @@ jobs:
           workspaces: src-tauri -> target
 
       - name: Verify released Contracts npm package
+        env:
+          CONTRACTS_VERSION: 0.45.0
         run: |
           set -euo pipefail
-          if ! released_version="$(pnpm view "@skenion/contracts@${VERSION}" version --silent)"; then
-            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+          if ! released_version="$(pnpm view "@skenion/contracts@${CONTRACTS_VERSION}" version --silent)"; then
+            echo "::error::@skenion/contracts@${CONTRACTS_VERSION} is not available on npm."
             exit 1
           fi
-          if [[ "${released_version}" != "${VERSION}" ]]; then
-            echo "::error::@skenion/contracts@${VERSION} is not available on npm."
+          if [[ "${released_version}" != "${CONTRACTS_VERSION}" ]]; then
+            echo "::error::@skenion/contracts@${CONTRACTS_VERSION} is not available on npm."
             exit 1
           fi
 
@@ -318,35 +341,42 @@ jobs:
           pnpm install --no-frozen-lockfile
           node <<'NODE'
           const fs = require("node:fs");
-          const expected = process.env.VERSION;
+          const contractsRange = ">=0.45.0 <0.46.0";
           const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
           const declared = packageJson.dependencies?.["@skenion/contracts"];
           const declaredPeer = packageJson.peerDependencies?.["@skenion/contracts"];
           const installed = JSON.parse(fs.readFileSync("node_modules/@skenion/contracts/package.json", "utf8"));
 
-          if (declared !== expected) {
-            console.error(`::error::package.json declares @skenion/contracts as ${declared}, expected ${expected}.`);
+          if (!isContracts45(declared)) {
+            console.error(`::error::package.json declares @skenion/contracts as ${declared}, expected a concrete version satisfying ${contractsRange}.`);
             process.exit(1);
           }
-          if (declaredPeer !== undefined && declaredPeer !== expected) {
-            console.error(`::error::package.json peerDependency declares @skenion/contracts as ${declaredPeer}, expected ${expected}.`);
+          if (declaredPeer !== undefined && declaredPeer !== contractsRange) {
+            console.error(`::error::package.json peerDependency declares @skenion/contracts as ${declaredPeer}, expected ${contractsRange}.`);
             process.exit(1);
           }
-          if (installed.version !== expected) {
-            console.error(`::error::installed @skenion/contracts is ${installed.version}, expected ${expected}.`);
+          if (!isContracts45(installed.version)) {
+            console.error(`::error::installed @skenion/contracts is ${installed.version}, expected ${contractsRange}.`);
             process.exit(1);
+          }
+
+          function isContracts45(version) {
+            if (typeof version !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
+              return false;
+            }
+            const [major, minor] = version.split(".").map(Number);
+            return major === 0 && minor === 45;
           }
           NODE
 
-      - name: Stage same-train Runtime sidecar
+      - name: Stage Runtime sidecar from exact release tag
         env:
-          SKENION_RELEASE_TRAIN_TOKEN: ${{ secrets.SKENION_RELEASE_TRAIN_TOKEN }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           args=(
-            --version "${VERSION}"
+            --runtime-tag "${RUNTIME_TAG}"
             --target "${TARGET}"
-            --mode "${RELEASE_TRAIN_MODE}"
+            --mode "${RELEASE_MODE}"
           )
           if [[ -n "${RELEASE_MANIFEST}" ]]; then
             args+=(--manifest "${RELEASE_MANIFEST}")
@@ -386,7 +416,7 @@ jobs:
       - name: Upload skenion runtime sidecar release asset
         if: needs.release.outputs.upload_release_assets == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           gh release upload "${{ needs.release.outputs.tag }}" \
             "${{ steps.package_runtime_sidecar.outputs.asset_path }}" \
@@ -529,7 +559,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           PNPM_HOME: ${{ env.PNPM_HOME }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -547,7 +577,7 @@ jobs:
         if: runner.os != 'macOS'
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           PNPM_HOME: ${{ env.PNPM_HOME }}
         with:
           includeUpdaterJson: false
@@ -563,7 +593,7 @@ jobs:
       - name: Upload canonical skenion studio desktop release asset
         if: needs.release.outputs.upload_release_assets == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           gh release upload "${{ needs.release.outputs.tag }}" \
             "${{ steps.package_studio_desktop.outputs.asset_path }}" \
@@ -577,6 +607,7 @@ jobs:
             echo ""
             echo "- Target: ${TARGET}"
             echo "- Tier: ${{ matrix.tier }}"
+            echo "- Runtime sidecar source tag: ${RUNTIME_TAG}"
             echo "- Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}"
             echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
