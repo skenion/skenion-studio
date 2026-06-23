@@ -39,14 +39,18 @@ Copy/paste is a graph-editor primitive for every persisted node family,
 including built-ins, extension nodes, subpatches, IO convenience nodes, and
 living-help/example patches.
 
-## Lockstep Release Train
+## Release And Compatibility
 
-Skenion releasable packages and applications use lockstep product SemVer during
-v0. If the product train is `0.55`, Studio web/desktop artifacts publish as
-`0.55.0` where tooling requires patch SemVer, and Runtime/contracts/sdk/docs
-artifacts must belong to that same train. Do not create an independent Studio
-version stream. Release artifacts must be produced through GitHub Actions and
-Release Please, not local publishing.
+Skenion component versions are independent during v0. Studio release artifacts
+must prove compatibility through the supported Contracts line/range plus
+Runtime API/protocol baselines and exact sidecar tag/checksum evidence, not by
+requiring Studio, Runtime, and Contracts to share a product version.
+
+Studio currently targets the Contracts `0.45` line:
+`>=0.45.0 <0.46.0`. App dependencies may pin a concrete released
+`@skenion/contracts` patch in that line, while artifact metadata should declare
+the compatibility range. Release artifacts must be produced through GitHub
+Actions and Release Please, not local publishing.
 
 ## Manager, Worker, And Review Gate Defaults
 

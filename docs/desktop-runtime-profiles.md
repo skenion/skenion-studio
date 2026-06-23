@@ -24,8 +24,9 @@ If `SKENION_RUNTIME_BIN` is unset, the Tauri command looks for a sibling
 bundled Tauri sidecar, then `../Skenion-runtime/target/debug/skenion-runtime` for local workspace
 development, then falls back to `skenion-runtime` on `PATH`.
 
-Release builds stage the bundled sidecar from the same-train Runtime GitHub Release. The staging
-script verifies the Runtime asset checksum before Tauri packages the app.
+Release builds stage the bundled sidecar from an exact Runtime GitHub Release
+tag selected by the packaging workflow. The staging script verifies the Runtime
+asset checksum before Tauri packages the app.
 
 The native command returns the Runtime `skenion.runtime.sidecar.startup` JSON on success. Startup
 failures surface in the Runtime settings panel and client log. In CI or browser-only development,

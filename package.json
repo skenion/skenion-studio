@@ -28,7 +28,7 @@
   "dependencies": {
     "@mantine/core": "^9.3.1",
     "@mantine/hooks": "^9.3.1",
-    "@skenion/contracts": "0.43.0",
+    "@skenion/contracts": "0.45.0",
     "@tauri-apps/api": "2.11.1",
     "@xyflow/react": "^12.11.0",
     "lucide-react": "^1.18.0",

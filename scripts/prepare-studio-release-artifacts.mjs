@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const contractsLine = "0.45";
+const contractsRange = ">=0.45.0 <0.46.0";
+const runtimeApiBaseline = "0.1.0";
+const runtimeProtocolBaseline = "0.1.0";
 const studioRepo = "skenion/skenion-studio";
 const studioRepoUrl = `https://github.com/${studioRepo}`;
 const runtimeRepo = "skenion/skenion-runtime";
@@ -57,15 +61,22 @@ const options = parseArgs(process.argv.slice(2));
 const rootPackage = await readJson("package.json");
 const version = options.version ?? rootPackage.version;
 const releaseTag = options.tag ?? `skenion-studio-v${version}`;
-const trainId = version.split(".").slice(0, 2).join(".");
+const runtimeTag = requireOption(options.runtimeTag, "--runtime-tag");
+const runtimeVersion = runtimeVersionFromTag(runtimeTag);
 const checkOnly = Boolean(options.check);
 const distDir = path.resolve(rootDir, options.distDir ?? "dist");
 
 validateReleaseInputs(version, releaseTag);
 await validatePackageVersions(version, rootPackage);
 
-const webManifest = createWebManifest(version, trainId, releaseTag);
-const desktopManifest = createDesktopManifest(version, trainId, releaseTag);
+const webManifest = createWebManifest(version, releaseTag, rootPackage.dependencies["@skenion/contracts"]);
+const desktopManifest = createDesktopManifest(
+  version,
+  releaseTag,
+  runtimeTag,
+  runtimeVersion,
+  rootPackage.dependencies["@skenion/contracts"]
+);
 
 if (!checkOnly) {
   await copyWebDist(distDir, path.join(rootDir, "packages/studio-web/dist"));
@@ -104,9 +115,8 @@ function parseArgs(args) {
 
 async function validatePackageVersions(expectedVersion, rootPackageJson) {
   assertEqual(rootPackageJson.version, expectedVersion, "package.json version");
-  assertEqual(
+  assertConcreteContractsVersion(
     rootPackageJson.dependencies?.["@skenion/contracts"],
-    expectedVersion,
     "package.json dependencies.@skenion/contracts"
   );
 
@@ -123,7 +133,7 @@ async function validatePackageVersions(expectedVersion, rootPackageJson) {
     assertEqual(packageJson.version, expectedVersion, `${definition.directory}/package.json version`);
     assertEqual(
       packageJson.peerDependencies?.["@skenion/contracts"],
-      expectedVersion,
+      contractsRange,
       `${definition.directory}/package.json peerDependencies.@skenion/contracts`
     );
     if (packageJson.private !== true) {
@@ -152,15 +162,16 @@ function validateReleaseInputs(expectedVersion, releaseTagValue) {
   }
 }
 
-function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
+function createWebManifest(versionValue, releaseTagValue, contractsVersion) {
   return {
     "schema-version": "0.1",
     component: "studio-web",
     version: versionValue,
-    "train-id": trainIdValue,
     contracts: {
       "npm-package": "@skenion/contracts",
-      version: versionValue
+      line: contractsLine,
+      range: contractsRange,
+      version: contractsVersion
     },
     "studio-release": {
       repository: studioRepo,
@@ -179,16 +190,16 @@ function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
   };
 }
 
-function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
-  const runtimeTag = `skenion-runtime-v${versionValue}`;
+function createDesktopManifest(versionValue, releaseTagValue, runtimeTagValue, runtimeVersionValue, contractsVersion) {
   return {
     "schema-version": "0.1",
     component: "studio-desktop",
     version: versionValue,
-    "train-id": trainIdValue,
     contracts: {
       "npm-package": "@skenion/contracts",
-      version: versionValue
+      line: contractsLine,
+      range: contractsRange,
+      version: contractsVersion
     },
     "studio-release": {
       repository: studioRepo,
@@ -205,12 +216,16 @@ function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
     },
     runtime: {
       repository: runtimeRepo,
-      version: versionValue,
-      tag: runtimeTag,
-      url: `https://github.com/${runtimeRepo}/releases/tag/${runtimeTag}`
+      version: runtimeVersionValue,
+      tag: runtimeTagValue,
+      url: `https://github.com/${runtimeRepo}/releases/tag/${runtimeTagValue}`,
+      "api-baseline": runtimeApiBaseline,
+      "protocol-baseline": runtimeProtocolBaseline
     },
     "desktop-packages": desktopTargets.map((target) => createDesktopPackageTarget(releaseTagValue, target)),
-    "runtime-sidecars": desktopTargets.map((target) => createSidecarTarget(versionValue, releaseTagValue, runtimeTag, target))
+    "runtime-sidecars": desktopTargets.map((target) =>
+      createSidecarTarget(runtimeVersionValue, releaseTagValue, runtimeTagValue, target)
+    )
   };
 }
 
@@ -254,6 +269,35 @@ function createSidecarTarget(versionValue, releaseTagValue, runtimeTag, targetCo
 
 function desktopPackageExtension(target) {
   return target.includes("windows") ? "zip" : "tar.gz";
+}
+
+function requireOption(value, name) {
+  if (!value) {
+    fail(`${name} is required.`);
+  }
+  return value;
+}
+
+function runtimeVersionFromTag(tag) {
+  const match = tag.match(/^skenion-runtime-v(.+)$/);
+  if (!match || !semverPattern.test(match[1])) {
+    fail(`--runtime-tag must use skenion-runtime-vx.y.z form; got '${tag}'.`);
+  }
+  return match[1];
+}
+
+function assertConcreteContractsVersion(version, label) {
+  if (!version || !semverPattern.test(version)) {
+    fail(`${label} must be a concrete x.y.z package version in the ${contractsLine} line; got ${version ?? "<missing>"}.`);
+  }
+  if (!versionSatisfiesContractsLine(version)) {
+    fail(`${label} ${version} must satisfy ${contractsRange}.`);
+  }
+}
+
+function versionSatisfiesContractsLine(version) {
+  const [major, minor] = version.split(".").map(Number);
+  return major === 0 && minor === 45;
 }
 
 async function copyWebDist(source, destination) {
