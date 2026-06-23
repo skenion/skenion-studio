@@ -154,15 +154,15 @@ function validateReleaseInputs(expectedVersion, releaseTagValue) {
 
 function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
   return {
-    schemaVersion: "0.1",
+    "schema-version": "0.1",
     component: "studio-web",
     version: versionValue,
-    trainId: trainIdValue,
+    "train-id": trainIdValue,
     contracts: {
-      npmPackage: "@skenion/contracts",
+      "npm-package": "@skenion/contracts",
       version: versionValue
     },
-    studioRelease: {
+    "studio-release": {
       repository: studioRepo,
       tag: releaseTagValue,
       url: `https://github.com/${studioRepo}/releases/tag/${releaseTagValue}`
@@ -170,9 +170,9 @@ function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
     artifact: {
       kind: "studio-web-bundle",
       name: `skenion-studio-web-bundle-v${versionValue}.tar.gz`,
-      checksumName: `skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
+      "checksum-name": `skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
       url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz`,
-      checksumUrl: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
+      "checksum-url": `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
       directory: "dist",
       entrypoint: "dist/index.html"
     }
@@ -182,15 +182,15 @@ function createWebManifest(versionValue, trainIdValue, releaseTagValue) {
 function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
   const runtimeTag = `skenion-runtime-v${versionValue}`;
   return {
-    schemaVersion: "0.1",
+    "schema-version": "0.1",
     component: "studio-desktop",
     version: versionValue,
-    trainId: trainIdValue,
+    "train-id": trainIdValue,
     contracts: {
-      npmPackage: "@skenion/contracts",
+      "npm-package": "@skenion/contracts",
       version: versionValue
     },
-    studioRelease: {
+    "studio-release": {
       repository: studioRepo,
       tag: releaseTagValue,
       url: `https://github.com/${studioRepo}/releases/tag/${releaseTagValue}`
@@ -198,10 +198,10 @@ function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
     artifact: {
       kind: "tauri-desktop-release",
       distribution: "github-release-assets",
-      desktopPackagePattern: "skenion-studio-<target>.<tar.gz|zip>",
-      checksumPattern: "skenion-studio-<target>.<tar.gz|zip>.sha256",
-      linuxPackageContents: ["deb", "rpm"],
-      windowsPackageContents: ["nsis-setup-exe", "msi-if-emitted"]
+      "desktop-package-pattern": "skenion-studio-<target>.<tar.gz|zip>",
+      "checksum-pattern": "skenion-studio-<target>.<tar.gz|zip>.sha256",
+      "linux-package-contents": ["deb", "rpm"],
+      "windows-package-contents": ["nsis-setup-exe", "msi-if-emitted"]
     },
     runtime: {
       repository: runtimeRepo,
@@ -209,8 +209,8 @@ function createDesktopManifest(versionValue, trainIdValue, releaseTagValue) {
       tag: runtimeTag,
       url: `https://github.com/${runtimeRepo}/releases/tag/${runtimeTag}`
     },
-    desktopPackages: desktopTargets.map((target) => createDesktopPackageTarget(releaseTagValue, target)),
-    sidecars: desktopTargets.map((target) => createSidecarTarget(versionValue, releaseTagValue, runtimeTag, target))
+    "desktop-packages": desktopTargets.map((target) => createDesktopPackageTarget(releaseTagValue, target)),
+    "runtime-sidecars": desktopTargets.map((target) => createSidecarTarget(versionValue, releaseTagValue, runtimeTag, target))
   };
 }
 
@@ -219,12 +219,12 @@ function createDesktopPackageTarget(releaseTagValue, targetConfig) {
   return {
     target: targetConfig.target,
     tier: targetConfig.tier,
-    tauriBundleArgs: targetConfig.tauriBundleArgs,
-    packageAsset: {
+    "tauri-bundle-args": targetConfig.tauriBundleArgs,
+    "package-asset": {
       name: packageAssetName,
-      checksumName: `${packageAssetName}.sha256`,
+      "checksum-name": `${packageAssetName}.sha256`,
       url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}`,
-      checksumUrl: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}.sha256`
+      "checksum-url": `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}.sha256`
     }
   };
 }
@@ -236,18 +236,18 @@ function createSidecarTarget(versionValue, releaseTagValue, runtimeTag, targetCo
   return {
     target: targetConfig.target,
     tier: targetConfig.tier,
-    tauriBundleArgs: targetConfig.tauriBundleArgs,
-    runtimeReleaseAsset: {
+    "tauri-bundle-args": targetConfig.tauriBundleArgs,
+    "runtime-release-asset": {
       name: runtimeAssetName,
-      checksumName: `${runtimeAssetName}.sha256`,
+      "checksum-name": `${runtimeAssetName}.sha256`,
       url: `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeAssetName}`,
-      checksumUrl: `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeAssetName}.sha256`
+      "checksum-url": `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeAssetName}.sha256`
     },
-    studioRuntimeSidecarAsset: {
+    "studio-runtime-sidecar-asset": {
       name: studioSidecarAssetName,
-      checksumName: `${studioSidecarAssetName}.sha256`,
+      "checksum-name": `${studioSidecarAssetName}.sha256`,
       url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${studioSidecarAssetName}`,
-      checksumUrl: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${studioSidecarAssetName}.sha256`
+      "checksum-url": `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${studioSidecarAssetName}.sha256`
     }
   };
 }

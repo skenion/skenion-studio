@@ -182,7 +182,7 @@ async function checksumFromTrainManifest(manifestPath, targetName, expectedAsset
     return null;
   }
 
-  const artifactName = candidate.name ?? candidate.assetName ?? path.basename(candidate.url ?? "");
+  const artifactName = candidate.name ?? candidate["asset-name"] ?? path.basename(candidate.url ?? "");
   if (artifactName && artifactName !== expectedAssetName) {
     fail(`Manifest runtime binary for ${targetName} points at ${artifactName}, expected ${expectedAssetName}.`);
   }
