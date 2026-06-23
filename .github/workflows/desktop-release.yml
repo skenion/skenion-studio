@@ -468,39 +468,36 @@ jobs:
           const baseConfig = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
           const releaseConfig = JSON.parse(fs.readFileSync("src-tauri/tauri.release.conf.json", "utf8"));
           const config = mergeConfig(baseConfig, releaseConfig);
+          if (!target) {
+            fail("TARGET is required for release Tauri packaging input validation.");
+          }
           if (!config.bundle?.externalBin?.includes("binaries/skenion-runtime")) {
-            console.error("::error::Release Tauri bundle.externalBin must include binaries/skenion-runtime.");
-            process.exit(1);
+            fail("Release Tauri bundle.externalBin must include binaries/skenion-runtime.");
           }
           const icons = config.bundle?.icon ?? [];
           for (const icon of icons) {
             const iconPath = `src-tauri/${icon}`;
             if (!fs.existsSync(iconPath)) {
-              console.error(`::error::Tauri bundle.icon entry '${icon}' must exist at ${iconPath}.`);
-              process.exit(1);
+              fail(`Tauri bundle.icon entry '${icon}' must exist at ${iconPath}.`);
             }
           }
           if (target.includes("windows")) {
             const windowsIcon = "icons/icon.ico";
             const iconPath = `src-tauri/${windowsIcon}`;
             if (!icons.includes(windowsIcon)) {
-              console.error(`::error::Windows desktop releases require Tauri bundle.icon to include ${windowsIcon}.`);
-              process.exit(1);
+              fail(`Windows desktop releases require Tauri bundle.icon to include ${windowsIcon}.`);
             }
             if (!fs.existsSync(iconPath)) {
-              console.error("::error::Windows desktop releases require src-tauri/icons/icon.ico for the Tauri Windows resource file.");
-              process.exit(1);
+              fail("Windows desktop releases require src-tauri/icons/icon.ico for the Tauri Windows resource file.");
             }
             validateIcoFile(iconPath);
           }
           const isLinux = target.endsWith("-unknown-linux-gnu");
           if (isLinux && bundleArgs !== "--bundles deb,rpm") {
-            console.error(`::error::Linux desktop releases must currently scope Tauri bundles to deb,rpm; got '${bundleArgs}'.`);
-            process.exit(1);
+            fail(`Linux desktop releases must currently scope Tauri bundles to deb,rpm; got '${bundleArgs}'.`);
           }
           if (!isLinux && bundleArgs !== "") {
-            console.error(`::error::Non-Linux desktop releases should use native Tauri bundle defaults; got '${bundleArgs}'.`);
-            process.exit(1);
+            fail(`Non-Linux desktop releases should use native Tauri bundle defaults; got '${bundleArgs}'.`);
           }
 
           function validateIcoFile(iconPath) {
@@ -544,9 +541,6 @@ jobs:
               if (width <= 0 || height <= 0) {
                 fail(`${entryLabel} must declare nonzero dimensions.`);
               }
-              if (planes === 0 || bitDepth === 0) {
-                fail(`${entryLabel} must declare a nonzero color plane count and bit depth.`);
-              }
               if (imageLength === 0) {
                 fail(`${entryLabel} must point to a non-empty image payload.`);
               }
@@ -556,7 +550,17 @@ jobs:
               if (imageEnd > icon.length) {
                 fail(`${entryLabel} image range ${imageOffset}-${imageEnd} exceeds file length ${icon.length}.`);
               }
+
+              const pngPayload = isPngPayload(icon, imageOffset, imageLength);
+              if ((planes === 0 || bitDepth === 0) && !pngPayload) {
+                fail(`${entryLabel} must declare a nonzero color plane count and bit depth unless it embeds a PNG payload.`);
+              }
             }
+          }
+
+          function isPngPayload(icon, imageOffset, imageLength) {
+            const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+            return imageLength >= pngSignature.length && icon.subarray(imageOffset, imageOffset + pngSignature.length).equals(pngSignature);
           }
 
           function decodeIcoDimension(value) {
@@ -591,8 +595,20 @@ jobs:
           }
           NODE
 
-      - name: Build Tauri desktop package (macOS)
-        if: runner.os == 'macOS'
+      - name: Build unsigned preview Tauri desktop package (macOS)
+        if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          PNPM_HOME: ${{ env.PNPM_HOME }}
+        with:
+          includeUpdaterJson: false
+          projectPath: .
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
+
+      - name: Build signed Tauri desktop package (macOS)
+        if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode != 'unsigned-preview'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
