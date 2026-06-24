@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.44.2](https://github.com/skenion/skenion-studio/compare/v0.44.1...v0.44.2) (2026-06-24)
+
+
+### Bug Fixes
+
+* **ci:** use canonical studio release tags ([b549db7](https://github.com/skenion/skenion-studio/commit/b549db7de1af46d160ab63e45ce861aca2a87edc)), closes [#148](https://github.com/skenion/skenion-studio/issues/148)
+* mark empty studio releases unpromoted ([#141](https://github.com/skenion/skenion-studio/issues/141)) ([eb1fb4a](https://github.com/skenion/skenion-studio/commit/eb1fb4aeeb3635af3c0b0c6a0e6b060a9fac4ccd))
+
 ## [0.44.1](https://github.com/skenion/skenion-studio/compare/skenion-studio-v0.44.0...skenion-studio-v0.44.1) (2026-06-23)
 
 
