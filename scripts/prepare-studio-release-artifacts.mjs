@@ -225,12 +225,14 @@ function createDesktopManifest(versionValue, releaseTagValue, runtimeTagValue, r
       version: runtimeVersionValue,
       tag: runtimeTagValue,
       url: `https://github.com/${runtimeRepo}/releases/tag/${runtimeTagValue}`,
+      "binary-source": "skenion-runtime-release-manifest",
+      "manifest-schema": "skenion.runtime.releaseArtifact.v1",
       "api-baseline": runtimeApiBaseline,
       "protocol-baseline": runtimeProtocolBaseline
     },
     "desktop-packages": desktopTargets.map((target) => createDesktopPackageTarget(releaseTagValue, target)),
-    "runtime-sidecars": desktopTargets.map((target) =>
-      createSidecarTarget(runtimeVersionValue, releaseTagValue, runtimeTagValue, target)
+    "runtime-release-manifests": desktopTargets.map((target) =>
+      createRuntimeManifestTarget(runtimeVersionValue, runtimeTagValue, target)
     )
   };
 }
@@ -250,25 +252,20 @@ function createDesktopPackageTarget(releaseTagValue, targetConfig) {
   };
 }
 
-function createSidecarTarget(versionValue, releaseTagValue, runtimeTag, targetConfig) {
+function createRuntimeManifestTarget(versionValue, runtimeTag, targetConfig) {
   const runtimeAssetName = `skenion-runtime-v${versionValue}-${targetConfig.target}.tar.gz`;
-  const studioSidecarExtension = targetConfig.target.includes("windows") ? "zip" : "tar.gz";
-  const studioSidecarAssetName = `skenion-runtime-sidecar-${targetConfig.target}.${studioSidecarExtension}`;
+  const runtimeManifestName = `${runtimeAssetName}.manifest.json`;
   return {
     target: targetConfig.target,
     tier: targetConfig.tier,
     "tauri-bundle-args": targetConfig.tauriBundleArgs,
-    "runtime-release-asset": {
-      name: runtimeAssetName,
-      "checksum-name": `${runtimeAssetName}.sha256`,
-      url: `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeAssetName}`,
-      "checksum-url": `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeAssetName}.sha256`
-    },
-    "studio-runtime-sidecar-asset": {
-      name: studioSidecarAssetName,
-      "checksum-name": `${studioSidecarAssetName}.sha256`,
-      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${studioSidecarAssetName}`,
-      "checksum-url": `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${studioSidecarAssetName}.sha256`
+    "runtime-release-artifact-manifest": {
+      schema: "skenion.runtime.releaseArtifact.v1",
+      component: "skenion-runtime",
+      name: runtimeManifestName,
+      url: `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeManifestName}`,
+      "artifact-filename": runtimeAssetName,
+      "checksum-filename": `${runtimeAssetName}.sha256`
     }
   };
 }

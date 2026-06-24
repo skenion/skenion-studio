@@ -12,7 +12,6 @@
     "coverage": "vitest run --coverage",
     "dev": "vite --host localhost",
     "lint": "eslint .",
-    "package-runtime-sidecar": "node scripts/package-runtime-sidecar.mjs",
     "package-studio-desktop": "node scripts/package-studio-desktop.mjs",
     "prepare-studio-release-artifacts": "node scripts/prepare-studio-release-artifacts.mjs",
     "preview": "vite preview --host localhost",

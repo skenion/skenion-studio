@@ -7,8 +7,8 @@ This private workspace package is used only by GitHub Actions from a canonical
 contain desktop binaries. The generated `studio-desktop-manifest.json` names
 the Studio release tag, `@skenion/contracts` compatibility line/range, the
 canonical `skenion-studio-<target>` desktop package archives, and the exact
-Runtime sidecar release assets that the desktop GitHub Release is expected to
-consume.
+Runtime release artifact manifests that desktop packaging consumes before
+staging the Tauri external Runtime binary.
 
 Do not publish this package to npm. skenion studio desktop is distributed as
 signed desktop release artifacts.

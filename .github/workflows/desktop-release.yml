@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       runtime-tag:
-        description: Exact Runtime release tag to stage as the desktop sidecar, for example v0.46.0
+        description: Exact Runtime release tag whose release artifact manifest stages the desktop Runtime binary, for example v0.46.0
         required: true
         type: string
       release-mode:
@@ -16,8 +16,8 @@ on:
         default: verify
         required: false
         type: string
-      release-manifest:
-        description: Optional path to a checked-in compatibility manifest with Runtime sidecar checksums
+      runtime-manifest-url:
+        description: Optional Runtime release artifact manifest URL override; defaults to the manifest asset on the Runtime GitHub Release
         required: false
         type: string
       desktop-signing-mode:
@@ -37,7 +37,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   RELEASE_TAG: ${{ inputs.tag }}
   RELEASE_MODE: ${{ inputs['release-mode'] }}
-  RELEASE_MANIFEST: ${{ inputs['release-manifest'] }}
+  RUNTIME_MANIFEST_URL: ${{ inputs['runtime-manifest-url'] }}
   RUNTIME_TAG: ${{ inputs['runtime-tag'] }}
   DESKTOP_SIGNING_MODE: ${{ inputs['desktop-signing-mode'] }}
 
@@ -72,7 +72,7 @@ jobs:
           version="${RELEASE_TAG#v}"
 
           if [[ -z "${RUNTIME_TAG}" ]]; then
-            echo "::error::runtime-tag is required so desktop packaging stages exact Runtime sidecar release evidence."
+            echo "::error::runtime-tag is required so desktop packaging stages exact Runtime release manifest evidence."
             exit 1
           fi
           if [[ ! "${RUNTIME_TAG}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
@@ -175,7 +175,7 @@ jobs:
             echo ""
             echo "- Studio tag: ${{ steps.validate.outputs.tag }}"
             echo "- Studio version: ${{ steps.validate.outputs.version }}"
-            echo "- Runtime sidecar release: ${{ steps.validate.outputs.runtime_tag }}"
+            echo "- Runtime release manifest tag: ${{ steps.validate.outputs.runtime_tag }}"
             echo "- Contracts npm package: @skenion/contracts@0.45.0"
             echo "- Contracts compatibility: >=0.45.0 <0.46.0"
             echo "- Mode: ${RELEASE_MODE}"
@@ -322,7 +322,6 @@ jobs:
             echo "- App installer artifact class: Tauri Windows installer bundle"
             echo "- Primary Windows installer family: NSIS setup executable (-setup.exe)"
             echo "- Secondary Windows installer family: MSI, when emitted by Tauri"
-            echo "- Runtime sidecar asset class: internal Runtime sidecar transport ZIP"
             echo "- Windows installer signing mode: ${signing_status}"
             echo "- Windows release-completion status: ${release_completion}"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -405,7 +404,7 @@ jobs:
           }
           NODE
 
-      - name: Stage Runtime sidecar from exact release tag
+      - name: Stage Runtime binary from release manifest
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
@@ -414,50 +413,10 @@ jobs:
             --target "${TARGET}"
             --mode "${RELEASE_MODE}"
           )
-          if [[ -n "${RELEASE_MANIFEST}" ]]; then
-            args+=(--manifest "${RELEASE_MANIFEST}")
+          if [[ -n "${RUNTIME_MANIFEST_URL}" ]]; then
+            args+=(--runtime-manifest-url "${RUNTIME_MANIFEST_URL}")
           fi
           pnpm run stage-runtime-sidecar -- "${args[@]}"
-
-      - id: package_runtime_sidecar
-        name: Package skenion runtime sidecar release asset
-        run: pnpm run package-runtime-sidecar -- --target "${TARGET}"
-
-      - name: Verify Windows installer artifact classification
-        if: runner.os == 'Windows'
-        env:
-          SIDECAR_ASSET_NAME: ${{ steps.package_runtime_sidecar.outputs.asset_name }}
-        run: |
-          set -euo pipefail
-
-          if [[ ! "${SIDECAR_ASSET_NAME}" =~ ^skenion-runtime-sidecar-.+\.zip$ ]]; then
-            echo "::error::Windows Runtime sidecar asset must be named as an internal sidecar ZIP; got '${SIDECAR_ASSET_NAME}'."
-            exit 1
-          fi
-          if [[ "${SIDECAR_ASSET_NAME}" == *setup.exe || "${SIDECAR_ASSET_NAME}" == *.msi ]]; then
-            echo "::error::Runtime sidecar '${SIDECAR_ASSET_NAME}' must not be classified as a Windows app installer."
-            exit 1
-          fi
-
-          {
-            echo "## Windows Artifact Classification"
-            echo ""
-            echo "- Target: ${TARGET}"
-            echo "- User-facing Windows app installer: Tauri NSIS setup executable (-setup.exe)"
-            echo "- Additional installer, if emitted: Tauri MSI"
-            echo "- Runtime sidecar ZIP: ${SIDECAR_ASSET_NAME}"
-            echo "- Sidecar ZIP installer status: not a skenion studio Windows installer"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Upload skenion runtime sidecar release asset
-        if: needs.release.outputs.upload_release_assets == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          gh release upload "${{ needs.release.outputs.tag }}" \
-            "${{ steps.package_runtime_sidecar.outputs.asset_path }}" \
-            "${{ steps.package_runtime_sidecar.outputs.checksum_path }}" \
-            --clobber
 
       - name: Verify release Tauri packaging inputs
         run: |
@@ -659,9 +618,7 @@ jobs:
             echo ""
             echo "- Target: ${TARGET}"
             echo "- Tier: ${{ matrix.tier }}"
-            echo "- Runtime sidecar source tag: ${RUNTIME_TAG}"
-            echo "- Runtime sidecar release asset: ${{ steps.package_runtime_sidecar.outputs.asset_name }}"
-            echo "- Runtime sidecar checksum: ${{ steps.package_runtime_sidecar.outputs.asset_name }}.sha256"
+            echo "- Runtime release manifest tag: ${RUNTIME_TAG}"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
             echo "- Desktop signing mode: ${DESKTOP_SIGNING_MODE}"
             echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"

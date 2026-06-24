@@ -209,8 +209,7 @@ function legacyExpectedWebAssets(versionValue) {
 function expectedDesktopAssets(targets) {
   return targets.flatMap((target) => {
     const desktopAsset = `skenion-studio-${target}.${target.includes("windows") ? "zip" : "tar.gz"}`;
-    const sidecarAsset = `skenion-runtime-sidecar-${target}.${target.includes("windows") ? "zip" : "tar.gz"}`;
-    return [desktopAsset, `${desktopAsset}.sha256`, sidecarAsset, `${sidecarAsset}.sha256`];
+    return [desktopAsset, `${desktopAsset}.sha256`];
   });
 }
 

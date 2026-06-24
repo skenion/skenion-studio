@@ -3,12 +3,14 @@ import { createHash } from "node:crypto";
 import { createWriteStream, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const defaultOutputDir = path.join(rootDir, "src-tauri", "binaries");
+const runtimeManifestSchema = "skenion.runtime.releaseArtifact.v1";
+const runtimeComponent = "skenion-runtime";
 const releaseModeNames = new Set(["publish", "verify"]);
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const supportedTargets = new Set([
@@ -27,6 +29,7 @@ const target = requireOption(options.target, "--target");
 const mode = options.mode ?? "verify";
 const runtimeRepo = options.repo ?? "skenion/skenion-runtime";
 const outputDir = path.resolve(rootDir, options.outputDir ?? defaultOutputDir);
+const manifestUrl = options.runtimeManifestUrl ?? options.manifestUrl;
 
 if (options.version && options.version !== version) {
   fail(`--version (${options.version}) must match Runtime release tag version (${version}).`);
@@ -37,43 +40,42 @@ if (!supportedTargets.has(target)) {
 if (!releaseModeNames.has(mode) && mode !== "local") {
   fail("--mode must be publish, verify, or local.");
 }
+if (options.manifest && manifestUrl) {
+  fail("--manifest cannot be combined with --manifest-url or --runtime-manifest-url.");
+}
+if (options.checkManifestOnly && !options.manifest) {
+  fail("--manifest is required with --check-manifest-only.");
+}
 
 const assetName = `skenion-runtime-v${version}-${target}.tar.gz`;
 const checksumAssetName = `${assetName}.sha256`;
+const manifestAssetName = `${assetName}.manifest.json`;
 const binaryName = target.includes("windows") ? "skenion-runtime.exe" : "skenion-runtime";
 const stagedBinaryName = `skenion-runtime-${target}${target.includes("windows") ? ".exe" : ""}`;
 
+const manifestEvidence = await loadRuntimeManifest();
+const runtimeArtifact = validateRuntimeManifest(manifestEvidence.manifest, {
+  expectedArtifactName: assetName,
+  expectedChecksumName: checksumAssetName,
+  expectedManifestName: manifestAssetName,
+  enforceManifestFilename: !manifestUrl,
+  manifestSource: manifestEvidence.source
+});
+
 if (options.checkManifestOnly) {
-  const expectedChecksum = await checksumFromTrainManifest(options.checkManifestOnly, target, assetName);
-  if (!expectedChecksum) {
-    fail(`Missing SHA-256 checksum for ${assetName} in ${options.checkManifestOnly}.`);
-  }
-  console.log(`manifest selects ${assetName} with sha256 ${expectedChecksum}`);
+  console.log(
+    `validated Runtime release manifest ${runtimeArtifact.manifestFilename} for ${assetName} with sha256 ${runtimeArtifact.sha256}`
+  );
   process.exit(0);
 }
 
-const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-runtime-sidecar-"));
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-runtime-artifact-"));
 
 try {
-  const release = await getRelease(runtimeRepo, releaseTag);
   const artifactPath = path.join(tempDir, assetName);
-  const checksumPath = path.join(tempDir, checksumAssetName);
-
-  await downloadReleaseAsset(release, assetName, artifactPath);
-  const expectedChecksum = options.manifest
-    ? await checksumFromTrainManifest(options.manifest, target, assetName)
-    : await checksumFromReleaseAsset(release, checksumAssetName, checksumPath, assetName);
-
-  if (!expectedChecksum) {
-    const source = options.manifest ? options.manifest : checksumAssetName;
-    const message = `Missing SHA-256 checksum for ${assetName} in ${source}.`;
-    if (releaseModeNames.has(mode)) {
-      fail(message);
-    }
-    console.warn(`warning: ${message}`);
-  } else {
-    await verifySha256(artifactPath, expectedChecksum, assetName);
-  }
+  await downloadUrl(runtimeArtifact.publicUrl, artifactPath, assetName);
+  await verifyFileSize(artifactPath, runtimeArtifact.size, assetName);
+  await verifySha256(artifactPath, runtimeArtifact.sha256, assetName);
 
   await run("tar", ["-xzf", path.basename(artifactPath)], { cwd: tempDir });
   const extractedBinary = path.join(
@@ -90,8 +92,8 @@ try {
     await fs.chmod(stagedBinary, 0o755);
   }
 
-  console.log(`staged Runtime sidecar ${path.relative(rootDir, stagedBinary)}`);
-  console.log(`verified ${assetName} with sha256 ${expectedChecksum}`);
+  console.log(`staged Runtime binary ${path.relative(rootDir, stagedBinary)}`);
+  console.log(`verified ${assetName} from ${runtimeArtifact.publicUrl} with sha256 ${runtimeArtifact.sha256}`);
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
@@ -100,6 +102,18 @@ function parseArgs(args) {
   const parsed = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--check-manifest-only") {
+      parsed.checkManifestOnly = true;
+      const maybeManifest = args[index + 1];
+      if (maybeManifest && !maybeManifest.startsWith("--")) {
+        if (parsed.manifest) {
+          fail("--check-manifest-only path cannot be combined with --manifest.");
+        }
+        parsed.manifest = maybeManifest;
+        index += 1;
+      }
+      continue;
+    }
     if (arg === "--") {
       continue;
     }
@@ -144,7 +158,31 @@ async function getRelease(repo, tag) {
   return response.json();
 }
 
-async function downloadReleaseAsset(release, assetNameToDownload, destination) {
+async function loadRuntimeManifest() {
+  if (options.manifest) {
+    const manifestPath = path.resolve(rootDir, options.manifest);
+    return {
+      source: manifestPath,
+      manifest: JSON.parse(await fs.readFile(manifestPath, "utf8"))
+    };
+  }
+
+  if (manifestUrl) {
+    return {
+      source: manifestUrl,
+      manifest: await fetchJson(manifestUrl, "Runtime release artifact manifest")
+    };
+  }
+
+  const release = await getRelease(runtimeRepo, releaseTag);
+  const manifest = await downloadReleaseJsonAsset(release, manifestAssetName);
+  return {
+    source: `${runtimeRepo}@${releaseTag}:${manifestAssetName}`,
+    manifest
+  };
+}
+
+async function downloadReleaseJsonAsset(release, assetNameToDownload) {
   const asset = release.assets?.find((candidate) => candidate.name === assetNameToDownload);
   if (!asset) {
     fail(`Runtime release ${release.tag_name} is missing asset ${assetNameToDownload}.`);
@@ -158,54 +196,146 @@ async function downloadReleaseAsset(release, assetNameToDownload, destination) {
   if (!response.ok) {
     fail(`Could not download ${assetNameToDownload}: ${response.status} ${response.statusText}.`);
   }
+  return response.json();
+}
+
+function validateRuntimeManifest(manifest, expected) {
+  assertPlainObject(manifest, "Runtime manifest");
+  assertEqual(manifest.schema, runtimeManifestSchema, "manifest.schema");
+  assertEqual(manifest.component, runtimeComponent, "manifest.component");
+  assertEqual(manifest.runtimeVersion, version, "manifest.runtimeVersion");
+  assertEqual(manifest.releaseTag, releaseTag, "manifest.releaseTag");
+  assertEqual(manifest.target, target, "manifest.target");
+  requireNonEmptyString(manifest.tier, "manifest.tier");
+  requireNonEmptyString(manifest.sourceCommit, "manifest.sourceCommit");
+
+  assertPlainObject(manifest.contracts, "manifest.contracts");
+  requireNonEmptyString(manifest.contracts.version, "manifest.contracts.version");
+  requireNonEmptyString(manifest.contracts.line, "manifest.contracts.line");
+
+  const artifact = assertPlainObject(manifest.artifact, "manifest.artifact");
+  assertEqual(artifact.filename, expected.expectedArtifactName, "manifest.artifact.filename");
+  const sha256 = requireSha256(artifact.sha256, "manifest.artifact.sha256");
+  const size = requirePositiveInteger(artifact.size, "manifest.artifact.size");
+  const publicUrl = requireHttpUrl(artifact.publicUrl, "manifest.artifact.publicUrl");
+  requireEvidence(artifact.s3, "manifest.artifact.s3");
+
+  const checksum = assertPlainObject(manifest.checksum, "manifest.checksum");
+  assertEqual(checksum.filename, expected.expectedChecksumName, "manifest.checksum.filename");
+  requireHttpUrl(checksum.publicUrl, "manifest.checksum.publicUrl");
+  requireEvidence(checksum.s3, "manifest.checksum.s3");
+
+  const manifestArtifact = assertPlainObject(manifest.manifest, "manifest.manifest");
+  const manifestFilename = requireNonEmptyString(manifestArtifact.filename, "manifest.manifest.filename");
+  if (expected.enforceManifestFilename && manifestFilename !== expected.expectedManifestName) {
+    fail(
+      `manifest.manifest.filename is ${manifestFilename}, expected ${expected.expectedManifestName} from ${expected.manifestSource}.`
+    );
+  }
+  requireHttpUrl(manifestArtifact.publicUrl, "manifest.manifest.publicUrl");
+  requireEvidence(manifestArtifact.s3, "manifest.manifest.s3");
+
+  return {
+    publicUrl,
+    sha256,
+    size,
+    manifestFilename
+  };
+}
+
+function assertPlainObject(value, label) {
+  if (!isPlainObject(value)) {
+    fail(`${label} must be an object.`);
+  }
+  return value;
+}
+
+function assertEqual(actual, expected, label) {
+  if (actual !== expected) {
+    fail(`${label} is ${actual ?? "<missing>"}, expected ${expected}.`);
+  }
+}
+
+function requireNonEmptyString(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    fail(`${label} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function requireSha256(value, label) {
+  if (typeof value !== "string" || !/^[a-fA-F0-9]{64}$/.test(value)) {
+    fail(`${label} must be a 64-character SHA-256 hex digest.`);
+  }
+  return value.toLowerCase();
+}
+
+function requirePositiveInteger(value, label) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    fail(`${label} must be a positive integer byte size.`);
+  }
+  return value;
+}
+
+function requireHttpUrl(value, label) {
+  const stringValue = requireNonEmptyString(value, label);
+  let parsed;
+  try {
+    parsed = new URL(stringValue);
+  } catch {
+    fail(`${label} must be an absolute URL.`);
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    fail(`${label} must use http or https.`);
+  }
+  return stringValue;
+}
+
+function requireEvidence(value, label) {
+  if (value === null || value === undefined) {
+    fail(`${label} is required.`);
+  }
+  if (typeof value === "string" && value.trim().length === 0) {
+    fail(`${label} must not be empty.`);
+  }
+  if (typeof value !== "string" && !isPlainObject(value)) {
+    fail(`${label} must be a string or object.`);
+  }
+}
+
+function isPlainObject(value) {
+  return Object.prototype.toString.call(value) === "[object Object]";
+}
+
+async function fetchJson(url, label) {
+  const response = await authenticatedFetch(url, {
+    headers: {
+      Accept: "application/json"
+    }
+  });
+  if (!response.ok) {
+    fail(`Could not download ${label} from ${url}: ${response.status} ${response.statusText}.`);
+  }
+  return response.json();
+}
+
+async function downloadUrl(url, destination, label) {
+  const response = await authenticatedFetch(url, {
+    headers: {
+      Accept: "application/octet-stream"
+    }
+  });
+  if (!response.ok) {
+    fail(`Could not download ${label} from ${url}: ${response.status} ${response.statusText}.`);
+  }
   await pipeline(response.body, createWriteStream(destination));
 }
 
-async function checksumFromReleaseAsset(release, checksumName, destination, expectedAssetName) {
-  await downloadReleaseAsset(release, checksumName, destination);
-  const body = await fs.readFile(destination, "utf8");
-  const firstLine = body.split(/\r?\n/).find((line) => line.trim().length > 0);
-  if (!firstLine) {
-    return null;
+async function verifyFileSize(filePath, expectedSize, label) {
+  const stats = await fs.stat(filePath);
+  if (stats.size !== expectedSize) {
+    fail(`size mismatch for ${label}: expected ${expectedSize}, got ${stats.size}.`);
   }
-
-  const match = firstLine.trim().match(/^([a-fA-F0-9]{64})\s+\*?(.+)$/);
-  if (!match) {
-    fail(`${checksumName} is not a sha256sum-compatible checksum manifest.`);
-  }
-  const checksumAssetName = path.basename(match[2].trim());
-  if (checksumAssetName !== expectedAssetName) {
-    fail(`${checksumName} describes ${checksumAssetName}, expected ${expectedAssetName}.`);
-  }
-  return match[1].toLowerCase();
-}
-
-async function checksumFromTrainManifest(manifestPath, targetName, expectedAssetName) {
-  const manifest = JSON.parse(await fs.readFile(path.resolve(rootDir, manifestPath), "utf8"));
-  const candidate = findRuntimeManifestCandidate(manifest, targetName);
-  if (!candidate) {
-    return null;
-  }
-
-  const artifact = candidate["runtime-release-asset"] ?? candidate.asset ?? candidate;
-  const artifactName = artifact.name ?? artifact["asset-name"] ?? path.basename(artifact.url ?? "");
-  if (artifactName && artifactName !== expectedAssetName) {
-    fail(`Manifest runtime binary for ${targetName} points at ${artifactName}, expected ${expectedAssetName}.`);
-  }
-
-  const checksum = artifact.sha256 ?? artifact.checksum?.sha256 ?? artifact.checksum?.value;
-  if (typeof checksum !== "string" || !/^[a-fA-F0-9]{64}$/.test(checksum)) {
-    return null;
-  }
-  return checksum.toLowerCase();
-}
-
-function findRuntimeManifestCandidate(manifest, targetName) {
-  const generatedSidecar = manifest?.["runtime-sidecars"]?.find((candidate) => candidate.target === targetName);
-  if (generatedSidecar) {
-    return generatedSidecar;
-  }
-  return manifest?.components?.runtime?.binaries?.[targetName] ?? null;
 }
 
 async function verifySha256(filePath, expected, label) {
@@ -221,10 +351,10 @@ async function verifySha256(filePath, expected, label) {
 async function githubFetch(url, init = {}) {
   const token = process.env.GH_TOKEN;
   if (!token) {
-    fail("GH_TOKEN is required to read Runtime GitHub release assets for sidecar staging.");
+    fail("GH_TOKEN is required to read Runtime GitHub release manifest assets.");
   }
   const headers = {
-    "User-Agent": "skenion-studio-sidecar-stager",
+    "User-Agent": "skenion-studio-runtime-manifest-stager",
     ...init.headers
   };
   headers.Authorization = `Bearer ${token}`;
@@ -232,6 +362,35 @@ async function githubFetch(url, init = {}) {
     ...init,
     headers
   });
+}
+
+async function authenticatedFetch(url, init = {}) {
+  const headers = {
+    "User-Agent": "skenion-studio-runtime-manifest-stager",
+    ...init.headers
+  };
+  if (isGitHubUrl(url)) {
+    const token = process.env.GH_TOKEN;
+    if (releaseModeNames.has(mode) && !token) {
+      fail(`GH_TOKEN is required to read GitHub-hosted Runtime manifest evidence: ${url}`);
+    }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return fetch(url, {
+    ...init,
+    headers
+  });
+}
+
+function isGitHubUrl(value) {
+  try {
+    const hostname = new URL(value).hostname;
+    return hostname === "github.com" || hostname === "api.github.com" || hostname.endsWith(".githubusercontent.com");
+  } catch {
+    return false;
+  }
 }
 
 async function run(command, args, options = {}) {
