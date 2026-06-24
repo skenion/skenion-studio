@@ -34,26 +34,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with:
-          repository: skenion/skenion-contracts
-          path: .deps/skenion-contracts
-      - uses: actions/checkout@v6
-        with:
-          repository: skenion/skenion-examples
-          path: .deps/skenion-examples
-      - name: Align cross-repo dependency branches
-        if: github.event_name == 'pull_request'
-        run: |
-          for dep in .deps/skenion-contracts .deps/skenion-examples; do
-            (
-              cd "${dep}"
-              if git ls-remote --exit-code origin "refs/heads/${GITHUB_HEAD_REF}" >/dev/null 2>&1; then
-                git fetch --depth=1 origin "${GITHUB_HEAD_REF}"
-                git checkout FETCH_HEAD
-              fi
-            )
-          done
       - uses: pnpm/action-setup@v6
         with:
           version: 10.12.4
@@ -61,10 +41,6 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-        working-directory: .deps/skenion-contracts
-      - run: pnpm run build
-        working-directory: .deps/skenion-contracts
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm run coverage
@@ -75,26 +51,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with:
-          repository: skenion/skenion-contracts
-          path: .deps/skenion-contracts
-      - uses: actions/checkout@v6
-        with:
-          repository: skenion/skenion-examples
-          path: .deps/skenion-examples
-      - name: Align cross-repo dependency branches
-        if: github.event_name == 'pull_request'
-        run: |
-          for dep in .deps/skenion-contracts .deps/skenion-examples; do
-            (
-              cd "${dep}"
-              if git ls-remote --exit-code origin "refs/heads/${GITHUB_HEAD_REF}" >/dev/null 2>&1; then
-                git fetch --depth=1 origin "${GITHUB_HEAD_REF}"
-                git checkout FETCH_HEAD
-              fi
-            )
-          done
       - uses: pnpm/action-setup@v6
         with:
           version: 10.12.4
@@ -102,9 +58,5 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-        working-directory: .deps/skenion-contracts
-      - run: pnpm run build
-        working-directory: .deps/skenion-contracts
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build

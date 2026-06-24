@@ -22,7 +22,9 @@ React Flow is only the visual interaction layer. `skenion graph v0.1` remains th
 
 ## Development
 
-This repository currently consumes `@skenion/contracts` from a local checkout under `.deps`, matching CI.
+Default CI consumes the committed registry dependency for `@skenion/contracts`.
+Use a local `.deps/skenion-contracts` checkout only for explicit cross-repo
+integration work before a Contracts release exists.
 
 ```sh
 mkdir -p .deps
@@ -32,7 +34,8 @@ pnpm run ci
 pnpm run dev
 ```
 
-If `.deps/skenion-contracts` already exists, update it before installing dependencies.
+If `.deps/skenion-contracts` already exists for manual integration work, update
+it before installing dependencies. Do not rely on `.deps` for default PR CI.
 
 Desktop sidecar diagnostics and profile behavior are documented in
 [`docs/desktop-runtime-profiles.md`](docs/desktop-runtime-profiles.md).
