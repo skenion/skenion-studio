@@ -163,6 +163,10 @@ function validateReleaseInputs(expectedVersion, releaseTagValue) {
 }
 
 function createWebManifest(versionValue, releaseTagValue, contractsVersion) {
+  const webAssetName = `skenion-studio-web-bundle-v${versionValue}.tar.gz`;
+  const webChecksumName = `${webAssetName}.sha256`;
+  const distribution = createWebDsubDistribution(releaseTagValue, webAssetName, webChecksumName);
+
   return {
     "schema-version": "0.1",
     component: "studio-web",
@@ -180,10 +184,12 @@ function createWebManifest(versionValue, releaseTagValue, contractsVersion) {
     },
     artifact: {
       kind: "studio-web-bundle",
-      name: `skenion-studio-web-bundle-v${versionValue}.tar.gz`,
-      "checksum-name": `skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
-      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz`,
-      "checksum-url": `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/skenion-studio-web-bundle-v${versionValue}.tar.gz.sha256`,
+      distribution: "dsub-s3",
+      name: webAssetName,
+      "checksum-name": webChecksumName,
+      url: distribution.url,
+      "checksum-url": distribution.checksumUrl,
+      dsub: distribution.dsub,
       directory: "dist",
       entrypoint: "dist/index.html"
     }
@@ -269,6 +275,40 @@ function createSidecarTarget(versionValue, releaseTagValue, runtimeTag, targetCo
 
 function desktopPackageExtension(target) {
   return target.includes("windows") ? "zip" : "tar.gz";
+}
+
+function createWebDsubDistribution(releaseTagValue, assetName, checksumName) {
+  const publicBaseUrl = normalizeBaseUrl(process.env.SKENION_RELEASE_PUBLIC_BASE_URL);
+  const bucket = process.env.SKENION_RELEASE_S3_BUCKET || null;
+  const prefix = trimSlashes(process.env.SKENION_RELEASE_S3_PREFIX || "");
+  const assetPath = `skenion-studio/${releaseTagValue}/web/${assetName}`;
+  const checksumPath = `skenion-studio/${releaseTagValue}/web/${checksumName}`;
+  const assetKey = prefix ? `${prefix}/${assetPath}` : assetPath;
+  const checksumKey = prefix ? `${prefix}/${checksumPath}` : checksumPath;
+
+  return {
+    url: publicBaseUrl ? `${publicBaseUrl}/${assetPath}` : null,
+    checksumUrl: publicBaseUrl ? `${publicBaseUrl}/${checksumPath}` : null,
+    dsub: {
+      bucket,
+      "public-base-url": publicBaseUrl,
+      "asset-path": assetPath,
+      "checksum-path": checksumPath,
+      "asset-key": assetKey,
+      "checksum-key": checksumKey
+    }
+  };
+}
+
+function normalizeBaseUrl(value) {
+  if (!value) {
+    return null;
+  }
+  return value.replace(/\/+$/, "");
+}
+
+function trimSlashes(value) {
+  return value.replace(/^\/+|\/+$/g, "");
 }
 
 function requireOption(value, name) {

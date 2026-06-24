@@ -86,6 +86,7 @@ function createStatusUpdate(release) {
 function releasePleaseCreatedStatus(release) {
   const assetNames = assetNameSet(release);
   const productAssets = [
+    ...legacyExpectedWebAssets(version),
     ...expectedWebAssets(version),
     ...expectedDesktopAssets(allDesktopTargets)
   ].filter((assetName) => assetNames.has(assetName));
@@ -103,8 +104,8 @@ function releasePleaseCreatedStatus(release) {
     statusBlock: statusBlock([
       "**Studio release status:** Release Please metadata only.",
       "",
-      `This GitHub Release is marked as a prerelease/unpromoted release because no Studio web bundle or desktop artifacts have been uploaded for \`${releaseTag}\` yet.`,
-      "It is not a Studio distribution release and must not be treated as release-complete or compatibility-matrix promoted."
+      `This GitHub Release is marked as a prerelease/unpromoted release because no Studio web artifact index or desktop artifacts have been published for \`${releaseTag}\` yet.`,
+      "It is not a Studio distribution release and must not be treated as release-complete or product-ledger promoted."
     ])
   };
 }
@@ -119,13 +120,14 @@ function webArtifactsPublishedStatus(release) {
   return {
     title: `skenion-studio: v${version} (web artifacts published)`,
     prerelease: true,
-    summary: "web bundle and desktop manifest assets are present; desktop distribution is still pending",
+    summary: "DSUB web artifact index is present; desktop distribution is still pending",
     statusBlock: statusBlock([
       "**Studio release status:** Web artifact evidence published.",
       "",
-      `GitHub Actions uploaded the canonical Studio web bundle, checksum, desktop manifest, and combined checksum manifest for \`${releaseTag}\`.`,
-      `Runtime sidecar evidence target: \`${runtimeTag}\`.`,
-      "This release remains prerelease/unpromoted until release-blocking desktop assets and compatibility-matrix promotion evidence are present."
+      `GitHub Actions published the canonical Studio web bundle, checksum, desktop manifest metadata, and combined checksum manifest for \`${releaseTag}\` to DSUB release storage.`,
+      `This GitHub Release carries the compact DSUB artifact index for those web artifacts; large web artifacts are not GitHub Release assets.`,
+      `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
+      "This release remains prerelease/unpromoted until release-blocking desktop distribution artifacts and signing evidence are present."
     ])
   };
 }
@@ -158,9 +160,9 @@ function desktopArtifactsPublishedStatus(release) {
       statusBlock: statusBlock([
         "**Studio release status:** Canonical product artifact set present.",
         "",
-        `GitHub Actions verified and uploaded the Studio web bundle plus release-blocking desktop packages and Runtime sidecars for \`${releaseTag}\`.`,
-        `Runtime sidecar evidence target: \`${runtimeTag}\`.`,
-        "This release has the Studio artifact set required for distribution evidence. Product compatibility promotion must still be recorded by the compatibility matrix verifier before reporting a promoted product line."
+        `GitHub Actions verified the Studio web artifact index and release-blocking desktop packages for \`${releaseTag}\`.`,
+        `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
+        "This release has the Studio artifact set required for distribution evidence. Product promotion must still be recorded in the product release ledger before reporting a promoted product line."
       ])
     };
   }
@@ -180,8 +182,8 @@ function desktopArtifactsPublishedStatus(release) {
     statusBlock: statusBlock([
       "**Studio release status:** Desktop artifact evidence published, not release-complete.",
       "",
-      `GitHub Actions uploaded release-blocking Studio desktop packages and Runtime sidecars for \`${releaseTag}\`.`,
-      `Runtime sidecar evidence target: \`${runtimeTag}\`.`,
+      `GitHub Actions verified release-blocking Studio desktop packages for \`${releaseTag}\`.`,
+      `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
       `Release completion remains blocked because ${blockers.join("; ")}.`,
       "This release stays prerelease/unpromoted until the missing release-completion evidence is present."
     ])
@@ -189,6 +191,10 @@ function desktopArtifactsPublishedStatus(release) {
 }
 
 function expectedWebAssets(versionValue) {
+  return [`skenion-studio-web-artifacts-v${versionValue}.index.json`];
+}
+
+function legacyExpectedWebAssets(versionValue) {
   const webAsset = `skenion-studio-web-bundle-v${versionValue}.tar.gz`;
   const desktopManifestAsset = `skenion-studio-desktop-manifest-v${versionValue}.json`;
   return [

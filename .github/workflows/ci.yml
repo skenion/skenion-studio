@@ -17,6 +17,17 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  release-workflow:
+    name: Release Workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check release script syntax
+        run: bash -n scripts/*.sh
+      - name: Validate mocked Studio DSUB S3 publisher
+        run: scripts/validate-studio-asset-s3-publisher.sh
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

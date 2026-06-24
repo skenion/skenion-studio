@@ -69,26 +69,28 @@ The Studio release artifact workflows then replace that status block as product
 evidence appears:
 
 - Studio Release Artifacts publish mode uploads the canonical web bundle,
-  checksum, desktop manifest, desktop manifest checksum, and combined checksum
-  manifest. This is web artifact evidence, not full Studio distribution
-  completion, because release-blocking desktop packages can still be missing.
+  checksum, desktop manifest metadata, desktop manifest checksum, and combined
+  checksum manifest to DSUB release storage. The GitHub Release carries only a
+  compact DSUB web artifact index. This is web artifact evidence, not full
+  Studio distribution completion, because release-blocking desktop packages can
+  still be missing.
 - Desktop Release publish mode uploads Runtime sidecar assets plus canonical
   desktop package archives and checksums for each successful target. A final
   status step verifies the release-blocking desktop asset set before it updates
   the release notes.
 
 A Studio GitHub Release is release-complete only when the release has the
-canonical web bundle, release-blocking desktop packages, required checksums,
-Runtime sidecar evidence, and the applicable signing/notarization evidence.
+canonical web artifact index, release-blocking desktop packages, required
+checksums, Runtime release evidence, and the applicable signing/notarization evidence.
 Unsigned preview desktop artifacts keep the release prerelease/unpromoted, even
 when they are useful internal or pre-alpha evidence. If the release has only a
 partial asset set, the release notes must keep an explicit non-distribution
 marker instead of implying product availability.
 
-Compatibility promotion is a separate product-level step. Do not report a
-promoted Studio compatibility line until the `skenion/skenion` compatibility
-matrix verifier records the intended Contracts line, Runtime evidence, Studio
-artifacts, and Examples/Manual evidence.
+Product release promotion is a separate product-level ledger step. Do not
+report a promoted Studio product line until the `skenion/skenion` Project
+records the intended Contracts line, Runtime evidence, Studio artifacts, and
+Examples/Manual evidence.
 
 ## Desktop Packaging
 
@@ -170,10 +172,11 @@ publish Studio desktop packages or Runtime sidecars.
 
 skenion studio web release behavior remains remote-runtime compatible: Vite
 builds do not require the sidecar, and browser deployments continue to use
-explicit Runtime URLs. The web build is distributed as a Studio web bundle
-GitHub Release artifact named `skenion-studio-web-bundle-vx.y.z.tar.gz`, with a
-sibling `skenion-studio-web-bundle-vx.y.z.tar.gz.sha256` checksum, not as an npm
-package.
+explicit Runtime URLs. The web build is distributed from DSUB release storage
+as `skenion-studio-web-bundle-vx.y.z.tar.gz`, with a sibling
+`skenion-studio-web-bundle-vx.y.z.tar.gz.sha256` checksum, not as an npm
+package. The GitHub Release keeps only the compact DSUB artifact index for the
+web artifact set.
 
 skenion studio desktop is distributed as signed desktop artifacts from GitHub
 Releases. The private `packages/studio-desktop` workspace package exists only
