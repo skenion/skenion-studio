@@ -88,6 +88,7 @@ function releasePleaseCreatedStatus(release) {
   const productAssets = [
     ...legacyExpectedWebAssets(version),
     ...expectedWebAssets(version),
+    ...legacyExpectedDesktopAssets(allDesktopTargets),
     ...expectedDesktopAssets(allDesktopTargets)
   ].filter((assetName) => assetNames.has(assetName));
 
@@ -104,7 +105,7 @@ function releasePleaseCreatedStatus(release) {
     statusBlock: statusBlock([
       "**Studio release status:** Release Please metadata only.",
       "",
-      `This GitHub Release is marked as a prerelease/unpromoted release because no Studio web artifact index or desktop artifacts have been published for \`${releaseTag}\` yet.`,
+      `This GitHub Release is marked as a prerelease/unpromoted release because no Studio web artifact index or desktop package indexes have been published for \`${releaseTag}\` yet.`,
       "It is not a Studio distribution release and must not be treated as release-complete or product-ledger promoted."
     ])
   };
@@ -127,7 +128,7 @@ function webArtifactsPublishedStatus(release) {
       `GitHub Actions published the canonical Studio web bundle, checksum, desktop manifest metadata, and combined checksum manifest for \`${releaseTag}\` to DSUB release storage.`,
       `This GitHub Release carries the compact DSUB artifact index for those web artifacts; large web artifacts are not GitHub Release assets.`,
       `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
-      "This release remains prerelease/unpromoted until release-blocking desktop distribution artifacts and signing evidence are present."
+      "This release remains prerelease/unpromoted until release-blocking desktop package indexes and signing evidence are present."
     ])
   };
 }
@@ -143,7 +144,7 @@ function desktopArtifactsPublishedStatus(release) {
   const missingDesktop = missingAssets(release, expectedDesktopAssets(releaseBlockingTargets));
   if (missingDesktop.length > 0) {
     fail(
-      `cannot mark ${releaseTag} as desktop-artifact evidence; missing release-blocking assets: ${missingDesktop.join(", ")}`
+      `cannot mark ${releaseTag} as desktop-artifact evidence; missing release-blocking desktop indexes: ${missingDesktop.join(", ")}`
     );
   }
 
@@ -156,11 +157,11 @@ function desktopArtifactsPublishedStatus(release) {
     return {
       title: `skenion-studio: v${version}`,
       prerelease: false,
-      summary: "canonical web and signed release-blocking desktop assets are present",
+      summary: "canonical web index and signed release-blocking desktop indexes are present",
       statusBlock: statusBlock([
         "**Studio release status:** Canonical product artifact set present.",
         "",
-        `GitHub Actions verified the Studio web artifact index and release-blocking desktop packages for \`${releaseTag}\`.`,
+        `GitHub Actions verified the Studio web artifact index and release-blocking DSUB desktop package indexes for \`${releaseTag}\`.`,
         `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
         "This release has the Studio artifact set required for distribution evidence. Product promotion must still be recorded in the product release ledger before reporting a promoted product line."
       ])
@@ -178,11 +179,11 @@ function desktopArtifactsPublishedStatus(release) {
   return {
     title: `skenion-studio: v${version} (desktop artifacts published; unpromoted)`,
     prerelease: true,
-    summary: `desktop assets are present but release completion is blocked (${blockers.join("; ")})`,
+    summary: `desktop indexes are present but release completion is blocked (${blockers.join("; ")})`,
     statusBlock: statusBlock([
       "**Studio release status:** Desktop artifact evidence published, not release-complete.",
       "",
-      `GitHub Actions verified release-blocking Studio desktop packages for \`${releaseTag}\`.`,
+      `GitHub Actions verified release-blocking Studio desktop package indexes for \`${releaseTag}\`.`,
       `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
       `Release completion remains blocked because ${blockers.join("; ")}.`,
       "This release stays prerelease/unpromoted until the missing release-completion evidence is present."
@@ -207,6 +208,10 @@ function legacyExpectedWebAssets(versionValue) {
 }
 
 function expectedDesktopAssets(targets) {
+  return targets.map((target) => `skenion-studio-desktop-${target}-v${version}.index.json`);
+}
+
+function legacyExpectedDesktopAssets(targets) {
   return targets.flatMap((target) => {
     const desktopAsset = `skenion-studio-${target}.${target.includes("windows") ? "zip" : "tar.gz"}`;
     return [desktopAsset, `${desktopAsset}.sha256`];

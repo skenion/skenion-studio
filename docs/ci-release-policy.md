@@ -75,14 +75,15 @@ evidence appears:
   Studio distribution completion, because release-blocking desktop packages can
   still be missing.
 - Desktop Release publish mode uploads canonical desktop package archives and
-  checksums for each successful target. Runtime binaries remain sourced from
-  Runtime release artifact manifests. A final status step verifies the
-  release-blocking Studio-owned desktop asset set before it updates the release
-  notes.
+  checksums for each successful target to DSUB release storage. The GitHub
+  Release carries only compact per-target desktop package index JSON assets.
+  Runtime binaries remain sourced from Runtime release artifact manifests. A
+  final status step verifies the release-blocking desktop index set before it
+  updates the release notes.
 
 A Studio GitHub Release is release-complete only when the release has the
-canonical web artifact index, release-blocking desktop packages, required
-checksums, Runtime release manifest evidence, and the applicable signing/notarization evidence.
+canonical web artifact index, release-blocking desktop package indexes, Runtime
+release manifest evidence, and the applicable signing/notarization evidence.
 Unsigned preview desktop artifacts keep the release prerelease/unpromoted, even
 when they are useful internal or pre-alpha evidence. If the release has only a
 partial asset set, the release notes must keep an explicit non-distribution
@@ -111,13 +112,20 @@ Studio tag and packages these targets:
 The workflow consumes Runtime release evidence and produces Studio desktop
 artifacts:
 
-- skenion studio desktop packages are canonical release archives named
+- skenion studio desktop packages are canonical DSUB S3 release archives named
   `skenion-studio-<target>.tar.gz` for macOS/Linux and
   `skenion-studio-<target>.zip` for Windows, each with a sibling `.sha256`
   file. These archives contain the Tauri-generated app distribution artifacts
   for that target: signed/notarized macOS DMG/App archive output, Windows NSIS
   `-setup.exe` output with MSI included only when Tauri emits it, and Linux
-  deb/rpm package output.
+  deb/rpm package output. They are published under
+  `skenion-studio/<release-tag>/desktop/<target>/...` in DSUB release storage.
+- Each successful desktop target also produces a compact
+  `skenion-studio-desktop-<target>-vx.y.z.index.json` file. That index records
+  Studio version, release tag, source commit, target tier, Contracts metadata,
+  Runtime release tag/binary source, signing mode, and the DSUB URL/S3 key/size
+  and SHA-256 evidence for the desktop package and checksum. The index is the
+  only desktop target asset uploaded to the Studio GitHub Release.
 - Runtime release artifact manifests are Runtime-owned evidence consumed by
   skenion studio desktop packaging and compatibility verification. Studio uses
   the manifest asset on the Runtime GitHub Release to find the Runtime tarball
@@ -127,14 +135,18 @@ artifacts:
 
 Tauri action builds are used only to produce the platform bundle outputs. The
 desktop release workflow then runs `scripts/package-studio-desktop.mjs` in
-publish mode to create and upload the canonical `skenion-studio-<target>`
-archive plus checksum with `gh release upload`. Verify mode builds the Tauri
-packages but does not upload release assets. Linux desktop release assets are
-the canonical archives containing deb/rpm output; the v0 workflow does not
-claim or manifest AppImage assets. Windows desktop release assets are canonical
-ZIP archives containing the installer output that Tauri actually produced; the
-release flow does not claim a standalone `.msi` asset unless MSI output is
-present inside that archive.
+publish mode to create the canonical `skenion-studio-<target>` archive plus
+checksum. `scripts/publish-studio-desktop-asset-s3.sh` publishes those files to
+DSUB S3 with no-clobber behavior, verifies S3 metadata and public URL content,
+and generates the compact per-target index JSON. The workflow uploads only that
+index JSON to the Studio GitHub Release, succeeding idempotently when an
+existing release asset has identical content and failing closed when it differs.
+Verify mode builds the Tauri packages but does not upload release assets. Linux
+desktop release assets are the canonical DSUB archives containing deb/rpm
+output; the v0 workflow does not claim or manifest AppImage assets. Windows
+desktop release assets are canonical DSUB ZIP archives containing the installer
+output that Tauri actually produced; the release flow does not claim a
+standalone `.msi` asset unless MSI output is present inside that archive.
 
 Before Tauri packaging, `scripts/stage-runtime-sidecar.mjs` loads the
 `skenion-runtime-vx.y.z-<target>.tar.gz.manifest.json` asset selected by the
@@ -164,7 +176,10 @@ before Tauri packaging starts.
 Release Please remains responsible for versioning and GitHub release creation.
 Desktop packaging uploads artifacts only from GitHub Actions publish mode.
 Local commands may build or stage artifacts for verification, but they must not
-publish Studio desktop packages or Runtime artifacts.
+publish Studio desktop packages or Runtime artifacts. DSUB desktop publishing
+requires `workflow_dispatch`, DSUB S3 secrets, and the organization `GH_TOKEN`
+secret for the GitHub Release index upload; dry-run publisher validation does
+not require DSUB secrets.
 
 skenion studio web release behavior remains remote-runtime compatible: Vite
 builds do not require the sidecar, and browser deployments continue to use
@@ -174,11 +189,10 @@ as `skenion-studio-web-bundle-vx.y.z.tar.gz`, with a sibling
 package. The GitHub Release keeps only the compact DSUB artifact index for the
 web artifact set.
 
-skenion studio desktop is still distributed as signed desktop artifacts from
-GitHub Releases for this slice. Moving those Studio desktop packages to DSUB S3
-remains residual follow-up for skenion/skenion-studio#150. The private
-`packages/studio-desktop` workspace package exists only to stage release
-metadata and dry-run pack checks; it must not be published to npm.
+skenion studio desktop packages are distributed from DSUB S3 release storage.
+The Studio GitHub Release keeps compact desktop index metadata only. The
+private `packages/studio-desktop` workspace package exists only to stage
+release metadata and dry-run pack checks; it must not be published to npm.
 
 macOS desktop distribution is release-complete only when the release-blocking
 macOS arm64 (`aarch64-apple-darwin`) and macOS x64 (`x86_64-apple-darwin`)

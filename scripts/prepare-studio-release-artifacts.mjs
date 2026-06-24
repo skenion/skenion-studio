@@ -214,9 +214,11 @@ function createDesktopManifest(versionValue, releaseTagValue, runtimeTagValue, r
     },
     artifact: {
       kind: "tauri-desktop-release",
-      distribution: "github-release-assets",
-      "desktop-package-pattern": "skenion-studio-<target>.<tar.gz|zip>",
+      distribution: "dsub-s3",
+      "desktop-package-path-pattern": "skenion-studio/<release-tag>/desktop/<target>/skenion-studio-<target>.<tar.gz|zip>",
       "checksum-pattern": "skenion-studio-<target>.<tar.gz|zip>.sha256",
+      "index-pattern": "skenion-studio-desktop-<target>-v<version>.index.json",
+      "github-release-asset-pattern": "skenion-studio-desktop-<target>-v<version>.index.json",
       "linux-package-contents": ["deb", "rpm"],
       "windows-package-contents": ["nsis-setup-exe", "msi-if-emitted"]
     },
@@ -239,15 +241,32 @@ function createDesktopManifest(versionValue, releaseTagValue, runtimeTagValue, r
 
 function createDesktopPackageTarget(releaseTagValue, targetConfig) {
   const packageAssetName = `skenion-studio-${targetConfig.target}.${desktopPackageExtension(targetConfig.target)}`;
+  const packageChecksumName = `${packageAssetName}.sha256`;
+  const indexName = `skenion-studio-desktop-${targetConfig.target}-${releaseTagValue}.index.json`;
+  const distribution = createDesktopDsubDistribution(releaseTagValue, targetConfig.target, {
+    assetName: packageAssetName,
+    checksumName: packageChecksumName,
+    indexName
+  });
   return {
     target: targetConfig.target,
     tier: targetConfig.tier,
     "tauri-bundle-args": targetConfig.tauriBundleArgs,
     "package-asset": {
       name: packageAssetName,
-      "checksum-name": `${packageAssetName}.sha256`,
-      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}`,
-      "checksum-url": `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${packageAssetName}.sha256`
+      "checksum-name": packageChecksumName,
+      distribution: "dsub-s3",
+      url: distribution.asset.url,
+      "checksum-url": distribution.checksum.url,
+      dsub: distribution.asset.dsub,
+      "checksum-dsub": distribution.checksum.dsub
+    },
+    "desktop-index": {
+      name: indexName,
+      distribution: "github-release-asset-and-dsub-s3",
+      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${indexName}`,
+      "dsub-url": distribution.index.url,
+      dsub: distribution.index.dsub
     }
   };
 }
@@ -293,6 +312,32 @@ function createWebDsubDistribution(releaseTagValue, assetName, checksumName) {
       "checksum-path": checksumPath,
       "asset-key": assetKey,
       "checksum-key": checksumKey
+    }
+  };
+}
+
+function createDesktopDsubDistribution(releaseTagValue, target, names) {
+  const publicBaseUrl = normalizeBaseUrl(process.env.SKENION_RELEASE_PUBLIC_BASE_URL);
+  const bucket = process.env.SKENION_RELEASE_S3_BUCKET || null;
+  const prefix = trimSlashes(process.env.SKENION_RELEASE_S3_PREFIX || "");
+  const directory = `skenion-studio/${releaseTagValue}/desktop/${target}`;
+
+  return {
+    asset: createDsubObjectDistribution(publicBaseUrl, bucket, prefix, `${directory}/${names.assetName}`),
+    checksum: createDsubObjectDistribution(publicBaseUrl, bucket, prefix, `${directory}/${names.checksumName}`),
+    index: createDsubObjectDistribution(publicBaseUrl, bucket, prefix, `${directory}/${names.indexName}`)
+  };
+}
+
+function createDsubObjectDistribution(publicBaseUrl, bucket, prefix, objectPath) {
+  const key = prefix ? `${prefix}/${objectPath}` : objectPath;
+  return {
+    url: publicBaseUrl ? `${publicBaseUrl}/${objectPath}` : null,
+    dsub: {
+      bucket,
+      "public-base-url": publicBaseUrl,
+      path: objectPath,
+      key
     }
   };
 }

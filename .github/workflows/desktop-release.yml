@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       release-mode:
-        description: Release mode; publish uploads to the GitHub Release, verify builds only
+        description: Release mode; publish uploads desktop packages to DSUB S3 and compact indexes to the GitHub Release, verify builds only
         default: verify
         required: false
         type: string
@@ -180,7 +180,7 @@ jobs:
             echo "- Contracts compatibility: >=0.45.0 <0.46.0"
             echo "- Mode: ${RELEASE_MODE}"
             echo "- Desktop signing mode: ${{ steps.validate.outputs.desktop_signing_mode }}"
-            echo "- Upload release assets: ${{ steps.validate.outputs.upload_release_assets }}"
+            echo "- Publish desktop artifact evidence: ${{ steps.validate.outputs.upload_release_assets }}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
   desktop-package:
@@ -334,6 +334,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
 
       - name: Install Linux desktop dependencies
         if: runner.os == 'Linux'
@@ -601,15 +605,86 @@ jobs:
         if: needs.release.outputs.upload_release_assets == 'true'
         run: pnpm run package-studio-desktop -- --target "${TARGET}" --version "${VERSION}"
 
-      - name: Upload canonical skenion studio desktop release asset
+      - name: Install AWS CLI
+        if: needs.release.outputs.upload_release_assets == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install awscli
+          python - <<'PY'
+          import os
+          import sysconfig
+
+          scripts = sysconfig.get_path("scripts")
+          if not scripts:
+              raise SystemExit("could not determine Python scripts directory for awscli")
+          with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as output:
+              print(scripts, file=output)
+          PY
+
+      - name: Check AWS CLI
+        if: needs.release.outputs.upload_release_assets == 'true'
+        run: aws --version
+
+      - id: publish_desktop
+        name: Publish skenion studio desktop package to DSUB S3
+        if: needs.release.outputs.upload_release_assets == 'true'
+        env:
+          SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}
+          SKENION_RELEASE_S3_REGION: ${{ secrets.SKENION_RELEASE_S3_REGION }}
+          SKENION_RELEASE_S3_BUCKET: ${{ secrets.SKENION_RELEASE_S3_BUCKET }}
+          SKENION_RELEASE_S3_PREFIX: ${{ secrets.SKENION_RELEASE_S3_PREFIX }}
+          SKENION_RELEASE_S3_ACCESS_KEY_ID: ${{ secrets.SKENION_RELEASE_S3_ACCESS_KEY_ID }}
+          SKENION_RELEASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SKENION_RELEASE_S3_SECRET_ACCESS_KEY }}
+          SKENION_RELEASE_S3_FORCE_PATH_STYLE: ${{ secrets.SKENION_RELEASE_S3_FORCE_PATH_STYLE }}
+          SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}
+          CONTRACTS_VERSION: 0.45.0
+          CONTRACTS_LINE: "0.45"
+          CONTRACTS_RANGE: ">=0.45.0 <0.46.0"
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT="$(git rev-parse HEAD)" scripts/publish-studio-desktop-asset-s3.sh \
+            "${VERSION}" \
+            "${{ needs.release.outputs.tag }}" \
+            "${TARGET}" \
+            "${{ matrix.tier }}" \
+            "${{ steps.package_studio_desktop.outputs.asset_path }}" \
+            "${{ steps.package_studio_desktop.outputs.checksum_path }}"
+
+      - name: Upload DSUB desktop artifact index to GitHub Release
         if: needs.release.outputs.upload_release_assets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          INDEX_PATH: ${{ steps.publish_desktop.outputs.index_path }}
         run: |
-          gh release upload "${{ needs.release.outputs.tag }}" \
-            "${{ steps.package_studio_desktop.outputs.asset_path }}" \
-            "${{ steps.package_studio_desktop.outputs.checksum_path }}" \
-            --clobber
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::GH_TOKEN organization Actions secret is required for GitHub Release mutation."
+            exit 1
+          fi
+
+          index_name="$(basename "${INDEX_PATH}")"
+          release_assets="$(mktemp)"
+          download_dir="$(mktemp -d)"
+          cleanup_release_asset_check() {
+            rm -f "${release_assets}"
+            rm -rf "${download_dir}"
+          }
+          trap cleanup_release_asset_check EXIT
+
+          gh release view "${{ needs.release.outputs.tag }}" --json assets --jq '.assets[].name' >"${release_assets}"
+          if grep -Fxq "${index_name}" "${release_assets}"; then
+            gh release download "${{ needs.release.outputs.tag }}" --pattern "${index_name}" --dir "${download_dir}"
+            if cmp -s "${INDEX_PATH}" "${download_dir}/${index_name}"; then
+              echo "GitHub Release DSUB desktop artifact index already exists with identical content: ${index_name}"
+              exit 0
+            fi
+
+            echo "::error::GitHub Release DSUB desktop artifact index already exists with different content: ${index_name}"
+            exit 1
+          fi
+
+          gh release upload "${{ needs.release.outputs.tag }}" "${INDEX_PATH}"
 
       - name: Summarize desktop package
         run: |
@@ -621,10 +696,11 @@ jobs:
             echo "- Runtime release manifest tag: ${RUNTIME_TAG}"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
             echo "- Desktop signing mode: ${DESKTOP_SIGNING_MODE}"
-            echo "- Upload release assets: ${{ needs.release.outputs.upload_release_assets }}"
+            echo "- Publish desktop artifact evidence: ${{ needs.release.outputs.upload_release_assets }}"
             if [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" ]]; then
-              echo "- Desktop package release asset: ${{ steps.package_studio_desktop.outputs.asset_name }}"
-              echo "- Desktop package checksum: ${{ steps.package_studio_desktop.outputs.asset_name }}.sha256"
+              echo "- Desktop package DSUB URL: ${{ steps.publish_desktop.outputs.desktop_asset_url }}"
+              echo "- Desktop package checksum DSUB URL: ${{ steps.publish_desktop.outputs.desktop_checksum_url }}"
+              echo "- Desktop package index release asset: ${{ steps.publish_desktop.outputs.index_asset }}"
               echo "- Desktop package contents: ${{ steps.package_studio_desktop.outputs.artifact_count }} Tauri artifact(s)"
             fi
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
