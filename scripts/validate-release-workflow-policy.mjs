@@ -669,8 +669,8 @@ function checkRuntimeSidecarPolicy() {
   expectIncludes(
     stageRuntimePath,
     stageRuntime,
-    'assertEqual(artifact.executableName, executableName, "manifest.artifact.executableName");',
-    "Runtime sidecar staging must validate the raw binary executable name"
+    "function requireRuntimeExecutableName(value, filename)",
+    "Runtime sidecar staging must validate the raw binary executable name against internal or public raw-binary names"
   );
   expectIncludes(
     stageRuntimePath,

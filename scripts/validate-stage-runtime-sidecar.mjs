@@ -746,7 +746,7 @@ function runtimeManifest(origin, artifact) {
     artifact: {
       filename: artifact.fixture.artifactName,
       binaryFormat: "raw-binary",
-      executableName: artifact.fixture.executableName,
+      executableName: artifact.fixture.artifactName,
       sha256: artifact.sha256,
       size: artifact.size,
       publicUrl: binaryUrl(origin, artifact.fixture),

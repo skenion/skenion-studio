@@ -310,8 +310,8 @@ function validateRuntimeManifest(manifest, expected) {
 
   const artifact = assertPlainObject(manifest.artifact, "manifest.artifact");
   assertEqual(artifact.binaryFormat, "raw-binary", "manifest.artifact.binaryFormat");
-  assertEqual(artifact.executableName, executableName, "manifest.artifact.executableName");
   assertEqual(artifact.filename, expected.expectedArtifactName, "manifest.artifact.filename");
+  requireRuntimeExecutableName(artifact.executableName, artifact.filename);
   const sha256 = requireSha256(artifact.sha256, "manifest.artifact.sha256");
   const size = requirePositiveInteger(artifact.size, "manifest.artifact.size");
   const publicUrl = requireHttpUrl(artifact.publicUrl, "manifest.artifact.publicUrl");
@@ -346,6 +346,13 @@ function validateRuntimeManifest(manifest, expected) {
     manifestFilename,
     binaryFormat: "raw-binary"
   };
+}
+
+function requireRuntimeExecutableName(value, filename) {
+  const manifestExecutableName = requireNonEmptyString(value, "manifest.artifact.executableName");
+  if (manifestExecutableName !== executableName && manifestExecutableName !== filename) {
+    fail(`manifest.artifact.executableName is ${manifestExecutableName}, expected ${executableName} or ${filename}.`);
+  }
 }
 
 function validateManifestTarget(manifest) {
