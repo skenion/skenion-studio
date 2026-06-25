@@ -25,11 +25,12 @@ async function updateRelease() {
     fail("GH_TOKEN is required to update Studio GitHub release status.");
   }
 
+  const release = await ghJson(["api", `repos/${studioRepo}/releases/tags/${releaseTag}`]);
+
   if (mode === "desktop-artifacts-published") {
-    await verifyRequiredWebArtifactEvidence();
+    verifyRecordedWebArtifactEvidence(release.body ?? "");
   }
 
-  const release = await ghJson(["api", `repos/${studioRepo}/releases/tags/${releaseTag}`]);
   const update = createStatusUpdate();
   const body = prependStatusBlock(release.body ?? "", update.statusBlock);
   await ghJson(
@@ -194,9 +195,10 @@ function createReleaseBlockingDesktopPackages(versionValue) {
   ];
 }
 
-async function verifyRequiredWebArtifactEvidence() {
+function verifyRecordedWebArtifactEvidence(releaseBody) {
   const web = webLinks();
-  const requiredUrls = [
+  const requiredEvidence = [
+    ["web artifact status", "**Studio release status:** Web artifact evidence published."],
     ["web artifact index", web.index],
     ["web bundle", web.bundle],
     ["web bundle checksum", web.bundleChecksum],
@@ -205,31 +207,10 @@ async function verifyRequiredWebArtifactEvidence() {
     ["combined checksum manifest", web.combinedChecksum]
   ];
 
-  for (const [label, url] of requiredUrls) {
-    await verifyPublicUrlExists(label, url);
-  }
-}
-
-async function verifyPublicUrlExists(label, url) {
-  let response;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    try {
-      response = await fetch(url, {
-        method: "HEAD",
-        redirect: "follow",
-        signal: controller.signal
-      });
-    } finally {
-      clearTimeout(timeout);
+  for (const [label, evidence] of requiredEvidence) {
+    if (!releaseBody.includes(evidence)) {
+      fail(`cannot mark ${releaseTag} release-complete; required recorded DSUB ${label} evidence is missing from the GitHub Release body: ${evidence}`);
     }
-  } catch (error) {
-    fail(`cannot mark ${releaseTag} release-complete; required DSUB ${label} is not reachable: ${url} (${error.message})`);
-  }
-
-  if (!response.ok) {
-    fail(`cannot mark ${releaseTag} release-complete; required DSUB ${label} returned HTTP ${response.status}: ${url}`);
   }
 }
 

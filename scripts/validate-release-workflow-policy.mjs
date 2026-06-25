@@ -747,20 +747,20 @@ function checkReleaseStatusPolicy() {
   expectIncludes(
     statusScriptPath,
     statusScript,
-    "await verifyRequiredWebArtifactEvidence();",
-    "desktop release completion must verify web artifact evidence before patching the GitHub Release"
+    "verifyRecordedWebArtifactEvidence(release.body ?? \"\");",
+    "desktop release completion must verify recorded web artifact evidence before patching the GitHub Release"
   );
   expectIncludes(
     statusScriptPath,
     statusScript,
     "skenion-studio-web-artifacts-v${version}.index.json",
-    "web artifact evidence check must include the DSUB web artifact index"
+    "recorded web artifact evidence check must include the DSUB web artifact index"
   );
-  expectIncludes(
+  rejectPattern(
     statusScriptPath,
     statusScript,
-    'fetch(url,',
-    "web artifact evidence check must use deterministic DSUB public URL existence checks"
+    /\bfetch\(url,|method:\s*"HEAD"|required DSUB .* returned HTTP/,
+    "release status must not require GitHub-hosted runners to probe public CDN URLs before recording artifact evidence"
   );
   for (const packageId of ["macos-apple-silicon", "macos-intel", "windows-x64", "linux-x64-deb", "linux-x64-rpm"]) {
     expectIncludes(
