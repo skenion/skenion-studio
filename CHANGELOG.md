@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.44.11](https://github.com/skenion/skenion-studio/compare/v0.44.10...v0.44.11) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** publish studio installers via dsub ([#174](https://github.com/skenion/skenion-studio/issues/174)) ([3597bf0](https://github.com/skenion/skenion-studio/commit/3597bf05fd70e67b10d6d3aeb3dd627e8c981960))
+* **ci:** repair desktop release workflow yaml ([#176](https://github.com/skenion/skenion-studio/issues/176)) ([9261c10](https://github.com/skenion/skenion-studio/commit/9261c104fe20e3c1718cedcd3fecdfedee03a702))
+
 ## [0.44.10](https://github.com/skenion/skenion-studio/compare/v0.44.9...v0.44.10) (2026-06-25)
 
 
