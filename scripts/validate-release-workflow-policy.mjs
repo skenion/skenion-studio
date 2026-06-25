@@ -13,6 +13,8 @@ const packageDesktopPath = "scripts/package-studio-desktop.mjs";
 const prepareArtifactsPath = "scripts/prepare-studio-release-artifacts.mjs";
 const stageRuntimePath = "scripts/stage-runtime-sidecar.mjs";
 const webPublisherPath = "scripts/publish-studio-asset-s3.sh";
+const desktopExistingCheckPath = "scripts/check-studio-desktop-asset-s3-existing.sh";
+const desktopExistingCheckValidatorPath = "scripts/validate-studio-desktop-s3-existing-check.sh";
 const desktopPublisherPath = "scripts/publish-studio-desktop-asset-s3.sh";
 const statusScriptPath = "scripts/update-studio-release-status.mjs";
 const runtimeReleasePinPath = "release/runtime-release.json";
@@ -32,6 +34,8 @@ const packageDesktop = readRequired(packageDesktopPath);
 const prepareArtifacts = readRequired(prepareArtifactsPath);
 const stageRuntime = readRequired(stageRuntimePath);
 const webPublisher = readRequired(webPublisherPath);
+const desktopExistingCheck = readRequired(desktopExistingCheckPath);
+const desktopExistingCheckValidator = readRequired(desktopExistingCheckValidatorPath);
 const desktopPublisher = readRequired(desktopPublisherPath);
 const statusScript = readRequired(statusScriptPath);
 const runtimeReleasePin = readRequired(runtimeReleasePinPath);
@@ -142,6 +146,9 @@ function checkNoDirectS3WorkflowUpload(relativePath, content) {
 
 function checkReleaseWorkflows() {
   checkDesktopMatrixDisplayPolicy();
+  checkDesktopS3PreflightPolicy();
+  checkDesktopReleaseCachePolicy();
+  checkDesktopSetupHygienePolicy();
   checkAutomaticReleaseFlowPolicy();
 
   const webPublishStep = requireStep(studioReleaseWorkflowPath, studioReleaseWorkflow, "Publish Studio web artifacts to DSUB S3");
@@ -185,6 +192,12 @@ function checkReleaseWorkflows() {
 
   const runtimePublishStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Stage Runtime binary from release manifest (publish S3)");
   checkRuntimeStagingWorkflowStep(runtimePublishStep, "s3");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    runtimePublishStep,
+    "steps.preflight_desktop.outputs.exists != 'true'",
+    "Runtime S3 staging must be skipped when reusable Studio desktop package evidence already exists"
+  );
 
   checkDesktopSummarySteps();
 
@@ -280,6 +293,368 @@ function checkAutomaticReleaseFlowPolicy() {
       `Desktop Release must derive dispatch input from ${payloadField}`
     );
   }
+}
+
+function checkDesktopS3PreflightPolicy() {
+  const preflightStepInfo = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Preflight existing Studio desktop package in DSUB S3"
+  );
+  const preflightStep = preflightStepInfo.text;
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    preflightStep,
+    `${desktopExistingCheckPath} \\`,
+    "desktop release workflow must run the Studio desktop S3 existing-artifact preflight before platform setup"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    preflightStep,
+    "SOURCE_COMMIT=\"$(git rev-parse HEAD)\"",
+    "desktop S3 existing-artifact preflight must validate evidence against the checked-out release tag commit"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    preflightStep,
+    /--require-existing/,
+    "platform desktop package preflight must stay non-strict so missing DSUB evidence triggers a rebuild"
+  );
+  for (const requiredEnv of [
+    "SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}",
+    "SKENION_RELEASE_S3_BUCKET: ${{ secrets.SKENION_RELEASE_S3_BUCKET }}",
+    "SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}",
+    "RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}",
+    "DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}"
+  ]) {
+    expectIncludes(
+      desktopReleaseWorkflowPath,
+      preflightStep,
+      requiredEnv,
+      `desktop S3 existing-artifact preflight must receive ${requiredEnv}`
+    );
+  }
+
+  for (const stepName of [
+    "Preflight macOS signing and notarization secrets",
+    "Summarize unsigned macOS preview mode",
+    "Preflight Windows installer signing policy",
+    "Stage Runtime binary from release manifest (publish S3)",
+    "Verify release Tauri packaging inputs",
+    "Build unsigned preview Tauri desktop package (macOS)",
+    "Build signed Tauri desktop package (macOS)",
+    "Build Tauri desktop package (non-macOS)",
+    "Collect skenion studio desktop installers",
+    "Publish skenion studio desktop package to DSUB S3"
+  ]) {
+    const step = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, stepName);
+    expectIncludes(
+      desktopReleaseWorkflowPath,
+      step,
+      "steps.preflight_desktop.outputs.exists != 'true'",
+      `${stepName} must be skipped when reusable Studio desktop package evidence already exists`
+    );
+  }
+
+  const summaryStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Summarize desktop package");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    summaryStep,
+    "reused existing DSUB S3 artifact evidence",
+    "desktop package summary must report when a platform reuses existing DSUB S3 evidence"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    summaryStep,
+    "steps.preflight_desktop.outputs.desktop_artifact_summary",
+    "desktop package summary must print reused DSUB links from the preflight output"
+  );
+
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "desktop-release-status:",
+    "desktop release status job must remain present after platform preflight skips"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "if: needs.release.outputs.upload_release_assets == 'true'",
+    "desktop release status job must still run in publish mode instead of following platform skip outputs"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "path: .release-source",
+    "desktop release status job must checkout the release tag to derive source commit evidence"
+  );
+
+  const finalVerificationStepInfo = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Verify release-blocking desktop package evidence in DSUB S3"
+  );
+  const finalVerificationStep = finalVerificationStepInfo.text;
+  const desktopStatusStepInfo = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Mark release as desktop artifact evidence"
+  );
+  if (finalVerificationStepInfo.endLine >= desktopStatusStepInfo.startLine) {
+    fail(
+      desktopReleaseWorkflowPath,
+      finalVerificationStepInfo.startLine,
+      "release-blocking desktop package evidence must be verified before release status mutation"
+    );
+  }
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    finalVerificationStep,
+    `.release-tools/${desktopExistingCheckPath} \\`,
+    "desktop release status job must verify release-blocking DSUB S3 evidence through the checker script"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    finalVerificationStep,
+    "--require-existing",
+    "desktop release status verification must fail closed when release-blocking DSUB S3 evidence is missing"
+  );
+  for (const requiredTarget of [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu"
+  ]) {
+    expectIncludes(
+      desktopReleaseWorkflowPath,
+      finalVerificationStep,
+      requiredTarget,
+      `desktop release status verification must check release-blocking target ${requiredTarget}`
+    );
+  }
+  for (const requiredEnv of [
+    "SOURCE_COMMIT: ${{ steps.release_source.outputs.source_commit }}",
+    "RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}",
+    "DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}",
+    "SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}",
+    "SKENION_RELEASE_S3_BUCKET: ${{ secrets.SKENION_RELEASE_S3_BUCKET }}",
+    "SKENION_RELEASE_S3_ACCESS_KEY_ID: ${{ secrets.SKENION_RELEASE_S3_ACCESS_KEY_ID }}",
+    "SKENION_RELEASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SKENION_RELEASE_S3_SECRET_ACCESS_KEY }}",
+    "SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}"
+  ]) {
+    expectIncludes(
+      desktopReleaseWorkflowPath,
+      finalVerificationStep,
+      requiredEnv,
+      `desktop release status verification must receive ${requiredEnv}`
+    );
+  }
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    finalVerificationStep,
+    /\bcurl\b|--head|method:\s*"HEAD"/,
+    "desktop release status verification must use DSUB S3 evidence rather than CDN HEAD checks"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopStatusStepInfo.text,
+    /preflight_desktop|publish_desktop|package_studio_desktop/,
+    "desktop release status must verify recorded evidence independently of per-platform build/publish steps"
+  );
+
+  for (const requiredScriptFragment of [
+    "get-object",
+    "skenion.studio.desktopPackage.v1",
+    "desktop checksum file sha256",
+    "desktopInstaller",
+    "source-commit",
+    "package-id",
+    "runtime.releaseTag",
+    "signing.mode"
+  ]) {
+    expectIncludes(
+      desktopExistingCheckPath,
+      desktopExistingCheck,
+      requiredScriptFragment,
+      `desktop S3 existing-artifact checker must validate ${requiredScriptFragment}`
+    );
+  }
+  for (const requiredValidatorFragment of [
+    "existing-linux",
+    "missing-linux-rpm",
+    "missing-linux-rpm-strict",
+    "bad-checksum",
+    "require-existing",
+    "exists=true",
+    "missing_package_ids=linux-x64-rpm"
+  ]) {
+    expectIncludes(
+      desktopExistingCheckValidatorPath,
+      desktopExistingCheckValidator,
+      requiredValidatorFragment,
+      `desktop S3 existing-artifact validator must cover ${requiredValidatorFragment}`
+    );
+  }
+  expectIncludes(
+    ".github/workflows/ci.yml",
+    readRequired(".github/workflows/ci.yml"),
+    "scripts/validate-studio-desktop-s3-existing-check.sh",
+    "CI must run the mocked Studio desktop S3 existing-artifact preflight validation"
+  );
+}
+
+function checkDesktopReleaseCachePolicy() {
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "DSUB S3 immutable object evidence is the release artifact source of truth.",
+    "desktop release workflow must state that Actions caches are not release artifact evidence"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "uses: actions/cache@v4",
+    "desktop release workflow must use an explicit platform-scoped pnpm cache"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "key: skenion-studio-desktop-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform_slug }}-${{ matrix.rust_target }}-${{ hashFiles('pnpm-lock.yaml') }}",
+    "desktop pnpm cache key must include OS, runner arch, platform slug, Rust target, and lockfile"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "restore-keys:",
+    "desktop pnpm cache must keep restore keys platform-scoped"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "prefix-key: skenion-studio-desktop-release-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform_slug }}-${{ matrix.rust_target }}",
+    "desktop Rust/Tauri cache prefix must include OS, runner arch, platform slug, and Rust target"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /node-version:\s*22[\s\S]{0,80}cache:\s*pnpm/,
+    "desktop release workflow must not use setup-node's generic pnpm cache for platform desktop builds"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /actions\/cache@v4[\s\S]{0,240}path:\s*(?:artifacts\/|.*src-tauri\/target\/.*bundle|.*packages\/studio-desktop)/,
+    "desktop release workflow must not cache release artifacts or Tauri bundle outputs as GitHub Actions cache entries"
+  );
+}
+
+function checkDesktopSetupHygienePolicy() {
+  const packageAwsProbe = requireStepInfo(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Probe AWS CLI (desktop package)");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    packageAwsProbe.text,
+    "command -v aws",
+    "desktop package job must probe for an existing AWS CLI before installing"
+  );
+  const packagePythonSetup = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Set up Python for AWS CLI install (desktop package)"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    packagePythonSetup.text,
+    "steps.aws_cli.outputs.available != 'true'",
+    "desktop package job must set up Python for AWS CLI only when aws is missing"
+  );
+  const packageAwsInstall = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Install missing AWS CLI (desktop package)"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    packageAwsInstall.text,
+    "steps.aws_cli.outputs.available != 'true'",
+    "desktop package job must install AWS CLI only when aws is missing"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    packageAwsInstall.text,
+    "python -m pip install awscli",
+    "desktop package job must install awscli via pip when aws is missing"
+  );
+  if (packageAwsProbe.endLine >= packagePythonSetup.startLine || packageAwsProbe.endLine >= packageAwsInstall.startLine) {
+    fail(
+      desktopReleaseWorkflowPath,
+      packageAwsProbe.startLine,
+      "desktop package job must probe aws before setup-python or pip install"
+    );
+  }
+
+  const statusAwsProbe = requireStepInfo(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Probe AWS CLI (release status)");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    statusAwsProbe.text,
+    "command -v aws",
+    "desktop release status job must probe for an existing AWS CLI before installing"
+  );
+  const statusPythonSetup = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Set up Python for AWS CLI install (release status)"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    statusPythonSetup.text,
+    "steps.status_aws_cli.outputs.available != 'true'",
+    "desktop release status job must set up Python for AWS CLI only when aws is missing"
+  );
+  const statusAwsInstall = requireStepInfo(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "Install missing AWS CLI (release status)"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    statusAwsInstall.text,
+    "steps.status_aws_cli.outputs.available != 'true'",
+    "desktop release status job must install AWS CLI only when aws is missing"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    statusAwsInstall.text,
+    "python -m pip install awscli",
+    "desktop release status job must install awscli via pip when aws is missing"
+  );
+  if (statusAwsProbe.endLine >= statusPythonSetup.startLine || statusAwsProbe.endLine >= statusAwsInstall.startLine) {
+    fail(
+      desktopReleaseWorkflowPath,
+      statusAwsProbe.startLine,
+      "desktop release status job must probe aws before setup-python or pip install"
+    );
+  }
+
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /uses:\s*actions\/setup-python@v6[\s\S]{0,160}if:\s*needs\.release\.outputs\.upload_release_assets == 'true'\s*(?:\n|$)/,
+    "desktop release workflow must not set up Python for AWS CLI before probing for an installed aws binary"
+  );
+
+  const rustTargetStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Add Rust target");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    rustTargetStep,
+    "rustup target list --installed",
+    "desktop release workflow must check installed Rust targets before adding one"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    rustTargetStep,
+    "rustup target add \"${TARGET}\"",
+    "desktop release workflow must still add the Rust target when it is missing"
+  );
 }
 
 function checkDesktopMatrixDisplayPolicy() {
@@ -839,14 +1214,23 @@ function shellCommandLines(content) {
 }
 
 function requireStep(relativePath, content, stepName) {
+  return requireStepInfo(relativePath, content, stepName).text;
+}
+
+function requireStepInfo(relativePath, content, stepName) {
   const step = splitSteps(content).find((candidate) =>
     new RegExp(`\\bname:\\s*${escapeRegExp(stepName)}\\s*$`, "m").test(candidate.text)
   );
   if (!step) {
     fail(relativePath, 1, `missing workflow step: ${stepName}`);
-    return "";
+    return {
+      startLine: 1,
+      endLine: 1,
+      lines: [],
+      text: ""
+    };
   }
-  return step.text;
+  return step;
 }
 
 function splitSteps(content) {

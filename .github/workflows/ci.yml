@@ -31,6 +31,8 @@ jobs:
         run: node scripts/validate-stage-runtime-sidecar.mjs
       - name: Validate mocked Studio DSUB S3 publisher
         run: scripts/validate-studio-asset-s3-publisher.sh
+      - name: Validate mocked Studio desktop DSUB S3 existing preflight
+        run: scripts/validate-studio-desktop-s3-existing-check.sh
       - name: Validate mocked Studio desktop DSUB S3 publisher
         run: scripts/validate-studio-desktop-asset-s3-publisher.sh
 

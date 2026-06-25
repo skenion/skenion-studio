@@ -253,8 +253,71 @@ jobs:
         with:
           ref: ${{ needs.release.outputs.tag_ref }}
 
+      - id: aws_cli
+        name: Probe AWS CLI (desktop package)
+        if: needs.release.outputs.upload_release_assets == 'true'
+        run: |
+          set -euo pipefail
+          if aws_path="$(command -v aws 2>/dev/null)"; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            echo "path=${aws_path}" >> "${GITHUB_OUTPUT}"
+            aws --version
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "AWS CLI is not installed; setup-python and pip install will run."
+          fi
+
+      - name: Set up Python for AWS CLI install (desktop package)
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.aws_cli.outputs.available != 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install missing AWS CLI (desktop package)
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.aws_cli.outputs.available != 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install awscli
+          python - <<'PY'
+          import os
+          import sysconfig
+
+          scripts = sysconfig.get_path("scripts")
+          if not scripts:
+              raise SystemExit("could not determine Python scripts directory for awscli")
+          with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as output:
+              print(scripts, file=output)
+          PY
+
+      - name: Check AWS CLI
+        if: needs.release.outputs.upload_release_assets == 'true'
+        run: aws --version
+
+      - id: preflight_desktop
+        name: Preflight existing Studio desktop package in DSUB S3
+        if: needs.release.outputs.upload_release_assets == 'true'
+        env:
+          SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}
+          SKENION_RELEASE_S3_REGION: ${{ secrets.SKENION_RELEASE_S3_REGION }}
+          SKENION_RELEASE_S3_BUCKET: ${{ secrets.SKENION_RELEASE_S3_BUCKET }}
+          SKENION_RELEASE_S3_PREFIX: ${{ secrets.SKENION_RELEASE_S3_PREFIX }}
+          SKENION_RELEASE_S3_ACCESS_KEY_ID: ${{ secrets.SKENION_RELEASE_S3_ACCESS_KEY_ID }}
+          SKENION_RELEASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SKENION_RELEASE_S3_SECRET_ACCESS_KEY }}
+          SKENION_RELEASE_S3_FORCE_PATH_STYLE: ${{ secrets.SKENION_RELEASE_S3_FORCE_PATH_STYLE }}
+          SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}
+          RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
+          DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT="$(git rev-parse HEAD)" scripts/check-studio-desktop-asset-s3-existing.sh \
+            "${VERSION}" \
+            "${{ needs.release.outputs.tag }}" \
+            "${TARGET}" \
+            "${{ matrix.tier }}"
+
       - name: Preflight macOS signing and notarization secrets
-        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode != 'unsigned-preview'
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.preflight_desktop.outputs.exists != 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode != 'unsigned-preview'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -292,7 +355,7 @@ jobs:
           echo "macOS signing and notarization secret preflight passed."
 
       - name: Summarize unsigned macOS preview mode
-        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.preflight_desktop.outputs.exists != 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
         run: |
           {
             echo "## macOS Signing Gate"
@@ -304,7 +367,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Preflight Windows installer signing policy
-        if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'Windows'
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.preflight_desktop.outputs.exists != 'true' && runner.os == 'Windows'
         env:
           DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
         run: |
@@ -342,21 +405,36 @@ jobs:
             echo "- Windows release-completion status: ${release_completion}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # GitHub Actions cache is only dependency/build-input acceleration here.
+      # DSUB S3 immutable object evidence is the release artifact source of truth.
       - uses: pnpm/action-setup@v6
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
         with:
           version: 10.12.4
 
       - uses: actions/setup-node@v6
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
         with:
           node-version: 22
-          cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - id: pnpm_store
+        name: Resolve platform pnpm store cache path
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          echo "store_path=$(pnpm store path --silent)" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore platform pnpm store cache
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
+        uses: actions/cache@v4
         with:
-          python-version: "3.x"
+          path: ${{ steps.pnpm_store.outputs.store_path }}
+          key: skenion-studio-desktop-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform_slug }}-${{ matrix.rust_target }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            skenion-studio-desktop-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform_slug }}-${{ matrix.rust_target }}-
 
       - name: Install Linux desktop dependencies
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && (needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true')
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -367,16 +445,25 @@ jobs:
             patchelf
 
       - name: Add Rust target
-        run: rustup target add "${TARGET}"
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          if rustup target list --installed | grep -Fxq "${TARGET}"; then
+            echo "Rust target ${TARGET} is already installed."
+          else
+            rustup target add "${TARGET}"
+          fi
 
       - uses: Swatinem/rust-cache@v2
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
         with:
-          prefix-key: skenion-studio-desktop-release-${{ matrix.platform_slug }}
+          prefix-key: skenion-studio-desktop-release-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform_slug }}-${{ matrix.rust_target }}
           cache-all-crates: "true"
           cache-on-failure: "true"
           workspaces: src-tauri -> target
 
       - name: Verify released Contracts npm package
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
         env:
           CONTRACTS_VERSION: 0.45.0
         run: |
@@ -391,6 +478,7 @@ jobs:
           fi
 
       - name: Install studio dependencies from released packages
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
         run: |
           set -euo pipefail
           pnpm install --no-frozen-lockfile
@@ -440,28 +528,8 @@ jobs:
           fi
           pnpm run stage-runtime-sidecar -- "${args[@]}"
 
-      - name: Install AWS CLI
-        if: needs.release.outputs.upload_release_assets == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install awscli
-          python - <<'PY'
-          import os
-          import sysconfig
-
-          scripts = sysconfig.get_path("scripts")
-          if not scripts:
-              raise SystemExit("could not determine Python scripts directory for awscli")
-          with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as output:
-              print(scripts, file=output)
-          PY
-
-      - name: Check AWS CLI
-        if: needs.release.outputs.upload_release_assets == 'true'
-        run: aws --version
-
       - name: Stage Runtime binary from release manifest (publish S3)
-        if: needs.release.outputs.upload_release_assets == 'true'
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.preflight_desktop.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}
@@ -485,6 +553,7 @@ jobs:
           pnpm run stage-runtime-sidecar -- "${args[@]}"
 
       - name: Verify release Tauri packaging inputs
+        if: needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true'
         run: |
           node <<'NODE'
           const fs = require("node:fs");
@@ -621,7 +690,7 @@ jobs:
           NODE
 
       - name: Build unsigned preview Tauri desktop package (macOS)
-        if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
+        if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode == 'unsigned-preview' && (needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -633,7 +702,7 @@ jobs:
           args: --target ${{ matrix.rust_target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - name: Build signed Tauri desktop package (macOS)
-        if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode != 'unsigned-preview'
+        if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode != 'unsigned-preview' && (needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -651,7 +720,7 @@ jobs:
           args: --target ${{ matrix.rust_target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - name: Build Tauri desktop package (non-macOS)
-        if: runner.os != 'macOS'
+        if: runner.os != 'macOS' && (needs.release.outputs.upload_release_assets == 'false' || steps.preflight_desktop.outputs.exists != 'true')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -664,12 +733,12 @@ jobs:
 
       - id: package_studio_desktop
         name: Collect skenion studio desktop installers
-        if: needs.release.outputs.upload_release_assets == 'true'
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.preflight_desktop.outputs.exists != 'true'
         run: pnpm run package-studio-desktop -- --target "${TARGET}" --version "${VERSION}"
 
       - id: publish_desktop
         name: Publish skenion studio desktop package to DSUB S3
-        if: needs.release.outputs.upload_release_assets == 'true'
+        if: needs.release.outputs.upload_release_assets == 'true' && steps.preflight_desktop.outputs.exists != 'true'
         env:
           SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}
           SKENION_RELEASE_S3_REGION: ${{ secrets.SKENION_RELEASE_S3_REGION }}
@@ -702,7 +771,16 @@ jobs:
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
             echo "- Desktop signing mode: ${DESKTOP_SIGNING_MODE}"
             echo "- Publish desktop artifact evidence: ${{ needs.release.outputs.upload_release_assets }}"
-            if [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" ]]; then
+            if [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" && "${{ steps.preflight_desktop.outputs.exists }}" == "true" ]]; then
+              echo "- Desktop package preflight: reused existing DSUB S3 artifact evidence"
+              echo "- Desktop installer packages: ${{ steps.preflight_desktop.outputs.package_ids }}"
+              echo "- Desktop installer contents: ${{ steps.preflight_desktop.outputs.artifact_count }} existing package artifact(s)"
+              echo "- Desktop installer DSUB links:"
+              cat <<'SKENION_DESKTOP_LINKS'
+          ${{ steps.preflight_desktop.outputs.desktop_artifact_summary }}
+          SKENION_DESKTOP_LINKS
+            elif [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" ]]; then
+              echo "- Desktop package preflight: missing reusable DSUB S3 evidence; built and published this platform"
               echo "- Desktop installer packages: ${{ steps.package_studio_desktop.outputs.package_ids }}"
               echo "- Desktop installer contents: ${{ steps.package_studio_desktop.outputs.artifact_count }} Tauri installer artifact(s)"
               echo "- Desktop installer DSUB links:"
@@ -729,6 +807,90 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: .release-tools
+
+      - name: Checkout release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release.outputs.tag_ref }}
+          path: .release-source
+
+      - id: release_source
+        name: Resolve release source commit
+        run: |
+          set -euo pipefail
+          echo "source_commit=$(git -C .release-source rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - id: status_aws_cli
+        name: Probe AWS CLI (release status)
+        run: |
+          set -euo pipefail
+          if aws_path="$(command -v aws 2>/dev/null)"; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            echo "path=${aws_path}" >> "${GITHUB_OUTPUT}"
+            aws --version
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "AWS CLI is not installed; setup-python and pip install will run."
+          fi
+
+      - name: Set up Python for AWS CLI install (release status)
+        if: steps.status_aws_cli.outputs.available != 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install missing AWS CLI (release status)
+        if: steps.status_aws_cli.outputs.available != 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install awscli
+          python - <<'PY'
+          import os
+          import sysconfig
+
+          scripts = sysconfig.get_path("scripts")
+          if not scripts:
+              raise SystemExit("could not determine Python scripts directory for awscli")
+          with open(os.environ["GITHUB_PATH"], "a", encoding="utf-8") as output:
+              print(scripts, file=output)
+          PY
+
+      - name: Check AWS CLI
+        run: aws --version
+
+      - name: Verify release-blocking desktop package evidence in DSUB S3
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+          VERSION: ${{ needs.release.outputs.version }}
+          SOURCE_COMMIT: ${{ steps.release_source.outputs.source_commit }}
+          RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
+          DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
+          SKENION_RELEASE_S3_ENDPOINT: ${{ secrets.SKENION_RELEASE_S3_ENDPOINT }}
+          SKENION_RELEASE_S3_REGION: ${{ secrets.SKENION_RELEASE_S3_REGION }}
+          SKENION_RELEASE_S3_BUCKET: ${{ secrets.SKENION_RELEASE_S3_BUCKET }}
+          SKENION_RELEASE_S3_PREFIX: ${{ secrets.SKENION_RELEASE_S3_PREFIX }}
+          SKENION_RELEASE_S3_ACCESS_KEY_ID: ${{ secrets.SKENION_RELEASE_S3_ACCESS_KEY_ID }}
+          SKENION_RELEASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SKENION_RELEASE_S3_SECRET_ACCESS_KEY }}
+          SKENION_RELEASE_S3_FORCE_PATH_STYLE: ${{ secrets.SKENION_RELEASE_S3_FORCE_PATH_STYLE }}
+          SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}
+        run: |
+          set -euo pipefail
+          release_blocking_targets=(
+            aarch64-apple-darwin
+            x86_64-apple-darwin
+            x86_64-pc-windows-msvc
+            x86_64-unknown-linux-gnu
+          )
+
+          for target in "${release_blocking_targets[@]}"; do
+            .release-tools/scripts/check-studio-desktop-asset-s3-existing.sh \
+              --require-existing \
+              "${VERSION}" \
+              "${RELEASE_TAG}" \
+              "${target}" \
+              release-blocking
+          done
 
       - name: Mark release as desktop artifact evidence
         env:
