@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.12](https://github.com/skenion/skenion-studio/compare/v0.44.11...v0.44.12) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** use platform slugs for desktop release jobs ([#177](https://github.com/skenion/skenion-studio/issues/177)) ([0533a3f](https://github.com/skenion/skenion-studio/commit/0533a3f3cb4a7af4a998798bc3e03c8d7552b212))
+
 ## [0.44.11](https://github.com/skenion/skenion-studio/compare/v0.44.10...v0.44.11) (2026-06-25)
 
 
