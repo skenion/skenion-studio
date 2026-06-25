@@ -116,18 +116,18 @@ const manifestAssetName = `${assetName}.manifest.json`;
 const executableName = targetConfig.executableName;
 const stagedBinaryName = `skenion-runtime-${target}${target.includes("windows") ? ".exe" : ""}`;
 
-const runtimeArtifact = await loadRuntimeArtifact();
-
-if (options.checkManifestOnly) {
-  console.log(
-    `validated Runtime release manifest ${runtimeArtifact.manifestFilename} for ${assetName} with sha256 ${runtimeArtifact.sha256}`
-  );
-  process.exit(0);
-}
-
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-runtime-artifact-"));
 
 try {
+  const runtimeArtifact = await loadRuntimeArtifact(tempDir);
+
+  if (options.checkManifestOnly) {
+    console.log(
+      `validated Runtime release manifest ${runtimeArtifact.manifestFilename} for ${assetName} with sha256 ${runtimeArtifact.sha256}`
+    );
+    process.exit(0);
+  }
+
   const artifactPath = path.join(tempDir, assetName);
   const expectedSha256 = await stageRuntimeBinary(runtimeArtifact, artifactPath, tempDir);
   if (runtimeArtifact.size !== undefined) {
@@ -197,7 +197,7 @@ function runtimeVersionFromTag(tag) {
   return match[1];
 }
 
-async function loadRuntimeArtifact() {
+async function loadRuntimeArtifact(tempDirPath) {
   if (options.manifest) {
     const manifestPath = path.resolve(rootDir, options.manifest);
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
@@ -213,13 +213,13 @@ async function loadRuntimeArtifact() {
   }
 
   if (manifestUrl) {
-    return loadRuntimeManifestUrl(manifestUrl);
+    return loadRuntimeManifestUrl(manifestUrl, tempDirPath);
   }
 
   if (releaseModeNames.has(mode)) {
     const releaseEvidence = await loadRuntimeRelease();
     const derivedManifestUrl = runtimeManifestUrlFromReleaseBody(releaseEvidence.release, releaseEvidence.source);
-    return loadRuntimeManifestUrl(derivedManifestUrl);
+    return loadRuntimeManifestUrl(derivedManifestUrl, tempDirPath);
   }
 
   if (mode !== "local") {
@@ -233,7 +233,10 @@ async function loadRuntimeArtifact() {
   };
 }
 
-async function loadRuntimeManifestUrl(url) {
+async function loadRuntimeManifestUrl(url, tempDirPath) {
+  if (runtimeArtifactSource === "s3") {
+    return loadRuntimeManifestFromS3Url(url, tempDirPath);
+  }
   const manifest = await fetchJson(url, "Runtime release artifact manifest");
   return {
     source: url,
@@ -242,6 +245,23 @@ async function loadRuntimeManifestUrl(url) {
       expectedChecksumName: checksumAssetName,
       expectedManifestName: manifestAssetName,
       manifestSource: url
+    })
+  };
+}
+
+async function loadRuntimeManifestFromS3Url(url, tempDirPath) {
+  const s3Config = await loadS3DownloadConfig(tempDirPath);
+  const manifestKey = deriveS3Key(url, manifestAssetName, s3Config);
+  const manifestPath = path.join(tempDirPath, manifestAssetName);
+  await downloadS3Object(s3Config, manifestKey, manifestPath, manifestAssetName);
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  return {
+    source: `s3://${s3Config.bucket}/${manifestKey}`,
+    ...validateRuntimeManifest(manifest, {
+      expectedArtifactName: assetName,
+      expectedChecksumName: checksumAssetName,
+      expectedManifestName: manifestAssetName,
+      manifestSource: `s3://${s3Config.bucket}/${manifestKey}`
     })
   };
 }

@@ -132,7 +132,7 @@ async function validateReleaseModeS3DsubManifestDerivation(server, artifact) {
       checksumUrl: checksumUrl(server.origin, artifact.fixture)
     })
   );
-  const s3Fixture = await createS3Fixture(artifact);
+  const s3Fixture = await createS3Fixture(artifact, server.origin);
   const fakeAws = await createFakeAwsCli();
   const outputDir = path.join(tempDir, "release-mode-s3-output");
   const requestsBefore = { ...server.requests };
@@ -163,17 +163,33 @@ async function validateReleaseModeS3DsubManifestDerivation(server, artifact) {
     return;
   }
 
-  if (server.requests.manifest <= requestsBefore.manifest) {
-    failures.push("release mode S3 staging did not fetch the DSUB Runtime manifest derived from the release body.");
-  }
-  if (server.requests.binary !== requestsBefore.binary || server.requests.checksum !== requestsBefore.checksum) {
-    failures.push("release mode S3 staging should not download the Runtime binary or SHA-256 through public HTTP.");
+  if (
+    server.requests.manifest !== requestsBefore.manifest ||
+    server.requests.binary !== requestsBefore.binary ||
+    server.requests.checksum !== requestsBefore.checksum
+  ) {
+    failures.push("release mode S3 staging should not download the Runtime manifest, binary, or SHA-256 through public HTTP.");
   }
 
   const stagedBinary = path.join(outputDir, `skenion-runtime-${artifact.fixture.target}`);
   const staged = await fs.readFile(stagedBinary, "utf8");
   if (staged !== artifact.binaryContents) {
     failures.push("release mode S3 staging copied the wrong Runtime binary content.");
+  }
+
+  const awsLog = (await fs.readFile(fakeAws.logPath, "utf8"))
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const copiedSources = awsLog.map((entry) => entry.args.slice(0, 4).join(" "));
+  for (const expected of [
+    `s3 cp s3://${s3Bucket}/${s3Fixture.manifestKey}`,
+    `s3 cp s3://${s3Bucket}/${s3Fixture.binaryKey}`,
+    `s3 cp s3://${s3Bucket}/${s3Fixture.checksumKey}`
+  ]) {
+    if (!copiedSources.some((source) => source.startsWith(expected))) {
+      failures.push(`release mode S3 staging did not copy expected object: ${expected}`);
+    }
   }
 }
 
@@ -602,11 +618,16 @@ async function createRuntimeBinary(baseDir, fixture) {
   };
 }
 
-async function createS3Fixture(artifact) {
+async function createS3Fixture(artifact, origin = "https://cdn.example.test") {
   const root = path.join(tempDir, "fake-s3");
   const keyPrefix = `${s3Prefix}/skenion-runtime/${releaseTag}/${artifact.fixture.platformSlug}`;
   const objectDir = path.join(root, s3Bucket, keyPrefix);
   await fs.mkdir(objectDir, { recursive: true });
+  await fs.writeFile(
+    path.join(objectDir, `${artifact.fixture.artifactName}.manifest.json`),
+    JSON.stringify(runtimeManifest(origin, artifact), null, 2),
+    "utf8"
+  );
   await fs.copyFile(artifact.binaryPath, path.join(objectDir, artifact.fixture.artifactName));
   await fs.writeFile(
     path.join(objectDir, artifact.fixture.checksumName),
@@ -615,6 +636,7 @@ async function createS3Fixture(artifact) {
   );
   return {
     root,
+    manifestKey: `${keyPrefix}/${artifact.fixture.artifactName}.manifest.json`,
     binaryKey: `${keyPrefix}/${artifact.fixture.artifactName}`,
     checksumKey: `${keyPrefix}/${artifact.fixture.checksumName}`
   };
