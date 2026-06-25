@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.20](https://github.com/skenion/skenion-studio/compare/v0.44.19...v0.44.20) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** skip existing Studio desktop artifacts ([4ed6156](https://github.com/skenion/skenion-studio/commit/4ed6156221940dafcae8c5690a194a730172e6ad))
+
 ## [0.44.19](https://github.com/skenion/skenion-studio/compare/v0.44.18...v0.44.19) (2026-06-25)
 
 
