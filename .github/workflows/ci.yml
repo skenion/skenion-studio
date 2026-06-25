@@ -25,8 +25,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Check release script syntax
         run: bash -n scripts/*.sh
+      - name: Validate Studio release workflow policy
+        run: node scripts/validate-release-workflow-policy.mjs
       - name: Validate mocked Studio DSUB S3 publisher
         run: scripts/validate-studio-asset-s3-publisher.sh
+      - name: Validate mocked Studio desktop DSUB S3 publisher
+        run: scripts/validate-studio-desktop-asset-s3-publisher.sh
 
   coverage:
     name: Coverage
