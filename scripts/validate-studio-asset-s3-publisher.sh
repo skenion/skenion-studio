@@ -136,6 +136,10 @@ case "${command_name}" in
         done
 
         echo "head ${bucket}/${key}" >>"${log}"
+        if [[ "${STUB_AWS_HEAD_FORBIDDEN:-}" == "1" ]]; then
+          echo "An error occurred (403) when calling the HeadObject operation: Forbidden" >&2
+          exit 255
+        fi
         path="${root}/${bucket}/${key}"
         if [[ ! -f "${path}" ]]; then
           echo "An error occurred (404) when calling the HeadObject operation: Not Found" >&2
@@ -464,6 +468,27 @@ assert_github_actions_guard_case() {
   fi
 }
 
+assert_github_event_allowlist_case() {
+  local release_case_dir="${tmp_root}/github-event-release"
+  local push_case_dir="${tmp_root}/github-event-push"
+
+  prepare_case "${release_case_dir}" "studio github release event artifact"
+  run_publisher "${release_case_dir}" GITHUB_EVENT_NAME=release >"${release_case_dir}/output.log" 2>&1
+  grep -q 'uploaded Studio release object' "${release_case_dir}/output.log"
+
+  prepare_case "${push_case_dir}" "studio github push event artifact"
+  if run_publisher "${push_case_dir}" GITHUB_EVENT_NAME=push >"${push_case_dir}/output.log" 2>&1; then
+    echo "expected GitHub push event publisher case to fail" >&2
+    exit 1
+  fi
+
+  grep -q 'only allowed for workflow_dispatch or release events' "${push_case_dir}/output.log"
+  if grep -q '^put ' "${push_case_dir}/aws.log"; then
+    echo "publisher reached S3 stub despite GitHub event guard refusal" >&2
+    exit 1
+  fi
+}
+
 assert_success_case() {
   local case_dir="${tmp_root}/success"
   local index_path
@@ -500,11 +525,13 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as fh:
     events = [line.strip() for line in fh if line.strip()]
 
+heads = [(index, event.removeprefix("head ")) for index, event in enumerate(events) if event.startswith("head ")]
 put_indexes = [
     (index, event.removeprefix("put "))
     for index, event in enumerate(events)
     if event.startswith("put ")
 ]
+assert len(heads) == 6, events
 assert len(put_indexes) == 6, events
 for index, key in put_indexes:
     assert any(event == f"head {key}" for event in events[:index]), (key, events)
@@ -659,12 +686,12 @@ assert_no_clobber_case() {
   write_stub_metadata "${existing}" "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
   if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected no-clobber publisher case to fail" >&2
+    echo "expected no-clobber publisher case to fail when HeadObject metadata mismatches" >&2
     exit 1
   fi
 
   grep -q 'refusing to overwrite existing Studio release artifact' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
+  if grep -q "^put ${bucket}/${prefix}/skenion-studio/${release_tag}/web/${web_asset_name}$" "${case_dir}/aws.log"; then
     echo "publisher uploaded despite no-clobber refusal" >&2
     exit 1
   fi
@@ -710,7 +737,7 @@ assert_existing_matching_metadata_skips_upload_case() {
   fi
 }
 
-assert_existing_missing_metadata_fails_matching_asset_case() {
+assert_existing_missing_metadata_matching_size_reuses_case() {
   local case_dir="${tmp_root}/existing-missing-metadata"
   local web_asset_path
   local web_asset_name
@@ -725,14 +752,11 @@ assert_existing_missing_metadata_fails_matching_asset_case() {
   mkdir -p "$(dirname "${existing}")"
   cp "${web_asset_path}" "${existing}"
 
-  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected metadata-free existing object case to fail" >&2
-    exit 1
-  fi
+  run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1
 
-  grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
-  grep -q 'Remove, re-publish, or remediate the object with immutable metadata before retrying' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
+  grep -q 'object already exists without immutable metadata and matching size' "${case_dir}/output.log"
+  grep -q 'object already exists and will not be overwritten' "${case_dir}/output.log"
+  if grep -q "^put ${bucket}/${web_asset_key}$" "${case_dir}/aws.log"; then
     echo "publisher uploaded despite metadata-free existing object refusal" >&2
     exit 1
   fi
@@ -762,7 +786,7 @@ assert_existing_missing_metadata_mismatched_size_case() {
   fi
 
   grep -q 'existing S3 object size does not match expected artifact' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
+  if grep -q "^put ${bucket}/${prefix}/skenion-studio/${release_tag}/web/${web_asset_name}$" "${case_dir}/aws.log"; then
     echo "publisher uploaded despite existing metadata-free size mismatch" >&2
     exit 1
   fi
@@ -788,7 +812,7 @@ assert_existing_mismatched_metadata_fails_case() {
   fi
 
   grep -q 'S3 metadata does not match expected immutable artifact' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
+  if grep -q "^put ${bucket}/${prefix}/skenion-studio/${release_tag}/web/${web_asset_name}$" "${case_dir}/aws.log"; then
     echo "publisher uploaded despite existing mismatched metadata" >&2
     exit 1
   fi
@@ -810,13 +834,10 @@ assert_existing_missing_metadata_mismatched_content_case() {
   cp "${web_asset_path}" "${existing}"
   printf 'X' | dd of="${existing}" bs=1 count=1 conv=notrunc >/dev/null 2>&1
 
-  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected existing missing metadata content mismatch case to fail" >&2
-    exit 1
-  fi
+  run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1
 
-  grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
-  grep -q 'Remove, re-publish, or remediate the object with immutable metadata before retrying' "${case_dir}/output.log"
+  grep -q 'object already exists without immutable metadata and matching size' "${case_dir}/output.log"
+  grep -q 'object already exists and will not be overwritten' "${case_dir}/output.log"
   if grep -q "^put ${bucket}/${web_asset_key}$" "${case_dir}/aws.log"; then
     echo "publisher overwrote metadata-free same-size object before metadata refusal" >&2
     exit 1
@@ -824,6 +845,46 @@ assert_existing_missing_metadata_mismatched_content_case() {
   if [[ -s "${case_dir}/curl.log" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
     echo "metadata-free S3 content mismatch should fail before public CDN verification" >&2
+    exit 1
+  fi
+}
+
+assert_head_403_upload_succeeds_case() {
+  local case_dir="${tmp_root}/head-403-upload-succeeds"
+
+  prepare_case "${case_dir}" "studio head 403 upload succeeds artifact"
+  run_publisher "${case_dir}" STUB_AWS_HEAD_FORBIDDEN=1 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'proceeding with conditional no-overwrite upload' "${case_dir}/output.log"
+  grep -q 'uploaded Studio release object' "${case_dir}/output.log"
+  if ! grep -q '^put ' "${case_dir}/aws.log"; then
+    echo "publisher did not conditionally upload after HeadObject 403" >&2
+    exit 1
+  fi
+}
+
+assert_head_403_precondition_reuses_case() {
+  local case_dir="${tmp_root}/head-403-precondition-reuses"
+  local web_asset_path
+  local web_asset_name
+  local web_asset_key
+  local existing
+
+  prepare_case "${case_dir}" "studio head 403 precondition artifact"
+  web_asset_path="$(web_asset_path_for "${case_dir}")"
+  web_asset_name="$(basename "${web_asset_path}")"
+  web_asset_key="${prefix}/skenion-studio/${release_tag}/web/${web_asset_name}"
+  existing="${case_dir}/s3/${bucket}/${web_asset_key}"
+  mkdir -p "$(dirname "${existing}")"
+  printf 'existing remote object\n' >"${existing}"
+
+  run_publisher "${case_dir}" STUB_AWS_HEAD_FORBIDDEN=1 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'proceeding with conditional no-overwrite upload' "${case_dir}/output.log"
+  grep -q 'object already exists and will not be overwritten' "${case_dir}/output.log"
+  grep -q 'without requiring HeadObject permission' "${case_dir}/output.log"
+  if grep -q "^put ${bucket}/${web_asset_key}$" "${case_dir}/aws.log"; then
+    echo "publisher overwrote existing object after HeadObject 403" >&2
     exit 1
   fi
 }
@@ -849,6 +910,7 @@ assert_strict_public_content_failure_case() {
 
 install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
+assert_github_event_allowlist_case
 assert_success_case
 assert_public_unavailable_default_skip_case
 assert_strict_public_head_failure_case
@@ -858,10 +920,12 @@ assert_secretless_dry_run_defaults_case
 assert_no_clobber_case
 assert_upload_missing_s3_metadata_is_not_a_failure_case
 assert_existing_matching_metadata_skips_upload_case
-assert_existing_missing_metadata_fails_matching_asset_case
+assert_existing_missing_metadata_matching_size_reuses_case
 assert_existing_missing_metadata_mismatched_size_case
 assert_existing_mismatched_metadata_fails_case
 assert_existing_missing_metadata_mismatched_content_case
+assert_head_403_upload_succeeds_case
+assert_head_403_precondition_reuses_case
 assert_strict_public_content_failure_case
 
 echo "Studio DSUB S3 publisher validation passed."

@@ -15,6 +15,7 @@ const stageRuntimePath = "scripts/stage-runtime-sidecar.mjs";
 const webPublisherPath = "scripts/publish-studio-asset-s3.sh";
 const desktopPublisherPath = "scripts/publish-studio-desktop-asset-s3.sh";
 const statusScriptPath = "scripts/update-studio-release-status.mjs";
+const runtimeReleasePinPath = "release/runtime-release.json";
 const desktopReadmePath = "packages/studio-desktop/README.md";
 const webReadmePath = "packages/studio-web/README.md";
 const ciPolicyPath = "docs/ci-release-policy.md";
@@ -33,6 +34,7 @@ const stageRuntime = readRequired(stageRuntimePath);
 const webPublisher = readRequired(webPublisherPath);
 const desktopPublisher = readRequired(desktopPublisherPath);
 const statusScript = readRequired(statusScriptPath);
+const runtimeReleasePin = readRequired(runtimeReleasePinPath);
 const desktopReadme = readRequired(desktopReadmePath);
 const webReadme = readRequired(webReadmePath);
 const ciPolicy = readRequired(ciPolicyPath);
@@ -55,6 +57,7 @@ checkDesktopPackaging();
 checkPrepareArtifactsPolicy();
 checkRuntimeSidecarPolicy();
 checkReleaseStatusPolicy();
+checkRuntimeReleasePinPolicy();
 checkDocsPolicy();
 
 if (failures.length > 0) {
@@ -139,6 +142,7 @@ function checkNoDirectS3WorkflowUpload(relativePath, content) {
 
 function checkReleaseWorkflows() {
   checkDesktopMatrixDisplayPolicy();
+  checkAutomaticReleaseFlowPolicy();
 
   const webPublishStep = requireStep(studioReleaseWorkflowPath, studioReleaseWorkflow, "Publish Studio web artifacts to DSUB S3");
   expectIncludes(
@@ -217,6 +221,65 @@ function checkReleaseWorkflows() {
     /unsigned-preview[\s\S]{0,120}non-release-complete|non-release-complete[\s\S]{0,120}unsigned-preview/,
     "desktop release workflow must not describe unsigned-preview as inherently non-release-complete"
   );
+}
+
+function checkAutomaticReleaseFlowPolicy() {
+  expectIncludes(
+    studioReleaseWorkflowPath,
+    studioReleaseWorkflow,
+    "release:\n    types: [published]",
+    "Studio Release Artifacts must publish automatically when a GitHub Release is published"
+  );
+  expectIncludes(
+    studioReleaseWorkflowPath,
+    studioReleaseWorkflow,
+    "github.event.release.tag_name",
+    "Studio Release Artifacts must derive release-event tags from github.event.release.tag_name"
+  );
+  expectIncludes(
+    studioReleaseWorkflowPath,
+    studioReleaseWorkflow,
+    "release/runtime-release.json",
+    "Studio Release Artifacts must resolve the default Runtime tag from the runtime release pin"
+  );
+  expectIncludes(
+    studioReleaseWorkflowPath,
+    studioReleaseWorkflow,
+    '"event_type": "studio-desktop-release-publish"',
+    "Studio Release Artifacts must trigger Desktop Release with repository_dispatch after web publish"
+  );
+  for (const payloadField of [
+    '"tag": "${RELEASE_TAG}"',
+    '"runtime_tag": "${RUNTIME_TAG}"',
+    '"release_mode": "publish"',
+    '"desktop_signing_mode": "unsigned-preview"'
+  ]) {
+    expectIncludes(
+      studioReleaseWorkflowPath,
+      studioReleaseWorkflow,
+      payloadField,
+      `Studio Release Artifacts repository_dispatch payload must include ${payloadField}`
+    );
+  }
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "repository_dispatch:\n    types: [studio-desktop-release-publish]",
+    "Desktop Release must accept the Studio web publish repository_dispatch event"
+  );
+  for (const payloadField of [
+    "github.event.client_payload.tag",
+    "github.event.client_payload.runtime_tag",
+    "github.event.client_payload.release_mode",
+    "github.event.client_payload.desktop_signing_mode"
+  ]) {
+    expectIncludes(
+      desktopReleaseWorkflowPath,
+      desktopReleaseWorkflow,
+      payloadField,
+      `Desktop Release must derive dispatch input from ${payloadField}`
+    );
+  }
 }
 
 function checkDesktopMatrixDisplayPolicy() {
@@ -343,9 +406,9 @@ function checkRuntimeStagingWorkflowStep(step, artifactSource) {
 }
 
 function checkPublisherScripts() {
-  for (const [relativePath, content, label] of [
-    [webPublisherPath, webPublisher, "web"],
-    [desktopPublisherPath, desktopPublisher, "desktop"]
+  for (const [relativePath, content, label, allowedEvents] of [
+    [webPublisherPath, webPublisher, "web", "workflow_dispatch|release"],
+    [desktopPublisherPath, desktopPublisher, "desktop", "workflow_dispatch|repository_dispatch"]
   ]) {
     expectIncludes(
       relativePath,
@@ -356,8 +419,14 @@ function checkPublisherScripts() {
     expectIncludes(
       relativePath,
       content,
-      'GITHUB_EVENT_NAME:-}" != "workflow_dispatch"',
-      `${label} publisher must only allow workflow_dispatch release uploads`
+      `    ${allowedEvents})`,
+      `${label} publisher must allow only ${allowedEvents} release uploads`
+    );
+    rejectPattern(
+      relativePath,
+      content,
+      /GITHUB_EVENT_NAME:-}" != "workflow_dispatch"/,
+      `${label} publisher must not be limited to manual workflow_dispatch uploads only`
     );
     expectIncludes(
       relativePath,
@@ -371,6 +440,7 @@ function checkPublisherScripts() {
       'upload_object "${index_path}"',
       `${label} publisher must upload compact index metadata through DSUB S3/CDN`
     );
+    checkPublisherUploadObjectPolicy(relativePath, content, label);
   }
 
   for (const requiredUpload of [
@@ -408,6 +478,72 @@ function checkPublisherScripts() {
     /desktop\/\$\{target\}|desktop-\$\{target\}|skenion-studio-\$\{target\}/,
     "desktop publisher public paths and asset names must not expose internal Rust target triples"
   );
+}
+
+function checkPublisherUploadObjectPolicy(relativePath, content, label) {
+  const uploadObject = content.match(/\n\s*upload_object\(\) \{[\s\S]*?\n\s*\}/)?.[0];
+  if (!uploadObject) {
+    fail(relativePath, 1, `${label} publisher must define upload_object`);
+    return;
+  }
+  expectIncludes(
+    relativePath,
+    uploadObject,
+    "object_exists_with_reusable_metadata",
+    `${label} publisher must use best-effort HeadObject metadata reuse before uploading`
+  );
+  expectIncludes(
+    relativePath,
+    content,
+    "head-object",
+    `${label} publisher must preserve the metadata-aware HeadObject reuse path`
+  );
+  expectIncludes(
+    relativePath,
+    content,
+    "without immutable metadata and matching size",
+    `${label} publisher must allow Runtime-style reuse when HeadObject succeeds with matching size but missing metadata`
+  );
+  expectIncludes(
+    relativePath,
+    content,
+    "Forbidden|AccessDenied",
+    `${label} publisher must continue to conditional upload when HeadObject is forbidden`
+  );
+  expectIncludes(
+    relativePath,
+    uploadObject,
+    "s3api put-object",
+    `${label} publisher must use put-object as the upload authority`
+  );
+  expectIncludes(
+    relativePath,
+    uploadObject,
+    "--if-none-match '*'",
+    `${label} publisher must use conditional put-object to avoid overwrites`
+  );
+  expectIncludes(
+    relativePath,
+    uploadObject,
+    "PreconditionFailed",
+    `${label} publisher must treat conditional existing-object responses as no-overwrite retries`
+  );
+}
+
+function checkRuntimeReleasePinPolicy() {
+  let pin;
+  try {
+    pin = JSON.parse(runtimeReleasePin);
+  } catch (error) {
+    fail(runtimeReleasePinPath, 1, `runtime release pin must be valid JSON: ${error.message}`);
+    return;
+  }
+  if (pin.schema !== "skenion.studio.runtimeReleasePin.v1") {
+    fail(runtimeReleasePinPath, 1, "runtime release pin schema must be skenion.studio.runtimeReleasePin.v1");
+  }
+  if (!/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(pin.runtimeTag ?? "")) {
+    fail(runtimeReleasePinPath, 1, "runtime release pin runtimeTag must be a concrete vx.y.z Runtime release tag");
+  }
 }
 
 function checkDesktopPackaging() {
