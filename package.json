@@ -22,6 +22,7 @@
     "tauri:dev": "tauri dev",
     "test": "vitest run",
     "validate-release-workflow-policy": "node scripts/validate-release-workflow-policy.mjs",
+    "validate-stage-runtime-sidecar": "node scripts/validate-stage-runtime-sidecar.mjs",
     "validate-studio-desktop-s3-publisher": "bash scripts/validate-studio-desktop-asset-s3-publisher.sh",
     "visual-gate": "pnpm run build-storybook && pnpm run visual-gate:capture",
     "visual-gate:capture": "node scripts/capture-studio-visual-gate.mjs"

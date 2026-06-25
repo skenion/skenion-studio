@@ -27,6 +27,8 @@ jobs:
         run: bash -n scripts/*.sh
       - name: Validate Studio release workflow policy
         run: node scripts/validate-release-workflow-policy.mjs
+      - name: Validate mocked Runtime sidecar staging
+        run: node scripts/validate-stage-runtime-sidecar.mjs
       - name: Validate mocked Studio DSUB S3 publisher
         run: scripts/validate-studio-asset-s3-publisher.sh
       - name: Validate mocked Studio desktop DSUB S3 publisher
