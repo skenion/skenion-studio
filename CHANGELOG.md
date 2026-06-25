@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.10](https://github.com/skenion/skenion-studio/compare/v0.44.9...v0.44.10) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** handle windows desktop checksum paths ([#171](https://github.com/skenion/skenion-studio/issues/171)) ([e3c5bfd](https://github.com/skenion/skenion-studio/commit/e3c5bfd9e9e7bc03a0f17b9d640e61cb2663b015))
+
 ## [0.44.9](https://github.com/skenion/skenion-studio/compare/v0.44.8...v0.44.9) (2026-06-25)
 
 
