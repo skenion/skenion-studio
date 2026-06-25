@@ -486,6 +486,89 @@ PY
   fi
 }
 
+install_windows_sha256sum_stub() {
+  local bin_dir="$1"
+
+  mkdir -p "${bin_dir}"
+  cat >"${bin_dir}/sha256sum" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+path=""
+for arg in "$@"; do
+  case "${arg}" in
+    --)
+      ;;
+    -*)
+      ;;
+    *)
+      path="${arg}"
+      ;;
+  esac
+done
+
+if [[ -z "${path}" ]]; then
+  echo "fake sha256sum expected a file path" >&2
+  exit 2
+fi
+
+python3 - "${path}" <<'PY'
+import hashlib
+import os
+import sys
+
+path = sys.argv[1]
+digest = hashlib.sha256()
+with open(path, "rb") as fh:
+    for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+        digest.update(chunk)
+
+prefix = "\\" if ("/" in path or "\\" in path) else ""
+print(f"{prefix}{digest.hexdigest()}  {path}")
+PY
+BASH
+  chmod +x "${bin_dir}/sha256sum"
+}
+
+assert_windows_git_bash_sha256sum_path_case() {
+  local case_dir="${tmp_root}/windows-git-bash-sha256sum-path"
+  local asset_path
+  local index_path
+
+  prepare_case "${case_dir}" "studio desktop windows git bash checksum artifact"
+  asset_path="$(asset_path_for "${case_dir}")"
+  index_path="$(asset_dir_for "${case_dir}")/skenion-studio-desktop-${target}-v${version}.index.json"
+  install_windows_sha256sum_stub "${case_dir}/bin"
+
+  if ! run_publisher "${case_dir}" "PATH=${case_dir}/bin:${tmp_root}/bin:${PATH}" >"${case_dir}/output.log" 2>&1; then
+    cat "${case_dir}/output.log" >&2
+    echo "expected Windows Git Bash sha256sum path case to pass" >&2
+    exit 1
+  fi
+
+  python3 - "${asset_path}.sha256" "${index_path}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as fh:
+    declared_sha = fh.read().split()[0]
+
+with open(sys.argv[2], encoding="utf-8") as fh:
+    index = json.load(fh)
+
+asset_sha = index["desktopPackage"]["sha256"]
+checksum_sha = index["checksum"]["sha256"]
+index_sha = index["index"]["s3"]["key"]
+
+assert asset_sha == declared_sha, (asset_sha, declared_sha)
+assert not asset_sha.startswith("\\"), asset_sha
+assert not checksum_sha.startswith("\\"), checksum_sha
+assert index_sha.endswith("skenion-studio-desktop-x86_64-unknown-linux-gnu-v1.2.3.index.json")
+PY
+
+  grep -q 'uploaded Studio desktop release object' "${case_dir}/output.log"
+}
+
 assert_public_unavailable_default_skip_case() {
   local case_dir="${tmp_root}/public-unavailable-default-skip"
 
@@ -813,6 +896,7 @@ assert_strict_public_content_failure_case() {
 install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
 assert_success_case
+assert_windows_git_bash_sha256sum_path_case
 assert_public_unavailable_default_skip_case
 assert_strict_public_head_failure_case
 assert_strict_public_get_failure_case

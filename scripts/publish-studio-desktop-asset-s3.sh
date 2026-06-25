@@ -77,10 +77,27 @@ file_size() {
 
 sha256_file() {
   local path="$1"
+  local tool_path
+  local dir
+  local name
+
+  tool_path="${path}"
+  if command -v cygpath >/dev/null 2>&1; then
+    tool_path="$(cygpath -u "${path}" 2>/dev/null || printf '%s' "${path}")"
+  fi
+  dir="$(dirname "${tool_path}")"
+  name="$(basename "${tool_path}")"
+
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${path}" | awk '{print $1}'
+    (
+      cd "${dir}"
+      sha256sum "${name}" | awk '{print $1}'
+    )
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "${path}" | awk '{print $1}'
+    (
+      cd "${dir}"
+      shasum -a 256 "${name}" | awk '{print $1}'
+    )
   else
     echo "no sha256 checksum tool found" >&2
     exit 1
