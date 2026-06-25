@@ -138,6 +138,8 @@ function checkNoDirectS3WorkflowUpload(relativePath, content) {
 }
 
 function checkReleaseWorkflows() {
+  checkDesktopMatrixDisplayPolicy();
+
   const webPublishStep = requireStep(studioReleaseWorkflowPath, studioReleaseWorkflow, "Publish Studio web artifacts to DSUB S3");
   expectIncludes(
     studioReleaseWorkflowPath,
@@ -217,6 +219,48 @@ function checkReleaseWorkflows() {
   );
 }
 
+function checkDesktopMatrixDisplayPolicy() {
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "name: desktop package (${{ matrix.platform_slug }})",
+    "desktop package job name must use the user-facing platform slug"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /^ {4}name:.*(?:matrix\.(?:target|rust_target)|unknown-linux-gnu|apple-darwin|pc-windows-msvc)/m,
+    "desktop job names must not expose internal Rust target triples"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /\bmatrix\.target\b/,
+    "desktop workflow matrix must use platform_slug for display and rust_target for internal build inputs"
+  );
+  for (const required of [
+    "platform_slug: macos-apple-silicon",
+    "platform_slug: macos-intel",
+    "platform_slug: windows-x64",
+    "platform_slug: linux-x64",
+    "platform_slug: windows-arm64",
+    "platform_slug: linux-arm64",
+    "rust_target: aarch64-apple-darwin",
+    "rust_target: x86_64-apple-darwin",
+    "rust_target: x86_64-pc-windows-msvc",
+    "rust_target: x86_64-unknown-linux-gnu",
+    "rust_target: aarch64-pc-windows-msvc",
+    "rust_target: aarch64-unknown-linux-gnu"
+  ]) {
+    expectIncludes(
+      desktopReleaseWorkflowPath,
+      desktopReleaseWorkflow,
+      required,
+      `desktop matrix must include ${required}`
+    );
+  }
+}
+
 function checkWorkflowSyntaxGuards() {
   rejectPattern(
     desktopReleaseWorkflowPath,
@@ -237,7 +281,7 @@ function checkDesktopSummarySteps() {
   expectIncludes(
     desktopReleaseWorkflowPath,
     desktopPackageSummaryStep,
-    'echo "- Platform/package: ${platform_package}"',
+    'echo "- Platform/package: ${PLATFORM_PACKAGE}"',
     "desktop package summary must report user-facing platform/package information"
   );
 

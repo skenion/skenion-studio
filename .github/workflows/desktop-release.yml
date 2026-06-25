@@ -184,7 +184,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
   desktop-package:
-    name: desktop package (${{ matrix.target }})
+    name: desktop package (${{ matrix.platform_slug }})
     needs: release
     runs-on: ${{ matrix.runner }}
     continue-on-error: ${{ matrix.release_blocking == false }}
@@ -196,38 +196,52 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: aarch64-apple-darwin
+          - platform_slug: macos-apple-silicon
+            platform_package: macos-apple-silicon DMG
+            rust_target: aarch64-apple-darwin
             runner: macos-14
             release_blocking: true
             tier: release-blocking
             tauri_bundle_args: ""
-          - target: x86_64-apple-darwin
+          - platform_slug: macos-intel
+            platform_package: macos-intel DMG
+            rust_target: x86_64-apple-darwin
             runner: macos-15-intel
             release_blocking: true
             tier: release-blocking
             tauri_bundle_args: ""
-          - target: x86_64-pc-windows-msvc
+          - platform_slug: windows-x64
+            platform_package: windows-x64 setup executable, plus MSI when emitted
+            rust_target: x86_64-pc-windows-msvc
             runner: windows-2022
             release_blocking: true
             tier: release-blocking
             tauri_bundle_args: ""
-          - target: x86_64-unknown-linux-gnu
+          - platform_slug: linux-x64
+            platform_package: linux-x64 deb/rpm
+            rust_target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             release_blocking: true
             tier: release-blocking
             tauri_bundle_args: "--bundles deb,rpm"
-          - target: aarch64-pc-windows-msvc
+          - platform_slug: windows-arm64
+            platform_package: windows-arm64 setup executable, plus MSI when emitted
+            rust_target: aarch64-pc-windows-msvc
             runner: windows-11-arm
             release_blocking: false
             tier: preview
             tauri_bundle_args: ""
-          - target: aarch64-unknown-linux-gnu
+          - platform_slug: linux-arm64
+            platform_package: linux-arm64 deb/rpm
+            rust_target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             release_blocking: false
             tier: preview
             tauri_bundle_args: "--bundles deb,rpm"
     env:
-      TARGET: ${{ matrix.target }}
+      TARGET: ${{ matrix.rust_target }}
+      PLATFORM_SLUG: ${{ matrix.platform_slug }}
+      PLATFORM_PACKAGE: ${{ matrix.platform_package }}
       VERSION: ${{ needs.release.outputs.version }}
       RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
       DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
@@ -278,23 +292,10 @@ jobs:
       - name: Summarize unsigned macOS preview mode
         if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
         run: |
-          case "${TARGET}" in
-            aarch64-apple-darwin)
-              platform_package="macos-apple-silicon DMG"
-              ;;
-            x86_64-apple-darwin)
-              platform_package="macos-intel DMG"
-              ;;
-            *)
-              echo "::error::unsupported macOS signing target '${TARGET}'"
-              exit 1
-              ;;
-          esac
-
           {
             echo "## macOS Signing Gate"
             echo ""
-            echo "- Platform/package: ${platform_package}"
+            echo "- Platform/package: ${PLATFORM_PACKAGE}"
             echo "- Desktop signing mode: unsigned-preview"
             echo "- macOS signing status: unsigned preview recorded"
             echo "- Release completion: allowed for internal/pre-alpha distribution evidence."
@@ -306,19 +307,6 @@ jobs:
           DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
         run: |
           set -euo pipefail
-
-          case "${TARGET}" in
-            x86_64-pc-windows-msvc)
-              platform_package="windows-x64 setup executable, plus MSI when emitted"
-              ;;
-            aarch64-pc-windows-msvc)
-              platform_package="windows-arm64 setup executable, plus MSI when emitted"
-              ;;
-            *)
-              echo "::error::unsupported Windows signing target '${TARGET}'"
-              exit 1
-              ;;
-          esac
 
           mode="${DESKTOP_SIGNING_MODE}"
           if [[ -z "${mode}" ]]; then
@@ -344,7 +332,7 @@ jobs:
           {
             echo "## Windows Installer Signing Gate"
             echo ""
-            echo "- Platform/package: ${platform_package}"
+            echo "- Platform/package: ${PLATFORM_PACKAGE}"
             echo "- App installer artifact class: Tauri Windows installer bundle"
             echo "- Primary Windows installer family: NSIS setup executable (-setup.exe)"
             echo "- Secondary Windows installer family: MSI, when emitted by Tauri"
@@ -381,7 +369,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: skenion-studio-desktop-release-${{ matrix.target }}
+          prefix-key: skenion-studio-desktop-release-${{ matrix.platform_slug }}
           cache-all-crates: "true"
           cache-on-failure: "true"
           workspaces: src-tauri -> target
@@ -640,7 +628,7 @@ jobs:
           includeUpdaterJson: false
           projectPath: .
           tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
+          args: --target ${{ matrix.rust_target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - name: Build signed Tauri desktop package (macOS)
         if: runner.os == 'macOS' && needs.release.outputs.desktop_signing_mode != 'unsigned-preview'
@@ -658,7 +646,7 @@ jobs:
           includeUpdaterJson: false
           projectPath: .
           tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
+          args: --target ${{ matrix.rust_target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - name: Build Tauri desktop package (non-macOS)
         if: runner.os != 'macOS'
@@ -670,7 +658,7 @@ jobs:
           includeUpdaterJson: false
           projectPath: .
           tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
+          args: --target ${{ matrix.rust_target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - id: package_studio_desktop
         name: Collect skenion studio desktop installers
@@ -703,35 +691,10 @@ jobs:
 
       - name: Summarize desktop package
         run: |
-          case "${TARGET}" in
-            aarch64-apple-darwin)
-              platform_package="macos-apple-silicon DMG"
-              ;;
-            x86_64-apple-darwin)
-              platform_package="macos-intel DMG"
-              ;;
-            x86_64-pc-windows-msvc)
-              platform_package="windows-x64 setup executable, plus MSI when emitted"
-              ;;
-            aarch64-pc-windows-msvc)
-              platform_package="windows-arm64 setup executable, plus MSI when emitted"
-              ;;
-            x86_64-unknown-linux-gnu)
-              platform_package="linux-x64 deb/rpm"
-              ;;
-            aarch64-unknown-linux-gnu)
-              platform_package="linux-arm64 deb/rpm"
-              ;;
-            *)
-              echo "::error::unsupported desktop packaging target '${TARGET}'"
-              exit 1
-              ;;
-          esac
-
           {
             echo "## skenion studio Desktop Package"
             echo ""
-            echo "- Platform/package: ${platform_package}"
+            echo "- Platform/package: ${PLATFORM_PACKAGE}"
             echo "- Tier: ${{ matrix.tier }}"
             echo "- Runtime release manifest tag: ${RUNTIME_TAG}"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
