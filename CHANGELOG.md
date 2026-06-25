@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* **ci:** trust studio s3 uploads before cdn propagation ([dd2f571](https://github.com/skenion/skenion-studio/commit/dd2f5717465705fe3e176e5ea1537a56580351d0)), closes [#156](https://github.com/skenion/skenion-studio/issues/156)
+* **ci:** trust studio s3 uploads before cdn propagation ([dd2f571](https://github.com/skenion/skenion-studio/commit/dd2f5717465705fe3e176e5ea1537a56580351d0)), refs [#156](https://github.com/skenion/skenion-studio/issues/156)
 
 ## [0.44.6](https://github.com/skenion/skenion-studio/compare/v0.44.5...v0.44.6) (2026-06-25)
 
