@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.16](https://github.com/skenion/skenion-studio/compare/v0.44.15...v0.44.16) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** accept versioned runtime executable names ([#185](https://github.com/skenion/skenion-studio/issues/185)) ([2c35b55](https://github.com/skenion/skenion-studio/commit/2c35b556c658d06d3bebe203c07bb8505f613a5b))
+
 ## [0.44.15](https://github.com/skenion/skenion-studio/compare/v0.44.14...v0.44.15) (2026-06-25)
 
 
