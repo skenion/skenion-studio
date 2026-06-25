@@ -1,6 +1,6 @@
 [package]
 name = "skenion-studio"
-version = "0.44.7"
+version = "0.44.8"
 description = "Desktop shell for skenion studio"
 authors = ["skenion contributors"]
 edition = "2021"

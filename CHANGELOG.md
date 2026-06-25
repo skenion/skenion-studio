@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.8](https://github.com/skenion/skenion-studio/compare/v0.44.7...v0.44.8) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** stage runtime sidecars from dsub release links ([#167](https://github.com/skenion/skenion-studio/issues/167)) ([8a16321](https://github.com/skenion/skenion-studio/commit/8a163214618ce60c07b0b288d37734aa76de2d6c))
+
 ## [0.44.7](https://github.com/skenion/skenion-studio/compare/v0.44.6...v0.44.7) (2026-06-25)
 
 
