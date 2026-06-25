@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.3](https://github.com/skenion/skenion-studio/compare/v0.44.2...v0.44.3) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** validate studio release artifact policy ([5162dd0](https://github.com/skenion/skenion-studio/commit/5162dd0052b5723f2f02e3fc985f9fea2bdc54ba))
+
 ## [0.44.2](https://github.com/skenion/skenion-studio/compare/v0.44.1...v0.44.2) (2026-06-24)
 
 
