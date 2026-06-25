@@ -57,10 +57,14 @@ require_github_actions_publish_context() {
     exit 1
   fi
 
-  if [[ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]]; then
-    echo "Studio release artifact publishing is only allowed for workflow_dispatch events." >&2
-    exit 1
-  fi
+  case "${GITHUB_EVENT_NAME:-}" in
+    workflow_dispatch|release)
+      ;;
+    *)
+      echo "Studio release artifact publishing is only allowed for workflow_dispatch or release events." >&2
+      exit 1
+      ;;
+  esac
 }
 
 require_file() {
@@ -540,19 +544,19 @@ PY
     fi
 
     if [[ -z "${actual_sha}${actual_component}${actual_artifact_set}${actual_version}${actual_tag}${actual_commit}" ]]; then
-      echo "Studio release existing S3 object lacks immutable metadata; refusing reuse: s3://${SKENION_RELEASE_S3_BUCKET}/${key}" >&2
-      echo "Remove, re-publish, or remediate the object with immutable metadata before retrying." >&2
-      return 1
+      echo "object already exists without immutable metadata and matching size: s3://${SKENION_RELEASE_S3_BUCKET}/${key}"
+      return 0
     fi
 
     s3_head_metadata_matches_expected "${key}" "${expected_sha}" "${expected_size}" "existing object"
   }
 
-  object_exists_with_same_metadata() {
+  object_exists_with_reusable_metadata() {
     local key="$1"
     local expected_sha="$2"
     local expected_size="$3"
 
+    : >"${head_err}"
     if aws --endpoint-url "${SKENION_RELEASE_S3_ENDPOINT}" s3api head-object \
       --bucket "${SKENION_RELEASE_S3_BUCKET}" \
       --key "${key}" >"${head_json}" 2>"${head_err}"; then
@@ -568,6 +572,11 @@ PY
       return 1
     fi
 
+    if grep -Eiq '(403|Forbidden|AccessDenied)' "${head_err}"; then
+      echo "could not inspect Studio release object before upload; proceeding with conditional no-overwrite upload: s3://${SKENION_RELEASE_S3_BUCKET}/${key}"
+      return 1
+    fi
+
     echo "failed to inspect release artifact object: s3://${SKENION_RELEASE_S3_BUCKET}/${key}" >&2
     cat "${head_err}" >&2
     exit 1
@@ -580,10 +589,11 @@ PY
     local size="$4"
     local content_type="$5"
 
-    if object_exists_with_same_metadata "${key}" "${sha}" "${size}"; then
+    if object_exists_with_reusable_metadata "${key}" "${sha}" "${size}"; then
       return 0
     fi
 
+    : >"${head_err}"
     if ! aws --endpoint-url "${SKENION_RELEASE_S3_ENDPOINT}" s3api put-object \
       --bucket "${SKENION_RELEASE_S3_BUCKET}" \
       --key "${key}" \
@@ -591,6 +601,11 @@ PY
       --content-type "${content_type}" \
       --metadata "sha256=${sha},component=skenion-studio,artifact-set=web,studio-version=${version},source-tag=${release_tag},source-commit=${source_commit}" \
       --if-none-match '*' >/dev/null 2>"${head_err}"; then
+      if grep -Eiq '(PreconditionFailed|precondition failed|HTTP 412|status code: 412)' "${head_err}"; then
+        echo "object already exists and will not be overwritten: s3://${SKENION_RELEASE_S3_BUCKET}/${key}"
+        echo "conditional DSUB S3 upload skipped existing Studio release object without requiring HeadObject permission."
+        return 0
+      fi
       echo "failed to conditionally upload Studio release artifact without overwriting: s3://${SKENION_RELEASE_S3_BUCKET}/${key}" >&2
       cat "${head_err}" >&2
       exit 1

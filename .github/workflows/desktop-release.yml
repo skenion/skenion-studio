@@ -1,6 +1,8 @@
 name: Desktop Release
 
 on:
+  repository_dispatch:
+    types: [studio-desktop-release-publish]
   workflow_dispatch:
     inputs:
       tag:
@@ -30,16 +32,16 @@ permissions:
   contents: write
 
 concurrency:
-  group: studio-desktop-release-${{ inputs.tag }}
+  group: studio-desktop-release-${{ github.event_name == 'repository_dispatch' && github.event.client_payload.tag || inputs.tag }}
   cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_TAG: ${{ inputs.tag }}
-  RELEASE_MODE: ${{ inputs['release-mode'] }}
-  RUNTIME_MANIFEST_URL: ${{ inputs['runtime-manifest-url'] }}
-  RUNTIME_TAG: ${{ inputs['runtime-tag'] }}
-  DESKTOP_SIGNING_MODE: ${{ inputs['desktop-signing-mode'] }}
+  RELEASE_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.tag || inputs.tag }}
+  RELEASE_MODE: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_mode || inputs['release-mode'] }}
+  RUNTIME_MANIFEST_URL: ${{ github.event_name == 'repository_dispatch' && '' || inputs['runtime-manifest-url'] }}
+  RUNTIME_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.runtime_tag || inputs['runtime-tag'] }}
+  DESKTOP_SIGNING_MODE: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.desktop_signing_mode || inputs['desktop-signing-mode'] }}
 
 jobs:
   release:

@@ -1,6 +1,8 @@
 name: Studio Release Artifacts
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -8,8 +10,8 @@ on:
         required: true
         type: string
       runtime-tag:
-        description: Exact Runtime release tag to record for release metadata, for example v0.46.0
-        required: true
+        description: Optional Runtime release tag override; defaults to release/runtime-release.json
+        required: false
         type: string
       release-mode:
         description: Release mode; publish uploads DSUB web artifacts, verify packs only
@@ -24,15 +26,15 @@ permissions:
   id-token: write
 
 concurrency:
-  group: studio-release-artifacts-${{ inputs.tag }}
+  group: studio-release-artifacts-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NPM_REGISTRY: https://registry.npmjs.org/
-  RELEASE_TAG: ${{ inputs.tag }}
-  RELEASE_MODE: ${{ inputs['release-mode'] }}
-  RUNTIME_TAG: ${{ inputs['runtime-tag'] }}
+  RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+  RELEASE_MODE: ${{ github.event_name == 'release' && 'publish' || inputs['release-mode'] }}
+  RUNTIME_TAG_INPUT: ${{ inputs['runtime-tag'] }}
 
 jobs:
   release-artifacts:
@@ -50,13 +52,17 @@ jobs:
       desktop_manifest_url: ${{ steps.dsub_metadata.outputs.desktop_manifest_url }}
       dsub_index_url: ${{ steps.dsub_metadata.outputs.index_url }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+
       - id: validate
         name: Validate release request
         shell: bash
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
           RELEASE_MODE: ${{ env.RELEASE_MODE }}
-          RUNTIME_TAG: ${{ env.RUNTIME_TAG }}
+          RUNTIME_TAG_INPUT: ${{ env.RUNTIME_TAG_INPUT }}
         run: |
           set -euo pipefail
 
@@ -67,12 +73,30 @@ jobs:
 
           version="${RELEASE_TAG#v}"
 
-          if [[ -z "${RUNTIME_TAG}" ]]; then
-            echo "::error::runtime-tag is required so Studio release artifacts record the exact Runtime release metadata target."
-            exit 1
+          runtime_tag="${RUNTIME_TAG_INPUT:-}"
+          if [[ -z "${runtime_tag}" ]]; then
+            runtime_tag="$(node <<'NODE'
+          const fs = require("node:fs");
+          const pinPath = "release/runtime-release.json";
+          if (!fs.existsSync(pinPath)) {
+            console.error(`::error::${pinPath} is required when runtime-tag is not explicitly provided.`);
+            process.exit(1);
+          }
+          const pin = JSON.parse(fs.readFileSync(pinPath, "utf8"));
+          if (pin.schema !== "skenion.studio.runtimeReleasePin.v1") {
+            console.error(`::error::${pinPath} schema must be skenion.studio.runtimeReleasePin.v1.`);
+            process.exit(1);
+          }
+          if (typeof pin.runtimeTag !== "string" || pin.runtimeTag.length === 0) {
+            console.error(`::error::${pinPath} runtimeTag must be a non-empty string.`);
+            process.exit(1);
+          }
+          console.log(pin.runtimeTag);
+          NODE
+            )"
           fi
-          if [[ ! "${RUNTIME_TAG}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "::error::runtime-tag must be vx.y.z; got '${RUNTIME_TAG}'."
+          if [[ ! "${runtime_tag}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::runtime-tag must be vx.y.z; got '${runtime_tag}'."
             exit 1
           fi
 
@@ -92,7 +116,7 @@ jobs:
           {
             echo "tag_ref=refs/tags/${RELEASE_TAG}"
             echo "version=${version}"
-            echo "runtime_tag=${RUNTIME_TAG}"
+            echo "runtime_tag=${runtime_tag}"
             echo "upload_release_assets=${upload_release_assets}"
           } >> "${GITHUB_OUTPUT}"
 
@@ -130,6 +154,7 @@ jobs:
           const missingFiles = new Set();
           const requiredFiles = [
             ".github/workflows/studio-release-artifacts.yml",
+            "release/runtime-release.json",
             "package.json",
             "pnpm-lock.yaml",
             "scripts/publish-studio-asset-s3.sh",
@@ -458,12 +483,33 @@ jobs:
         if: steps.validate.outputs.upload_release_assets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          RUNTIME_TAG: ${{ steps.validate.outputs.runtime_tag }}
           SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}
         run: |
           node .release-tools/scripts/update-studio-release-status.mjs \
             --mode web-artifacts-published \
             --tag "${RELEASE_TAG}" \
             --runtime-tag "${RUNTIME_TAG}"
+
+      - name: Trigger desktop release publish
+        if: steps.validate.outputs.upload_release_assets == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          RUNTIME_TAG: ${{ steps.validate.outputs.runtime_tag }}
+        run: |
+          set -euo pipefail
+          cat >repository-dispatch.json <<JSON
+          {
+            "event_type": "studio-desktop-release-publish",
+            "client_payload": {
+              "tag": "${RELEASE_TAG}",
+              "runtime_tag": "${RUNTIME_TAG}",
+              "release_mode": "publish",
+              "desktop_signing_mode": "unsigned-preview"
+            }
+          }
+          JSON
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input repository-dispatch.json
 
       - name: Summarize release artifacts
         shell: bash

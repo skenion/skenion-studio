@@ -153,6 +153,10 @@ case "${command_name}" in
         done
 
         echo "head ${bucket}/${key}" >>"${log}"
+        if [[ "${STUB_AWS_HEAD_FORBIDDEN:-}" == "1" ]]; then
+          echo "An error occurred (403) when calling the HeadObject operation: Forbidden" >&2
+          exit 255
+        fi
         path="${root}/${bucket}/${key}"
         if [[ ! -f "${path}" ]]; then
           echo "An error occurred (404) when calling the HeadObject operation: Not Found" >&2
@@ -444,6 +448,27 @@ assert_github_actions_guard_case() {
   fi
 }
 
+assert_github_event_allowlist_case() {
+  local dispatch_case_dir="${tmp_root}/github-event-repository-dispatch"
+  local push_case_dir="${tmp_root}/github-event-push"
+
+  prepare_case "${dispatch_case_dir}" "studio desktop repository dispatch event installer"
+  run_publisher "${dispatch_case_dir}" GITHUB_EVENT_NAME=repository_dispatch >"${dispatch_case_dir}/output.log" 2>&1
+  grep -q 'uploaded Studio desktop release object' "${dispatch_case_dir}/output.log"
+
+  prepare_case "${push_case_dir}" "studio desktop push event installer"
+  if run_publisher "${push_case_dir}" GITHUB_EVENT_NAME=push >"${push_case_dir}/output.log" 2>&1; then
+    echo "expected GitHub push event desktop publisher case to fail" >&2
+    exit 1
+  fi
+
+  grep -q 'only allowed for workflow_dispatch or repository_dispatch events' "${push_case_dir}/output.log"
+  if grep -q '^put ' "${push_case_dir}/aws.log"; then
+    echo "desktop publisher reached S3 stub despite GitHub event guard refusal" >&2
+    exit 1
+  fi
+}
+
 assert_success_case() {
   local case_dir="${tmp_root}/success"
   local index_path
@@ -485,7 +510,9 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as fh:
     events = [line.strip() for line in fh if line.strip()]
 
+heads = [(index, event.removeprefix("head ")) for index, event in enumerate(events) if event.startswith("head ")]
 puts = [(index, event.removeprefix("put ")) for index, event in enumerate(events) if event.startswith("put ")]
+assert len(heads) == 3, events
 assert len(puts) == 3, events
 for index, key in puts:
     assert any(event == f"head {key}" for event in events[:index]), (key, events)
@@ -554,12 +581,12 @@ assert_no_clobber_case() {
   write_stub_metadata "${existing}" "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
   if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected no-clobber publisher case to fail" >&2
+    echo "expected no-clobber publisher case to fail when HeadObject metadata mismatches" >&2
     exit 1
   fi
 
   grep -q 'refusing to overwrite existing Studio desktop release artifact' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
+  if grep -q "^put ${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${package_id}/$(basename "${asset_path}")$" "${case_dir}/aws.log"; then
     echo "publisher uploaded despite no-clobber refusal" >&2
     exit 1
   fi
@@ -590,7 +617,7 @@ assert_existing_matching_metadata_skips_upload_case() {
   fi
 }
 
-assert_existing_missing_metadata_fails_case() {
+assert_existing_missing_metadata_matching_size_reuses_case() {
   local case_dir="${tmp_root}/existing-missing-metadata"
   local asset_path
   local existing
@@ -601,14 +628,50 @@ assert_existing_missing_metadata_fails_case() {
   mkdir -p "$(dirname "${existing}")"
   cp "${asset_path}" "${existing}"
 
-  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected metadata-free existing desktop object case to fail" >&2
+  run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1
+
+  grep -q 'object already exists without immutable metadata and matching size' "${case_dir}/output.log"
+  grep -q 'object already exists and will not be overwritten' "${case_dir}/output.log"
+  if grep -q "^put ${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${package_id}/$(basename "${asset_path}")$" "${case_dir}/aws.log"; then
+    echo "publisher uploaded despite metadata-free existing desktop object refusal" >&2
     exit 1
   fi
+}
 
-  grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
-    echo "publisher uploaded despite metadata-free existing desktop object refusal" >&2
+assert_head_403_upload_succeeds_case() {
+  local case_dir="${tmp_root}/head-403-upload-succeeds"
+
+  prepare_case "${case_dir}" "studio desktop head 403 upload succeeds installer"
+  run_publisher "${case_dir}" STUB_AWS_HEAD_FORBIDDEN=1 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'proceeding with conditional no-overwrite upload' "${case_dir}/output.log"
+  grep -q 'uploaded Studio desktop release object' "${case_dir}/output.log"
+  if ! grep -q '^put ' "${case_dir}/aws.log"; then
+    echo "desktop publisher did not conditionally upload after HeadObject 403" >&2
+    exit 1
+  fi
+}
+
+assert_head_403_precondition_reuses_case() {
+  local case_dir="${tmp_root}/head-403-precondition-reuses"
+  local asset_path
+  local asset_key
+  local existing
+
+  prepare_case "${case_dir}" "studio desktop head 403 precondition installer"
+  asset_path="$(asset_path_for "${case_dir}")"
+  asset_key="${prefix}/skenion-studio/${release_tag}/desktop/${package_id}/$(basename "${asset_path}")"
+  existing="${case_dir}/s3/${bucket}/${asset_key}"
+  mkdir -p "$(dirname "${existing}")"
+  printf 'existing remote installer\n' >"${existing}"
+
+  run_publisher "${case_dir}" STUB_AWS_HEAD_FORBIDDEN=1 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'proceeding with conditional no-overwrite upload' "${case_dir}/output.log"
+  grep -q 'object already exists and will not be overwritten' "${case_dir}/output.log"
+  grep -q 'without requiring HeadObject permission' "${case_dir}/output.log"
+  if grep -q "^put ${bucket}/${asset_key}$" "${case_dir}/aws.log"; then
+    echo "desktop publisher overwrote existing object after HeadObject 403" >&2
     exit 1
   fi
 }
@@ -641,11 +704,14 @@ assert_strict_public_content_failure_case() {
 
 install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
+assert_github_event_allowlist_case
 assert_success_case
 assert_secretless_dry_run_defaults_case
 assert_no_clobber_case
 assert_existing_matching_metadata_skips_upload_case
-assert_existing_missing_metadata_fails_case
+assert_existing_missing_metadata_matching_size_reuses_case
+assert_head_403_upload_succeeds_case
+assert_head_403_precondition_reuses_case
 assert_strict_public_content_length_failure_case
 assert_strict_public_content_failure_case
 
