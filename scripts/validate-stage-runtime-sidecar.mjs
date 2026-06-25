@@ -34,7 +34,9 @@ try {
   const artifact = await createRuntimeBinary(tempDir, linuxFixture);
   const server = await startFixtureServer(artifact);
   try {
-    await validateReleaseBodyFallbackRejected(server.origin, artifact);
+    await validateReleaseModeDsubManifestDerivation(server.origin, artifact);
+    await validateReleaseModeS3DsubManifestDerivation(server, artifact);
+    await validateReleaseModeMissingDsubManifestFails(server.origin, artifact);
     await validateManifestUrlStaging(server.origin, artifact);
     await validateLocalReleaseBodyStaging(server.origin, artifact);
     await validateLocalS3ReleaseBodyStaging(server, artifact);
@@ -86,17 +88,110 @@ function runtimeFixture({ target, platformSlug, platformLabel, artifactName, exe
   };
 }
 
-async function validateReleaseBodyFallbackRejected(origin, artifact) {
+async function validateReleaseModeDsubManifestDerivation(origin, artifact) {
   const releaseJson = await writeReleaseJson(
-    `release-body-rejected-${artifact.fixture.platformSlug}`,
+    `release-mode-dsub-manifest-${artifact.fixture.platformSlug}`,
     runtimeDownloadsBody({
       fixture: artifact.fixture,
       binaryUrl: binaryUrl(origin, artifact.fixture),
       checksumUrl: checksumUrl(origin, artifact.fixture)
     })
   );
+  const outputDir = path.join(tempDir, `release-mode-dsub-output-${artifact.fixture.platformSlug}`);
+  const result = await runStage([
+    "--runtime-tag",
+    releaseTag,
+    "--target",
+    artifact.fixture.target,
+    "--mode",
+    "verify",
+    "--runtime-release-json",
+    releaseJson,
+    "--output-dir",
+    outputDir
+  ]);
+
+  if (result.code !== 0) {
+    failures.push(`release mode should derive and validate the DSUB Runtime manifest; got ${result.code}: ${result.stderr || result.stdout}`);
+    return;
+  }
+
+  const stagedBinary = path.join(outputDir, `skenion-runtime-${artifact.fixture.target}`);
+  const staged = await fs.readFile(stagedBinary, "utf8");
+  if (staged !== artifact.binaryContents) {
+    failures.push("release mode DSUB manifest derivation copied the wrong Runtime binary content.");
+  }
+}
+
+async function validateReleaseModeS3DsubManifestDerivation(server, artifact) {
+  const releaseJson = await writeReleaseJson(
+    "release-mode-s3-dsub-manifest",
+    runtimeDownloadsBody({
+      fixture: artifact.fixture,
+      binaryUrl: binaryUrl(server.origin, artifact.fixture),
+      checksumUrl: checksumUrl(server.origin, artifact.fixture)
+    })
+  );
+  const s3Fixture = await createS3Fixture(artifact);
+  const fakeAws = await createFakeAwsCli();
+  const outputDir = path.join(tempDir, "release-mode-s3-output");
+  const requestsBefore = { ...server.requests };
+  const result = await runStage(
+    [
+      "--runtime-tag",
+      releaseTag,
+      "--target",
+      artifact.fixture.target,
+      "--mode",
+      "publish",
+      "--runtime-release-json",
+      releaseJson,
+      "--runtime-artifact-source",
+      "s3",
+      "--output-dir",
+      outputDir
+    ],
+    runtimeS3Env({
+      fakeAws,
+      s3Fixture,
+      publicBaseUrl: `${server.origin}/skenion/releases`
+    })
+  );
+
+  if (result.code !== 0) {
+    failures.push(`release mode S3 staging should derive DSUB manifest then copy S3 objects; got ${result.code}: ${result.stderr || result.stdout}`);
+    return;
+  }
+
+  if (server.requests.manifest <= requestsBefore.manifest) {
+    failures.push("release mode S3 staging did not fetch the DSUB Runtime manifest derived from the release body.");
+  }
+  if (server.requests.binary !== requestsBefore.binary || server.requests.checksum !== requestsBefore.checksum) {
+    failures.push("release mode S3 staging should not download the Runtime binary or SHA-256 through public HTTP.");
+  }
+
+  const stagedBinary = path.join(outputDir, `skenion-runtime-${artifact.fixture.target}`);
+  const staged = await fs.readFile(stagedBinary, "utf8");
+  if (staged !== artifact.binaryContents) {
+    failures.push("release mode S3 staging copied the wrong Runtime binary content.");
+  }
+}
+
+async function validateReleaseModeMissingDsubManifestFails(origin, artifact) {
+  const missingFixture = {
+    ...artifact.fixture,
+    artifactPathPrefix: `/missing/skenion/releases/skenion-runtime/${releaseTag}/${artifact.fixture.platformSlug}`
+  };
+  const releaseJson = await writeReleaseJson(
+    "release-mode-missing-dsub-manifest",
+    runtimeDownloadsBody({
+      fixture: artifact.fixture,
+      binaryUrl: binaryUrl(origin, missingFixture),
+      checksumUrl: checksumUrl(origin, missingFixture)
+    })
+  );
   await expectStageFailure(
-    "release-body fallback in verify mode",
+    "release mode missing DSUB manifest",
     [
       "--runtime-tag",
       releaseTag,
@@ -107,7 +202,7 @@ async function validateReleaseBodyFallbackRejected(origin, artifact) {
       "--runtime-release-json",
       releaseJson
     ],
-    "release-body fallback is only allowed with --mode local"
+    "Could not download Runtime release artifact manifest"
   );
 }
 
@@ -566,7 +661,8 @@ copyFileSync(path.join(process.env.FAKE_S3_ROOT, match[1], match[2]), destinatio
 async function startFixtureServer(artifact) {
   const requests = {
     binary: 0,
-    checksum: 0
+    checksum: 0,
+    manifest: 0
   };
   const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
@@ -589,6 +685,7 @@ async function startFixtureServer(artifact) {
       return;
     }
     if (requestUrl.pathname === `${artifact.fixture.artifactPathPrefix}/${artifact.fixture.artifactName}.manifest.json`) {
+      requests.manifest += 1;
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(runtimeManifest(origin, artifact), null, 2));
       return;

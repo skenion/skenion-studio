@@ -675,8 +675,8 @@ function checkRuntimeSidecarPolicy() {
   expectIncludes(
     stageRuntimePath,
     stageRuntime,
-    "function defaultRuntimeManifestUrl()",
-    "Runtime sidecar staging must derive manifest evidence from Runtime tag and platform slug when no override is supplied"
+    "function runtimeManifestUrlFromReleaseBody(release, source)",
+    "Runtime sidecar staging must derive manifest evidence from the Runtime release body DSUB downloads table when no override is supplied"
   );
   expectIncludes(
     stageRuntimePath,

@@ -105,9 +105,6 @@ if (options.manifest && manifestUrl) {
 if (runtimeReleaseJson && (options.manifest || manifestUrl)) {
   fail("--runtime-release-json cannot be combined with manifest inputs.");
 }
-if (runtimeReleaseJson && mode !== "local") {
-  fail("--runtime-release-json release-body fallback is only allowed with --mode local; release packaging requires Runtime manifest evidence.");
-}
 if (options.checkManifestOnly && !options.manifest) {
   fail("--manifest is required with --check-manifest-only.");
 }
@@ -216,30 +213,13 @@ async function loadRuntimeArtifact() {
   }
 
   if (manifestUrl) {
-    const manifest = await fetchJson(manifestUrl, "Runtime release artifact manifest");
-    return {
-      source: manifestUrl,
-      ...validateRuntimeManifest(manifest, {
-        expectedArtifactName: assetName,
-        expectedChecksumName: checksumAssetName,
-        expectedManifestName: manifestAssetName,
-        manifestSource: manifestUrl
-      })
-    };
+    return loadRuntimeManifestUrl(manifestUrl);
   }
 
   if (releaseModeNames.has(mode)) {
-    const derivedManifestUrl = defaultRuntimeManifestUrl();
-    const manifest = await fetchJson(derivedManifestUrl, "Runtime release artifact manifest");
-    return {
-      source: derivedManifestUrl,
-      ...validateRuntimeManifest(manifest, {
-        expectedArtifactName: assetName,
-        expectedChecksumName: checksumAssetName,
-        expectedManifestName: manifestAssetName,
-        manifestSource: derivedManifestUrl
-      })
-    };
+    const releaseEvidence = await loadRuntimeRelease();
+    const derivedManifestUrl = runtimeManifestUrlFromReleaseBody(releaseEvidence.release, releaseEvidence.source);
+    return loadRuntimeManifestUrl(derivedManifestUrl);
   }
 
   if (mode !== "local") {
@@ -253,8 +233,17 @@ async function loadRuntimeArtifact() {
   };
 }
 
-function defaultRuntimeManifestUrl() {
-  return `https://github.com/${runtimeRepo}/releases/download/${releaseTag}/${manifestAssetName}`;
+async function loadRuntimeManifestUrl(url) {
+  const manifest = await fetchJson(url, "Runtime release artifact manifest");
+  return {
+    source: url,
+    ...validateRuntimeManifest(manifest, {
+      expectedArtifactName: assetName,
+      expectedChecksumName: checksumAssetName,
+      expectedManifestName: manifestAssetName,
+      manifestSource: url
+    })
+  };
 }
 
 async function getRelease(repo, tag) {
@@ -356,11 +345,7 @@ function validateManifestTarget(manifest) {
 }
 
 function runtimeArtifactFromReleaseBody(release, source) {
-  assertPlainObject(release, "Runtime release");
-  assertEqual(release.tag_name, releaseTag, "release.tag_name");
-  const body = requireNonEmptyString(release.body, "release.body");
-  const section = runtimeDownloadsSection(body, source);
-  const row = runtimeDownloadsRow(section, source);
+  const row = runtimeDownloadsRowFromRelease(release, source);
   const binaryUrl = requireRuntimeArtifactUrl(
     requireHttpUrlFromCell(row.binary, `Runtime downloads table binary URL for ${target}`),
     "Runtime downloads table binary URL",
@@ -378,6 +363,36 @@ function runtimeArtifactFromReleaseBody(release, source) {
     manifestFilename: `${source} downloads table`,
     binaryFormat: "raw-binary"
   };
+}
+
+function runtimeManifestUrlFromReleaseBody(release, source) {
+  const row = runtimeDownloadsRowFromRelease(release, source);
+  const binaryUrl = requireRuntimeArtifactUrl(
+    requireHttpUrlFromCell(row.binary, `Runtime downloads table binary URL for ${target}`),
+    "Runtime downloads table binary URL",
+    assetName
+  );
+  const parsed = new URL(binaryUrl);
+  const lastSlash = parsed.pathname.lastIndexOf("/");
+  if (lastSlash === -1) {
+    fail(`Runtime downloads table binary URL from ${source} does not include a filename path.`);
+  }
+  parsed.pathname = `${parsed.pathname.slice(0, lastSlash + 1)}${manifestAssetName}`;
+  parsed.search = "";
+  parsed.hash = "";
+  return requireRuntimeArtifactUrl(
+    parsed.toString(),
+    `Runtime manifest URL derived from ${source}`,
+    manifestAssetName
+  );
+}
+
+function runtimeDownloadsRowFromRelease(release, source) {
+  assertPlainObject(release, "Runtime release");
+  assertEqual(release.tag_name, releaseTag, "release.tag_name");
+  const body = requireNonEmptyString(release.body, "release.body");
+  const section = runtimeDownloadsSection(body, source);
+  return runtimeDownloadsRow(section, source);
 }
 
 async function stageRuntimeBinary(runtimeArtifact, artifactPath, tempDirPath) {
