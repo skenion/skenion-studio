@@ -278,10 +278,23 @@ jobs:
       - name: Summarize unsigned macOS preview mode
         if: needs.release.outputs.upload_release_assets == 'true' && runner.os == 'macOS' && matrix.release_blocking == true && needs.release.outputs.desktop_signing_mode == 'unsigned-preview'
         run: |
+          case "${TARGET}" in
+            aarch64-apple-darwin)
+              platform_package="macos-apple-silicon DMG"
+              ;;
+            x86_64-apple-darwin)
+              platform_package="macos-intel DMG"
+              ;;
+            *)
+              echo "::error::unsupported macOS signing target '${TARGET}'"
+              exit 1
+              ;;
+          esac
+
           {
             echo "## macOS Signing Gate"
             echo ""
-            echo "- Target: ${TARGET}"
+            echo "- Platform/package: ${platform_package}"
             echo "- Desktop signing mode: unsigned-preview"
             echo "- macOS signing status: unsigned preview recorded"
             echo "- Release completion: allowed for internal/pre-alpha distribution evidence."
@@ -293,6 +306,19 @@ jobs:
           DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
         run: |
           set -euo pipefail
+
+          case "${TARGET}" in
+            x86_64-pc-windows-msvc)
+              platform_package="windows-x64 setup executable, plus MSI when emitted"
+              ;;
+            aarch64-pc-windows-msvc)
+              platform_package="windows-arm64 setup executable, plus MSI when emitted"
+              ;;
+            *)
+              echo "::error::unsupported Windows signing target '${TARGET}'"
+              exit 1
+              ;;
+          esac
 
           mode="${DESKTOP_SIGNING_MODE}"
           if [[ -z "${mode}" ]]; then
@@ -318,7 +344,7 @@ jobs:
           {
             echo "## Windows Installer Signing Gate"
             echo ""
-            echo "- Target: ${TARGET}"
+            echo "- Platform/package: ${platform_package}"
             echo "- App installer artifact class: Tauri Windows installer bundle"
             echo "- Primary Windows installer family: NSIS setup executable (-setup.exe)"
             echo "- Secondary Windows installer family: MSI, when emitted by Tauri"
@@ -677,10 +703,35 @@ jobs:
 
       - name: Summarize desktop package
         run: |
+          case "${TARGET}" in
+            aarch64-apple-darwin)
+              platform_package="macos-apple-silicon DMG"
+              ;;
+            x86_64-apple-darwin)
+              platform_package="macos-intel DMG"
+              ;;
+            x86_64-pc-windows-msvc)
+              platform_package="windows-x64 setup executable, plus MSI when emitted"
+              ;;
+            aarch64-pc-windows-msvc)
+              platform_package="windows-arm64 setup executable, plus MSI when emitted"
+              ;;
+            x86_64-unknown-linux-gnu)
+              platform_package="linux-x64 deb/rpm"
+              ;;
+            aarch64-unknown-linux-gnu)
+              platform_package="linux-arm64 deb/rpm"
+              ;;
+            *)
+              echo "::error::unsupported desktop packaging target '${TARGET}'"
+              exit 1
+              ;;
+          esac
+
           {
             echo "## skenion studio Desktop Package"
             echo ""
-            echo "- Target: ${TARGET}"
+            echo "- Platform/package: ${platform_package}"
             echo "- Tier: ${{ matrix.tier }}"
             echo "- Runtime release manifest tag: ${RUNTIME_TAG}"
             echo "- Tauri bundle args: ${TAURI_BUNDLE_ARGS:-native defaults}"
@@ -691,8 +742,8 @@ jobs:
               echo "- Desktop installer contents: ${{ steps.package_studio_desktop.outputs.artifact_count }} Tauri installer artifact(s)"
               echo "- Desktop installer DSUB links:"
               cat <<'SKENION_DESKTOP_LINKS'
-${{ steps.publish_desktop.outputs.desktop_artifact_summary }}
-SKENION_DESKTOP_LINKS
+          ${{ steps.publish_desktop.outputs.desktop_artifact_summary }}
+          SKENION_DESKTOP_LINKS
             fi
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
               echo "- Windows app installer family: primary NSIS setup executable (-setup.exe), secondary MSI when emitted"

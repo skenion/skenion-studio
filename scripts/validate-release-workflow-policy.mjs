@@ -48,6 +48,7 @@ checkNoGithubReleaseUploads(studioReleaseWorkflowPath, studioReleaseWorkflow);
 checkNoGithubReleaseUploads(desktopReleaseWorkflowPath, desktopReleaseWorkflow);
 checkNoDirectS3WorkflowUpload(studioReleaseWorkflowPath, studioReleaseWorkflow);
 checkNoDirectS3WorkflowUpload(desktopReleaseWorkflowPath, desktopReleaseWorkflow);
+checkWorkflowSyntaxGuards();
 checkReleaseWorkflows();
 checkPublisherScripts();
 checkDesktopPackaging();
@@ -179,6 +180,8 @@ function checkReleaseWorkflows() {
   const runtimePublishStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Stage Runtime binary from release manifest (publish S3)");
   checkRuntimeStagingWorkflowStep(runtimePublishStep, "s3");
 
+  checkDesktopSummarySteps();
+
   const desktopPublishStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Publish skenion studio desktop package to DSUB S3");
   expectIncludes(
     desktopReleaseWorkflowPath,
@@ -212,6 +215,60 @@ function checkReleaseWorkflows() {
     /unsigned-preview[\s\S]{0,120}non-release-complete|non-release-complete[\s\S]{0,120}unsigned-preview/,
     "desktop release workflow must not describe unsigned-preview as inherently non-release-complete"
   );
+}
+
+function checkWorkflowSyntaxGuards() {
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /^\$\{\{\s*steps\.publish_desktop\.outputs\.desktop_artifact_summary\s*}}\s*$/m,
+    "desktop release heredoc content must remain inside the YAML run block indentation"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    "          ${{ steps.publish_desktop.outputs.desktop_artifact_summary }}",
+    "desktop release heredoc content must be indented as run-block YAML while rendering at shell column 1"
+  );
+}
+
+function checkDesktopSummarySteps() {
+  const desktopPackageSummaryStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Summarize desktop package");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopPackageSummaryStep,
+    'echo "- Platform/package: ${platform_package}"',
+    "desktop package summary must report user-facing platform/package information"
+  );
+
+  for (const step of splitSteps(desktopReleaseWorkflow)) {
+    if (!step.text.includes("GITHUB_STEP_SUMMARY")) {
+      continue;
+    }
+
+    const lines = step.text.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const lineNumber = step.startLine + index;
+      const text = lines[index].trim();
+      if (!/^echo\b/.test(text)) {
+        continue;
+      }
+      if (/echo\s+["']- Target:\s*\$\{TARGET\}/.test(text)) {
+        fail(
+          desktopReleaseWorkflowPath,
+          lineNumber,
+          "desktop GITHUB_STEP_SUMMARY blocks must not echo the internal Rust target"
+        );
+      }
+      if (/unknown-linux-gnu|apple-darwin|pc-windows-msvc/.test(text)) {
+        fail(
+          desktopReleaseWorkflowPath,
+          lineNumber,
+          "desktop GITHUB_STEP_SUMMARY echo lines must not expose internal Rust target triples"
+        );
+      }
+    }
+  }
 }
 
 function checkRuntimeStagingWorkflowStep(step, artifactSource) {
