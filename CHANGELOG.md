@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.14](https://github.com/skenion/skenion-studio/compare/v0.44.13...v0.44.14) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** derive runtime manifests from dsub downloads ([#181](https://github.com/skenion/skenion-studio/issues/181)) ([ede748b](https://github.com/skenion/skenion-studio/commit/ede748bd851206a20ce54856b36e61d80b7ccb32))
+
 ## [0.44.13](https://github.com/skenion/skenion-studio/compare/v0.44.12...v0.44.13) (2026-06-25)
 
 
