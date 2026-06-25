@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* **ci:** widen studio public artifact verification ([4734b72](https://github.com/skenion/skenion-studio/commit/4734b72708eabc2f9429e29f6fa696d7e37a4d3e)), closes [#156](https://github.com/skenion/skenion-studio/issues/156)
+* **ci:** widen studio public artifact verification ([4734b72](https://github.com/skenion/skenion-studio/commit/4734b72708eabc2f9429e29f6fa696d7e37a4d3e)), refs [#156](https://github.com/skenion/skenion-studio/issues/156)
 
 ## [0.44.5](https://github.com/skenion/skenion-studio/compare/v0.44.4...v0.44.5) (2026-06-25)
 
