@@ -12,12 +12,12 @@ on:
         required: true
         type: string
       release-mode:
-        description: Release mode; publish uploads desktop packages to DSUB S3 and compact indexes to the GitHub Release, verify builds only
+        description: Release mode; publish uploads desktop installers, checksums, and indexes to DSUB S3, verify builds only
         default: verify
         required: false
         type: string
       runtime-manifest-url:
-        description: Optional Runtime release artifact manifest URL override; defaults to the manifest asset on the Runtime GitHub Release
+        description: Optional Runtime raw-binary release manifest URL override; defaults to Runtime release evidence
         required: false
         type: string
       desktop-signing-mode:
@@ -283,8 +283,8 @@ jobs:
             echo ""
             echo "- Target: ${TARGET}"
             echo "- Desktop signing mode: unsigned-preview"
-            echo "- macOS release-completion status: blocked"
-            echo "- Reason: unsigned internal/pre-alpha artifact evidence does not satisfy signed/notarized desktop release completion."
+            echo "- macOS signing status: unsigned preview recorded"
+            echo "- Release completion: allowed for internal/pre-alpha distribution evidence."
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Preflight Windows installer signing policy
@@ -296,14 +296,14 @@ jobs:
 
           mode="${DESKTOP_SIGNING_MODE}"
           if [[ -z "${mode}" ]]; then
-            echo "::error::Windows publish mode requires desktop-signing-mode. Use unsigned-preview only for explicit non-release-complete evidence, or add a signed mode after Tauri signing is wired."
+            echo "::error::Windows publish mode requires desktop-signing-mode. Use unsigned-preview only for explicit internal/pre-alpha evidence, or add a signed mode after Tauri signing is wired."
             exit 1
           fi
 
           case "${mode}" in
             unsigned-preview)
               signing_status="unsigned-preview"
-              release_completion="blocked"
+              release_completion="allowed for internal/pre-alpha distribution evidence"
               ;;
             signed-required|azure-trusted-signing)
               echo "::error::desktop signing mode '${mode}' is reserved for signed Windows installer releases, but this workflow does not yet configure Tauri Windows signing. Wire signing first instead of publishing artifacts that only claim to be signed."
@@ -647,7 +647,7 @@ jobs:
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_bundle_args }}
 
       - id: package_studio_desktop
-        name: Package canonical skenion studio desktop release asset
+        name: Collect skenion studio desktop installers
         if: needs.release.outputs.upload_release_assets == 'true'
         run: pnpm run package-studio-desktop -- --target "${TARGET}" --version "${VERSION}"
 
@@ -673,44 +673,7 @@ jobs:
             "${{ needs.release.outputs.tag }}" \
             "${TARGET}" \
             "${{ matrix.tier }}" \
-            "${{ steps.package_studio_desktop.outputs.asset_path }}" \
-            "${{ steps.package_studio_desktop.outputs.checksum_path }}"
-
-      - name: Upload DSUB desktop artifact index to GitHub Release
-        if: needs.release.outputs.upload_release_assets == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          INDEX_PATH: ${{ steps.publish_desktop.outputs.index_path }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::GH_TOKEN organization Actions secret is required for GitHub Release mutation."
-            exit 1
-          fi
-
-          index_name="$(basename "${INDEX_PATH}")"
-          release_assets="$(mktemp)"
-          download_dir="$(mktemp -d)"
-          cleanup_release_asset_check() {
-            rm -f "${release_assets}"
-            rm -rf "${download_dir}"
-          }
-          trap cleanup_release_asset_check EXIT
-
-          gh release view "${{ needs.release.outputs.tag }}" --json assets --jq '.assets[].name' >"${release_assets}"
-          if grep -Fxq "${index_name}" "${release_assets}"; then
-            gh release download "${{ needs.release.outputs.tag }}" --pattern "${index_name}" --dir "${download_dir}"
-            if cmp -s "${INDEX_PATH}" "${download_dir}/${index_name}"; then
-              echo "GitHub Release DSUB desktop artifact index already exists with identical content: ${index_name}"
-              exit 0
-            fi
-
-            echo "::error::GitHub Release DSUB desktop artifact index already exists with different content: ${index_name}"
-            exit 1
-          fi
-
-          gh release upload "${{ needs.release.outputs.tag }}" "${INDEX_PATH}"
+            "${{ steps.package_studio_desktop.outputs.manifest_path }}"
 
       - name: Summarize desktop package
         run: |
@@ -724,10 +687,12 @@ jobs:
             echo "- Desktop signing mode: ${DESKTOP_SIGNING_MODE}"
             echo "- Publish desktop artifact evidence: ${{ needs.release.outputs.upload_release_assets }}"
             if [[ "${{ needs.release.outputs.upload_release_assets }}" == "true" ]]; then
-              echo "- Desktop package DSUB URL: ${{ steps.publish_desktop.outputs.desktop_asset_url }}"
-              echo "- Desktop package checksum DSUB URL: ${{ steps.publish_desktop.outputs.desktop_checksum_url }}"
-              echo "- Desktop package index release asset: ${{ steps.publish_desktop.outputs.index_asset }}"
-              echo "- Desktop package contents: ${{ steps.package_studio_desktop.outputs.artifact_count }} Tauri artifact(s)"
+              echo "- Desktop installer packages: ${{ steps.package_studio_desktop.outputs.package_ids }}"
+              echo "- Desktop installer contents: ${{ steps.package_studio_desktop.outputs.artifact_count }} Tauri installer artifact(s)"
+              echo "- Desktop installer DSUB links:"
+              cat <<'SKENION_DESKTOP_LINKS'
+${{ steps.publish_desktop.outputs.desktop_artifact_summary }}
+SKENION_DESKTOP_LINKS
             fi
             if [[ "${RUNNER_OS}" == "Windows" ]]; then
               echo "- Windows app installer family: primary NSIS setup executable (-setup.exe), secondary MSI when emitted"
@@ -755,6 +720,7 @@ jobs:
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
           RUNTIME_TAG: ${{ needs.release.outputs.runtime_tag }}
           DESKTOP_SIGNING_MODE: ${{ needs.release.outputs.desktop_signing_mode }}
+          SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}
         run: |
           node .release-tools/scripts/update-studio-release-status.mjs \
             --mode desktop-artifacts-published \

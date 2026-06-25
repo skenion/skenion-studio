@@ -15,13 +15,61 @@ const runtimeDownloadsStartMarker = "<!-- skenion-runtime-downloads:start -->";
 const runtimeDownloadsEndMarker = "<!-- skenion-runtime-downloads:end -->";
 const releaseModeNames = new Set(["publish", "verify"]);
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const supportedTargets = new Set([
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "x86_64-pc-windows-msvc",
-  "aarch64-pc-windows-msvc",
-  "x86_64-unknown-linux-gnu",
-  "aarch64-unknown-linux-gnu"
+const targetConfigs = new Map([
+  [
+    "aarch64-apple-darwin",
+    {
+      platformSlug: "macos-apple-silicon",
+      platformLabel: "macOS Apple silicon",
+      artifactFilename: "skenion-runtime-v<version>-macos-apple-silicon",
+      executableName: "skenion-runtime"
+    }
+  ],
+  [
+    "x86_64-apple-darwin",
+    {
+      platformSlug: "macos-intel",
+      platformLabel: "macOS Intel",
+      artifactFilename: "skenion-runtime-v<version>-macos-intel",
+      executableName: "skenion-runtime"
+    }
+  ],
+  [
+    "x86_64-pc-windows-msvc",
+    {
+      platformSlug: "windows-x64",
+      platformLabel: "Windows x64",
+      artifactFilename: "skenion-runtime-v<version>-windows-x64.exe",
+      executableName: "skenion-runtime.exe"
+    }
+  ],
+  [
+    "aarch64-pc-windows-msvc",
+    {
+      platformSlug: "windows-arm64",
+      platformLabel: "Windows Arm64",
+      artifactFilename: "skenion-runtime-v<version>-windows-arm64.exe",
+      executableName: "skenion-runtime.exe"
+    }
+  ],
+  [
+    "x86_64-unknown-linux-gnu",
+    {
+      platformSlug: "linux-x64",
+      platformLabel: "Linux x64",
+      artifactFilename: "skenion-runtime-v<version>-linux-x64",
+      executableName: "skenion-runtime"
+    }
+  ],
+  [
+    "aarch64-unknown-linux-gnu",
+    {
+      platformSlug: "linux-arm64",
+      platformLabel: "Linux Arm64",
+      artifactFilename: "skenion-runtime-v<version>-linux-arm64",
+      executableName: "skenion-runtime"
+    }
+  ]
 ]);
 
 const options = parseArgs(process.argv.slice(2));
@@ -38,8 +86,9 @@ const runtimeArtifactSource = options.runtimeArtifactSource ?? options.runtimeDo
 if (options.version && options.version !== version) {
   fail(`--version (${options.version}) must match Runtime release tag version (${version}).`);
 }
-if (!supportedTargets.has(target)) {
-  fail(`--target must be one of ${[...supportedTargets].join(", ")}; got '${target}'.`);
+const targetConfig = targetConfigs.get(target);
+if (!targetConfig) {
+  fail(`--target must be one of ${[...targetConfigs.keys()].join(", ")}; got '${target}'.`);
 }
 if (!releaseModeNames.has(mode) && mode !== "local") {
   fail("--mode must be publish, verify, or local.");
@@ -56,14 +105,18 @@ if (options.manifest && manifestUrl) {
 if (runtimeReleaseJson && (options.manifest || manifestUrl)) {
   fail("--runtime-release-json cannot be combined with manifest inputs.");
 }
+if (runtimeReleaseJson && mode !== "local") {
+  fail("--runtime-release-json release-body fallback is only allowed with --mode local; release packaging requires Runtime manifest evidence.");
+}
 if (options.checkManifestOnly && !options.manifest) {
   fail("--manifest is required with --check-manifest-only.");
 }
 
-const assetName = `skenion-runtime-v${version}-${target}.tar.gz`;
+const platformSlug = targetConfig.platformSlug;
+const assetName = targetConfig.artifactFilename.replace("<version>", version);
 const checksumAssetName = `${assetName}.sha256`;
 const manifestAssetName = `${assetName}.manifest.json`;
-const binaryName = target.includes("windows") ? "skenion-runtime.exe" : "skenion-runtime";
+const executableName = targetConfig.executableName;
 const stagedBinaryName = `skenion-runtime-${target}${target.includes("windows") ? ".exe" : ""}`;
 
 const runtimeArtifact = await loadRuntimeArtifact();
@@ -79,23 +132,16 @@ const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-runtime-artifac
 
 try {
   const artifactPath = path.join(tempDir, assetName);
-  const expectedSha256 = await stageRuntimeArchive(runtimeArtifact, artifactPath, tempDir);
+  const expectedSha256 = await stageRuntimeBinary(runtimeArtifact, artifactPath, tempDir);
   if (runtimeArtifact.size !== undefined) {
     await verifyFileSize(artifactPath, runtimeArtifact.size, assetName);
   }
   await verifySha256(artifactPath, expectedSha256, assetName);
 
-  await run("tar", ["-xzf", path.basename(artifactPath)], { cwd: tempDir });
-  const extractedBinary = path.join(
-    tempDir,
-    `skenion-runtime-v${version}-${target}`,
-    binaryName
-  );
-  await fs.access(extractedBinary);
   await fs.mkdir(outputDir, { recursive: true });
 
   const stagedBinary = path.join(outputDir, stagedBinaryName);
-  await fs.copyFile(extractedBinary, stagedBinary);
+  await fs.copyFile(artifactPath, stagedBinary);
   if (!target.includes("windows")) {
     await fs.chmod(stagedBinary, 0o755);
   }
@@ -164,7 +210,6 @@ async function loadRuntimeArtifact() {
         expectedArtifactName: assetName,
         expectedChecksumName: checksumAssetName,
         expectedManifestName: manifestAssetName,
-        enforceManifestFilename: true,
         manifestSource: manifestPath
       })
     };
@@ -178,10 +223,27 @@ async function loadRuntimeArtifact() {
         expectedArtifactName: assetName,
         expectedChecksumName: checksumAssetName,
         expectedManifestName: manifestAssetName,
-        enforceManifestFilename: false,
         manifestSource: manifestUrl
       })
     };
+  }
+
+  if (releaseModeNames.has(mode)) {
+    const derivedManifestUrl = defaultRuntimeManifestUrl();
+    const manifest = await fetchJson(derivedManifestUrl, "Runtime release artifact manifest");
+    return {
+      source: derivedManifestUrl,
+      ...validateRuntimeManifest(manifest, {
+        expectedArtifactName: assetName,
+        expectedChecksumName: checksumAssetName,
+        expectedManifestName: manifestAssetName,
+        manifestSource: derivedManifestUrl
+      })
+    };
+  }
+
+  if (mode !== "local") {
+    fail("Runtime manifest evidence is required for release packaging; release-body fallback is only allowed with --mode local.");
   }
 
   const releaseEvidence = await loadRuntimeRelease();
@@ -189,6 +251,10 @@ async function loadRuntimeArtifact() {
     source: releaseEvidence.source,
     ...runtimeArtifactFromReleaseBody(releaseEvidence.release, releaseEvidence.source)
   };
+}
+
+function defaultRuntimeManifestUrl() {
+  return `https://github.com/${runtimeRepo}/releases/download/${releaseTag}/${manifestAssetName}`;
 }
 
 async function getRelease(repo, tag) {
@@ -224,7 +290,8 @@ function validateRuntimeManifest(manifest, expected) {
   assertEqual(manifest.component, runtimeComponent, "manifest.component");
   assertEqual(manifest.runtimeVersion, version, "manifest.runtimeVersion");
   assertEqual(manifest.releaseTag, releaseTag, "manifest.releaseTag");
-  assertEqual(manifest.target, target, "manifest.target");
+  validateManifestTarget(manifest);
+  assertEqual(manifest.platformSlug, platformSlug, "manifest.platformSlug");
   requireNonEmptyString(manifest.tier, "manifest.tier");
   requireNonEmptyString(manifest.sourceCommit, "manifest.sourceCommit");
 
@@ -233,34 +300,59 @@ function validateRuntimeManifest(manifest, expected) {
   requireNonEmptyString(manifest.contracts.line, "manifest.contracts.line");
 
   const artifact = assertPlainObject(manifest.artifact, "manifest.artifact");
+  assertEqual(artifact.binaryFormat, "raw-binary", "manifest.artifact.binaryFormat");
+  assertEqual(artifact.executableName, executableName, "manifest.artifact.executableName");
   assertEqual(artifact.filename, expected.expectedArtifactName, "manifest.artifact.filename");
   const sha256 = requireSha256(artifact.sha256, "manifest.artifact.sha256");
   const size = requirePositiveInteger(artifact.size, "manifest.artifact.size");
   const publicUrl = requireHttpUrl(artifact.publicUrl, "manifest.artifact.publicUrl");
-  requireEvidence(artifact.s3, "manifest.artifact.s3");
+  requireRuntimeArtifactUrl(publicUrl, "manifest.artifact.publicUrl", expected.expectedArtifactName);
+  requireS3Evidence(artifact.s3, "manifest.artifact.s3", expected.expectedArtifactName);
 
   const checksum = assertPlainObject(manifest.checksum, "manifest.checksum");
   assertEqual(checksum.filename, expected.expectedChecksumName, "manifest.checksum.filename");
   const checksumUrl = requireHttpUrl(checksum.publicUrl, "manifest.checksum.publicUrl");
-  requireEvidence(checksum.s3, "manifest.checksum.s3");
+  requireRuntimeArtifactUrl(checksumUrl, "manifest.checksum.publicUrl", expected.expectedChecksumName);
+  requireS3Evidence(checksum.s3, "manifest.checksum.s3", expected.expectedChecksumName);
 
   const manifestArtifact = assertPlainObject(manifest.manifest, "manifest.manifest");
   const manifestFilename = requireNonEmptyString(manifestArtifact.filename, "manifest.manifest.filename");
-  if (expected.enforceManifestFilename && manifestFilename !== expected.expectedManifestName) {
+  if (manifestFilename !== expected.expectedManifestName) {
     fail(
       `manifest.manifest.filename is ${manifestFilename}, expected ${expected.expectedManifestName} from ${expected.manifestSource}.`
     );
   }
-  requireHttpUrl(manifestArtifact.publicUrl, "manifest.manifest.publicUrl");
-  requireEvidence(manifestArtifact.s3, "manifest.manifest.s3");
+  requireRuntimeArtifactUrl(
+    requireHttpUrl(manifestArtifact.publicUrl, "manifest.manifest.publicUrl"),
+    "manifest.manifest.publicUrl",
+    expected.expectedManifestName
+  );
+  requireS3Evidence(manifestArtifact.s3, "manifest.manifest.s3", expected.expectedManifestName);
 
   return {
     publicUrl,
     checksumUrl,
     sha256,
     size,
-    manifestFilename
+    manifestFilename,
+    binaryFormat: "raw-binary"
   };
+}
+
+function validateManifestTarget(manifest) {
+  const targetFields = [];
+  if (manifest.target !== undefined) {
+    targetFields.push(["manifest.target", manifest.target]);
+  }
+  if (manifest.rustTargetTriple !== undefined) {
+    targetFields.push(["manifest.rustTargetTriple", manifest.rustTargetTriple]);
+  }
+  if (targetFields.length === 0) {
+    fail("manifest.target or manifest.rustTargetTriple must identify the Runtime Rust target.");
+  }
+  for (const [label, value] of targetFields) {
+    assertEqual(value, target, label);
+  }
 }
 
 function runtimeArtifactFromReleaseBody(release, source) {
@@ -269,9 +361,9 @@ function runtimeArtifactFromReleaseBody(release, source) {
   const body = requireNonEmptyString(release.body, "release.body");
   const section = runtimeDownloadsSection(body, source);
   const row = runtimeDownloadsRow(section, source);
-  const archiveUrl = requireRuntimeArtifactUrl(
-    requireHttpUrlFromCell(row.archive, `Runtime downloads table archive URL for ${target}`),
-    "Runtime downloads table archive URL",
+  const binaryUrl = requireRuntimeArtifactUrl(
+    requireHttpUrlFromCell(row.binary, `Runtime downloads table binary URL for ${target}`),
+    "Runtime downloads table binary URL",
     assetName
   );
   const checksumUrl = requireRuntimeArtifactUrl(
@@ -281,13 +373,14 @@ function runtimeArtifactFromReleaseBody(release, source) {
   );
 
   return {
-    publicUrl: archiveUrl,
+    publicUrl: binaryUrl,
     checksumUrl,
-    manifestFilename: `${source} downloads table`
+    manifestFilename: `${source} downloads table`,
+    binaryFormat: "raw-binary"
   };
 }
 
-async function stageRuntimeArchive(runtimeArtifact, artifactPath, tempDirPath) {
+async function stageRuntimeBinary(runtimeArtifact, artifactPath, tempDirPath) {
   if (runtimeArtifactSource === "http") {
     const expectedSha256 = runtimeArtifact.sha256 ?? await downloadSha256(runtimeArtifact.checksumUrl, assetName);
     await downloadUrl(runtimeArtifact.publicUrl, artifactPath, assetName);
@@ -296,9 +389,9 @@ async function stageRuntimeArchive(runtimeArtifact, artifactPath, tempDirPath) {
 
   const s3Config = await loadS3DownloadConfig(tempDirPath);
   const checksumPath = path.join(tempDirPath, checksumAssetName);
-  const archiveKey = deriveS3Key(runtimeArtifact.publicUrl, assetName, s3Config);
+  const binaryKey = deriveS3Key(runtimeArtifact.publicUrl, assetName, s3Config);
   const checksumKey = deriveS3Key(runtimeArtifact.checksumUrl, checksumAssetName, s3Config);
-  await downloadS3Object(s3Config, archiveKey, artifactPath, assetName);
+  await downloadS3Object(s3Config, binaryKey, artifactPath, assetName);
   await downloadS3Object(s3Config, checksumKey, checksumPath, checksumAssetName);
   return parseSha256File(await fs.readFile(checksumPath, "utf8"), assetName, `s3://${s3Config.bucket}/${checksumKey}`);
 }
@@ -364,7 +457,7 @@ async function writeAwsPathStyleConfig(tempDirPath) {
 }
 
 function deriveS3Key(publicUrl, filename, s3Config) {
-  const relativePath = `${runtimeComponent}/v${version}/${target}/${filename}`;
+  const relativePath = `${runtimeComponent}/${releaseTag}/${platformSlug}/${filename}`;
   const key = `${s3Config.prefix}/${relativePath}`;
   const parsed = new URL(publicUrl);
   const decodedPath = decodeURIComponent(parsed.pathname);
@@ -468,22 +561,53 @@ function runtimeDownloadsRow(section, source) {
     fail(`Runtime downloads table from ${source} is missing a markdown separator row.`);
   }
 
-  const targetIndex = requireMarkdownColumn(headers, "target", source);
-  const archiveIndex = requireMarkdownColumn(headers, "archive", source);
+  const binaryIndex = optionalMarkdownColumn(headers, "binary") ??
+    optionalMarkdownColumn(headers, "download") ??
+    optionalMarkdownColumn(headers, "artifact");
+  if (binaryIndex === undefined) {
+    fail(`Runtime downloads table from ${source} is missing binary, download, or artifact column.`);
+  }
   const sha256Index = requireMarkdownColumn(headers, "sha256", source);
+  const platformIndex = optionalMarkdownColumn(headers, "platform");
+  const slugIndex = optionalMarkdownColumn(headers, "platformslug") ?? optionalMarkdownColumn(headers, "slug");
+  const targetIndex = optionalMarkdownColumn(headers, "target");
 
-  for (const line of tableLines.slice(2)) {
-    const cells = splitMarkdownTableRow(line);
-    if (cleanMarkdownCell(cells[targetIndex]) !== target) {
-      continue;
-    }
-    return {
-      archive: cells[archiveIndex] ?? "",
-      sha256: cells[sha256Index] ?? ""
-    };
+  if (platformIndex === undefined && slugIndex === undefined && targetIndex === undefined) {
+    fail(`Runtime downloads table from ${source} must include a Platform, Platform Slug, Slug, or Target column.`);
   }
 
-  fail(`Runtime downloads table from ${source} is missing target row for ${target}.`);
+  const matches = [];
+  for (const line of tableLines.slice(2)) {
+    const cells = splitMarkdownTableRow(line);
+    if (runtimeDownloadsRowMatches(cells, { platformIndex, slugIndex, targetIndex })) {
+      matches.push(cells);
+    }
+  }
+
+  if (matches.length === 0) {
+    fail(`Runtime downloads table from ${source} is missing platform row for ${platformSlug} (${target}).`);
+  }
+  if (matches.length > 1) {
+    fail(`Runtime downloads table from ${source} has ambiguous rows for ${platformSlug} (${target}).`);
+  }
+
+  const cells = matches[0];
+  return {
+    binary: cells[binaryIndex] ?? "",
+    sha256: cells[sha256Index] ?? ""
+  };
+}
+
+function runtimeDownloadsRowMatches(cells, indexes) {
+  const platform = indexes.platformIndex === undefined ? "" : cleanMarkdownCell(cells[indexes.platformIndex]);
+  const slug = indexes.slugIndex === undefined ? "" : cleanMarkdownCell(cells[indexes.slugIndex]);
+  const rowTarget = indexes.targetIndex === undefined ? "" : cleanMarkdownCell(cells[indexes.targetIndex]);
+  return (
+    normalizedSlug(slug) === platformSlug ||
+    normalizedPlatformName(platform) === normalizedPlatformName(targetConfig.platformLabel) ||
+    normalizedSlug(platform) === platformSlug ||
+    rowTarget === target
+  );
 }
 
 function splitMarkdownTableRow(line) {
@@ -502,12 +626,34 @@ function cleanMarkdownCell(value = "") {
   return value.replace(/`/g, "").trim();
 }
 
+function normalizedSlug(value) {
+  return cleanMarkdownCell(value)
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function normalizedPlatformName(value) {
+  return cleanMarkdownCell(value)
+    .toLowerCase()
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function requireMarkdownColumn(headers, normalizedName, source) {
   const index = headers.indexOf(normalizedName);
   if (index === -1) {
     fail(`Runtime downloads table from ${source} is missing ${normalizedName} column.`);
   }
   return index;
+}
+
+function optionalMarkdownColumn(headers, normalizedName) {
+  const index = headers.indexOf(normalizedName);
+  return index === -1 ? undefined : index;
 }
 
 function requireHttpUrlFromCell(cell, label) {
@@ -523,11 +669,35 @@ function requireHttpUrlFromCell(cell, label) {
 function requireRuntimeArtifactUrl(url, label, expectedFilename) {
   const parsed = new URL(url);
   const decodedPath = decodeURIComponent(parsed.pathname);
-  const expectedPathSuffix = `/${runtimeComponent}/v${version}/${target}/${expectedFilename}`;
+  const expectedPathSuffix = `/${runtimeComponent}/${releaseTag}/${platformSlug}/${expectedFilename}`;
   if (!decodedPath.endsWith(expectedPathSuffix)) {
     fail(`${label} path must end with ${expectedPathSuffix}; got ${decodedPath}.`);
   }
   return url;
+}
+
+function requireS3Evidence(value, label, expectedFilename) {
+  requireEvidence(value, label);
+  const expectedKeySuffix = `${runtimeComponent}/${releaseTag}/${platformSlug}/${expectedFilename}`;
+  const key = s3EvidenceKey(value, label);
+  if (!key.endsWith(expectedKeySuffix)) {
+    fail(`${label}.key must end with ${expectedKeySuffix}; got ${key}.`);
+  }
+}
+
+function s3EvidenceKey(value, label) {
+  if (typeof value === "string") {
+    if (value.startsWith("s3://")) {
+      const parsed = new URL(value);
+      return decodeURIComponent(parsed.pathname).replace(/^\/+/, "");
+    }
+    return value.replace(/^\/+/, "");
+  }
+  const key = requireNonEmptyString(value.key, `${label}.key`);
+  if (value.bucket !== undefined) {
+    requireNonEmptyString(value.bucket, `${label}.bucket`);
+  }
+  return key.replace(/^\/+/, "");
 }
 
 function assertPlainObject(value, label) {

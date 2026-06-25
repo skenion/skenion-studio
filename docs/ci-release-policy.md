@@ -70,24 +70,23 @@ evidence appears:
 
 - Studio Release Artifacts publish mode uploads the canonical web bundle,
   checksum, desktop manifest metadata, desktop manifest checksum, and combined
-  checksum manifest to DSUB release storage. The GitHub Release carries only a
-  compact DSUB web artifact index. This is web artifact evidence, not full
-  Studio distribution completion, because release-blocking desktop packages can
-  still be missing.
-- Desktop Release publish mode uploads canonical desktop package archives and
-  checksums for each successful target to DSUB release storage. The GitHub
-  Release carries only compact per-target desktop package index JSON assets.
-  Runtime binaries remain sourced from Runtime release artifact manifests. A
-  final status step verifies the release-blocking desktop index set before it
-  updates the release notes.
+  checksum manifest to DSUB release storage. The GitHub Release body records
+  DSUB download and checksum links instead of carrying artifact evidence. This
+  is web artifact evidence, not full Studio distribution completion, because
+  release-blocking desktop installers can still be missing.
+- Desktop Release publish mode uploads real Tauri installer artifacts and
+  checksums for each successful package to DSUB release storage. Runtime
+  binaries remain sourced from Runtime release artifact manifests. A final
+  status step rewrites the GitHub Release body from deterministic DSUB public
+  URLs for the release-blocking installer set.
 
 A Studio GitHub Release is release-complete only when the release has the
-canonical web artifact index, release-blocking desktop package indexes, Runtime
-release manifest evidence, and the applicable signing/notarization evidence.
-Unsigned preview desktop artifacts keep the release prerelease/unpromoted, even
-when they are useful internal or pre-alpha evidence. If the release has only a
-partial asset set, the release notes must keep an explicit non-distribution
-marker instead of implying product availability.
+canonical web artifact links, release-blocking desktop installer links, and
+Runtime release manifest evidence. Signing mode is recorded in the release
+body, but `unsigned-preview` is permitted for internal/pre-alpha distribution
+evidence and does not by itself make the release incomplete. If the release has
+only a partial artifact set, the release notes must keep an explicit
+non-distribution marker instead of implying product availability.
 
 Product release promotion is a separate product-level ledger step. Do not
 report a promoted Studio product line until the `skenion/skenion` Project
@@ -103,60 +102,59 @@ The desktop release workflow is manually dispatched with a Studio release tag,
 an exact Runtime release tag, and a desktop signing mode. It checks out the
 Studio tag and packages these targets:
 
-- release-blocking macOS arm64 / Apple Silicon: `aarch64-apple-darwin`.
-- release-blocking macOS x64 / Intel: `x86_64-apple-darwin`.
-- release-blocking Windows x64: `x86_64-pc-windows-msvc`.
-- release-blocking Linux x64: `x86_64-unknown-linux-gnu`.
-- preview: `aarch64-pc-windows-msvc`, `aarch64-unknown-linux-gnu`.
+- release-blocking macOS Apple Silicon DMG.
+- release-blocking macOS Intel DMG.
+- release-blocking Windows x64 setup executable, with MSI when emitted.
+- release-blocking Linux x64 deb/rpm installers.
+- preview Windows arm64 and Linux arm64 installers.
 
 The workflow consumes Runtime release evidence and produces Studio desktop
 artifacts:
 
-- skenion studio desktop packages are canonical DSUB S3 release archives named
-  `skenion-studio-<target>.tar.gz` for macOS/Linux and
-  `skenion-studio-<target>.zip` for Windows, each with a sibling `.sha256`
-  file. These archives contain the Tauri-generated app distribution artifacts
-  for that target: signed/notarized macOS DMG/App archive output, Windows NSIS
-  `-setup.exe` output with MSI included only when Tauri emits it, and Linux
-  deb/rpm package output. They are published under
-  `skenion-studio/<release-tag>/desktop/<target>/...` in DSUB release storage.
-- Each successful desktop target also produces a compact
-  `skenion-studio-desktop-<target>-vx.y.z.index.json` file. That index records
-  Studio version, release tag, source commit, target tier, Contracts metadata,
-  Runtime release tag/binary source, signing mode, and the DSUB URL/S3 key/size
-  and SHA-256 evidence for the desktop package and checksum. The index is the
-  only desktop target asset uploaded to the Studio GitHub Release.
+- skenion studio desktop packages are the real Tauri installer artifacts:
+  macOS `.dmg`, Windows setup `.exe` with MSI included only when Tauri emits
+  it, and Linux `.deb`/`.rpm`. Each installer has a sibling `.sha256` file.
+  They are published under product-facing DSUB paths such as
+  `skenion-studio/<release-tag>/desktop/macos-apple-silicon/...`,
+  `desktop/windows-x64/...`, `desktop/linux-x64-deb/...`, and
+  `desktop/linux-x64-rpm/...`. Public artifact names and paths must not expose
+  Rust target triples.
+- Each successful installer also produces a compact DSUB-hosted index JSON
+  file. That index records Studio version, release tag, source commit, package
+  ID, target tier, Contracts metadata, Runtime release tag/binary source,
+  signing mode, and the DSUB URL/S3 key/size and SHA-256 evidence for the
+  installer and checksum. Index JSON files remain in DSUB storage; they are not
+  uploaded to the Studio GitHub Release.
 - Runtime release artifact manifests are Runtime-owned evidence consumed by
   skenion studio desktop packaging and compatibility verification. Studio uses
-  the manifest asset on the Runtime GitHub Release to find the Runtime tarball
-  published by Runtime to DSUB S3, then verifies the tarball size and SHA-256
-  from that manifest before staging the Tauri external binary. Studio must not
-  repackage or upload Runtime binary assets to the Studio GitHub Release.
+  the Runtime release evidence to find the raw Runtime binary published by
+  Runtime to DSUB S3, then verifies its size and SHA-256 before staging the
+  Tauri external binary. Studio must not rebuild, repackage, or upload Runtime
+  binary assets to the Studio GitHub Release.
 
 Tauri action builds are used only to produce the platform bundle outputs. The
 desktop release workflow then runs `scripts/package-studio-desktop.mjs` in
-publish mode to create the canonical `skenion-studio-<target>` archive plus
-checksum. `scripts/publish-studio-desktop-asset-s3.sh` publishes those files to
-DSUB S3 with no-clobber behavior, verifies S3 metadata and public URL content,
-and generates the compact per-target index JSON. The workflow uploads only that
-index JSON to the Studio GitHub Release, succeeding idempotently when an
-existing release asset has identical content and failing closed when it differs.
-Verify mode builds the Tauri packages but does not upload release assets. Linux
-desktop release assets are the canonical DSUB archives containing deb/rpm
-output; the v0 workflow does not claim or manifest AppImage assets. Windows
-desktop release assets are canonical DSUB ZIP archives containing the installer
-output that Tauri actually produced; the release flow does not claim a
-standalone `.msi` asset unless MSI output is present inside that archive.
+publish mode to collect Tauri installer files directly and write one checksum
+per installer. `scripts/publish-studio-desktop-asset-s3.sh` publishes those
+files to DSUB S3 with no-clobber behavior, verifies S3 metadata and optional
+public URL content, and generates DSUB-hosted per-installer index JSON. The
+GitHub Release body records DSUB download and checksum links; no Studio
+desktop artifact or index is uploaded as a GitHub Release asset. Verify mode
+builds the Tauri packages but does not upload release assets. Linux desktop
+release assets are deb/rpm installers; the v0 workflow does not claim or
+manifest AppImage assets. Windows desktop release assets are installer files
+that Tauri actually produced; the release flow does not claim a standalone
+`.msi` asset unless MSI output is present.
 
-Before Tauri packaging, `scripts/stage-runtime-sidecar.mjs` loads the
-`skenion-runtime-vx.y.z-<target>.tar.gz.manifest.json` asset selected by the
-exact Runtime release tag, or an explicitly supplied Runtime manifest URL. The
-script validates the manifest schema, component, Runtime version, release tag,
-target, artifact filename, artifact size, and SHA-256. It then downloads the
-Runtime tarball from `manifest.artifact.publicUrl`, extracts the Runtime binary,
-and stages it for `bundle.externalBin`. Publish and verify modes fail closed
-when the Runtime manifest, artifact, size, or checksum is missing or
-mismatched. Local checks may pass a generated manifest fixture with
+Before Tauri packaging, `scripts/stage-runtime-sidecar.mjs` loads Runtime
+release evidence selected by the exact Runtime release tag, or an explicitly
+supplied Runtime manifest URL. The script validates the manifest schema,
+component, Runtime version, release tag, Rust target, platform slug, raw-binary
+format, executable name, artifact/checksum/manifest filenames, public URLs, S3
+keys, artifact size, and SHA-256. It then downloads the raw Runtime binary from
+`manifest.artifact.publicUrl` and stages it for `bundle.externalBin`. Publish
+and verify modes fail closed when the Runtime manifest, artifact, size, or
+checksum is missing or mismatched. Local checks may pass a generated manifest fixture with
 `--manifest ... --check-manifest-only`; that path is for validation and tests,
 not for release publication.
 
@@ -177,31 +175,28 @@ Release Please remains responsible for versioning and GitHub release creation.
 Desktop packaging uploads artifacts only from GitHub Actions publish mode.
 Local commands may build or stage artifacts for verification, but they must not
 publish Studio desktop packages or Runtime artifacts. DSUB desktop publishing
-requires `workflow_dispatch`, DSUB S3 secrets, and the organization `GH_TOKEN`
-secret for the GitHub Release index upload; dry-run publisher validation does
-not require DSUB secrets.
+requires `workflow_dispatch` and DSUB S3 secrets. The organization `GH_TOKEN`
+secret is used only to rewrite the GitHub Release body with DSUB links; dry-run
+publisher validation does not require DSUB secrets.
 
 skenion studio web release behavior remains remote-runtime compatible: Vite
 builds do not require the sidecar, and browser deployments continue to use
 explicit Runtime URLs. The web build is distributed from DSUB release storage
 as `skenion-studio-web-bundle-vx.y.z.tar.gz`, with a sibling
 `skenion-studio-web-bundle-vx.y.z.tar.gz.sha256` checksum, not as an npm
-package. The GitHub Release keeps only the compact DSUB artifact index for the
-web artifact set.
+package. The GitHub Release body records the web artifact set's DSUB download
+and checksum links instead of carrying the compact index as a release asset.
 
 skenion studio desktop packages are distributed from DSUB S3 release storage.
-The Studio GitHub Release keeps compact desktop index metadata only. The
+The Studio GitHub Release body records DSUB download and checksum links. The
 private `packages/studio-desktop` workspace package exists only to stage
 release metadata and dry-run pack checks; it must not be published to npm.
 
 macOS desktop distribution is release-complete only when the release-blocking
-macOS arm64 (`aarch64-apple-darwin`) and macOS x64 (`x86_64-apple-darwin`)
-publish jobs produce signed and notarized Tauri App/DMG artifacts. Unsigned
-macOS artifacts are useful build or preview evidence, but they do not satisfy
-the desktop release-completion gate. The workflow defaults to
-`desktop-signing-mode=signed-required`; `unsigned-preview` must be passed
-explicitly in the dispatch input and is allowed only for non-release-complete
-internal or pre-alpha evidence. Signed publish mode fails closed before Tauri
+macOS Apple Silicon and macOS Intel publish jobs produce Tauri DMG artifacts.
+Signing mode is recorded, and
+`unsigned-preview` must be passed explicitly in the dispatch input for
+internal/pre-alpha evidence. Signed publish mode fails closed before Tauri
 packaging if `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, and
 `APPLE_SIGNING_IDENTITY` are absent, or if notarization credentials are absent.
 Notarization currently uses the Apple ID credential path and requires
@@ -211,8 +206,7 @@ submit App/DMG artifacts to Apple from the macOS packaging jobs.
 Windows desktop publish mode uses the validated `desktop-signing-mode` dispatch
 input. Empty or unknown signing modes are rejected. The only currently
 permitted non-signing value is an explicitly dispatched `unsigned-preview`,
-which may publish installer artifacts as explicit preview evidence but does not
-satisfy Windows desktop release completion.
+which may publish installer artifacts as explicit preview evidence.
 `signed-required` and `azure-trusted-signing` are reserved for real
 signed-installer release paths and must not pass until Tauri Windows signing is
 wired with the matching certificate, signing service, timestamp, or custom

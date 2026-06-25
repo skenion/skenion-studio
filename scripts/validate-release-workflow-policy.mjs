@@ -7,11 +7,17 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const workflowDir = path.join(rootDir, ".github", "workflows");
 const failures = [];
 
-const webWorkflowPath = ".github/workflows/studio-release-artifacts.yml";
-const desktopWorkflowPath = ".github/workflows/desktop-release.yml";
+const studioReleaseWorkflowPath = ".github/workflows/studio-release-artifacts.yml";
+const desktopReleaseWorkflowPath = ".github/workflows/desktop-release.yml";
+const packageDesktopPath = "scripts/package-studio-desktop.mjs";
+const prepareArtifactsPath = "scripts/prepare-studio-release-artifacts.mjs";
+const stageRuntimePath = "scripts/stage-runtime-sidecar.mjs";
 const webPublisherPath = "scripts/publish-studio-asset-s3.sh";
 const desktopPublisherPath = "scripts/publish-studio-desktop-asset-s3.sh";
 const statusScriptPath = "scripts/update-studio-release-status.mjs";
+const desktopReadmePath = "packages/studio-desktop/README.md";
+const webReadmePath = "packages/studio-web/README.md";
+const ciPolicyPath = "docs/ci-release-policy.md";
 
 const workflowPaths = fs
   .readdirSync(workflowDir)
@@ -19,11 +25,17 @@ const workflowPaths = fs
   .map((fileName) => `.github/workflows/${fileName}`)
   .sort();
 
-const webWorkflow = readRequired(webWorkflowPath);
-const desktopWorkflow = readRequired(desktopWorkflowPath);
+const studioReleaseWorkflow = readRequired(studioReleaseWorkflowPath);
+const desktopReleaseWorkflow = readRequired(desktopReleaseWorkflowPath);
+const packageDesktop = readRequired(packageDesktopPath);
+const prepareArtifacts = readRequired(prepareArtifactsPath);
+const stageRuntime = readRequired(stageRuntimePath);
 const webPublisher = readRequired(webPublisherPath);
 const desktopPublisher = readRequired(desktopPublisherPath);
 const statusScript = readRequired(statusScriptPath);
+const desktopReadme = readRequired(desktopReadmePath);
+const webReadme = readRequired(webReadmePath);
+const ciPolicy = readRequired(ciPolicyPath);
 
 for (const workflowPath of workflowPaths) {
   const workflow = readRequired(workflowPath);
@@ -32,14 +44,17 @@ for (const workflowPath of workflowPaths) {
   checkNoReleaseActionBypass(workflowPath, workflow);
 }
 
-checkWorkflowUploads(webWorkflowPath, webWorkflow);
-checkWorkflowUploads(desktopWorkflowPath, desktopWorkflow);
-checkNoDirectS3WorkflowUpload(webWorkflowPath, webWorkflow);
-checkNoDirectS3WorkflowUpload(desktopWorkflowPath, desktopWorkflow);
-checkWebReleaseWorkflow();
-checkDesktopReleaseWorkflow();
+checkNoGithubReleaseUploads(studioReleaseWorkflowPath, studioReleaseWorkflow);
+checkNoGithubReleaseUploads(desktopReleaseWorkflowPath, desktopReleaseWorkflow);
+checkNoDirectS3WorkflowUpload(studioReleaseWorkflowPath, studioReleaseWorkflow);
+checkNoDirectS3WorkflowUpload(desktopReleaseWorkflowPath, desktopReleaseWorkflow);
+checkReleaseWorkflows();
 checkPublisherScripts();
+checkDesktopPackaging();
+checkPrepareArtifactsPolicy();
+checkRuntimeSidecarPolicy();
 checkReleaseStatusPolicy();
+checkDocsPolicy();
 
 if (failures.length > 0) {
   console.error("Studio release workflow policy validation failed:");
@@ -86,72 +101,23 @@ function checkNoReleaseActionBypass(relativePath, content) {
     relativePath,
     content,
     /\b(?:softprops\/action-gh-release|actions\/upload-release-asset|actions\/create-release|ncipollo\/release-action|svenstaro\/upload-release-action)\b/i,
-    "release assets must not bypass the reviewed GH_TOKEN and DSUB index upload steps"
+    "release assets must not bypass the reviewed GH_TOKEN and DSUB publisher steps"
   );
 }
 
-function checkWorkflowUploads(relativePath, content) {
-  const uploadCommands = collectReleaseUploadCommands(content);
-  if (uploadCommands.length !== 1) {
-    fail(
-      relativePath,
-      1,
-      `release workflow must contain exactly one compact DSUB index upload to GitHub Releases; found ${uploadCommands.length}`
-    );
-  }
-  for (const uploadCommand of uploadCommands) {
-    const command = uploadCommand.command;
-    if (!/\bINDEX_PATH\b/.test(command)) {
-      fail(
-        relativePath,
-        uploadCommand.line,
-        "GitHub Release upload is limited to compact DSUB index JSON via INDEX_PATH"
-      );
-    }
-    if (/\b--clobber\b/.test(command)) {
-      fail(relativePath, uploadCommand.line, "GitHub Release index upload must not use --clobber");
-    }
-    if (
-      /\b(?:web_asset|web_checksum|desktop_manifest|checksum_path|checksum_asset|asset_dir|asset_path|package_studio_desktop|release_assets)\b/i.test(
-        command
-      ) ||
-      /\.(?:tar\.gz|zip|dmg|msi|exe|deb|rpm|AppImage|sha256)(?:\s|"|')/i.test(command)
-    ) {
-      fail(
-        relativePath,
-        uploadCommand.line,
-        "large Studio bundles, desktop packages, and checksum files must publish through DSUB S3, not GitHub Release assets"
-      );
-    }
-    if (/skenion-runtime|runtime[-_ ]sidecar|src-tauri\/binaries|binaries\/skenion-runtime/i.test(command)) {
-      fail(
-        relativePath,
-        uploadCommand.line,
-        "Runtime sidecars must be recorded from Runtime release evidence, not uploaded by Studio release jobs"
-      );
-    }
-
-    const step = findStepForLine(content, uploadCommand.line);
-    if (!step) {
-      fail(relativePath, uploadCommand.line, "could not associate GitHub Release upload with a workflow step");
-      continue;
-    }
-    if (!/GH_TOKEN:\s*\$\{\{\s*secrets\.GH_TOKEN\s*\}\}/.test(step.text)) {
-      fail(relativePath, step.startLine, "GitHub Release upload step must use secrets.GH_TOKEN");
-    }
-    if (!/\[\[\s+-z\s+"\$\{GH_TOKEN:-\}"\s*\]\]/.test(step.text)) {
-      fail(relativePath, step.startLine, "GitHub Release upload step must fail closed when GH_TOKEN is missing");
-    }
-    for (const required of ["gh release view", "gh release download", "cmp -s"]) {
-      if (!step.text.includes(required)) {
-        fail(
-          relativePath,
-          step.startLine,
-          `GitHub Release index upload step must verify existing assets before upload with ${required}`
-        );
-      }
-    }
-  }
+function checkNoGithubReleaseUploads(relativePath, content) {
+  rejectPattern(
+    relativePath,
+    content,
+    /\bgh\s+release\s+upload\b/,
+    "Studio release workflows must not upload DSUB indexes or product artifacts to GitHub Release assets"
+  );
+  rejectPattern(
+    relativePath,
+    content,
+    /\bgh\s+release\s+(?:download|view)\b[\s\S]{0,200}\bassets\b/,
+    "Studio release workflows must not depend on GitHub Release assets for artifact evidence"
+  );
 }
 
 function checkNoDirectS3WorkflowUpload(relativePath, content) {
@@ -170,90 +136,108 @@ function checkNoDirectS3WorkflowUpload(relativePath, content) {
   }
 }
 
-function checkWebReleaseWorkflow() {
-  const metadataStep = requireStep(webWorkflowPath, webWorkflow, "Generate DSUB web artifact metadata");
+function checkReleaseWorkflows() {
+  const webPublishStep = requireStep(studioReleaseWorkflowPath, studioReleaseWorkflow, "Publish Studio web artifacts to DSUB S3");
   expectIncludes(
-    webWorkflowPath,
-    metadataStep,
-    `${webPublisherPath} \\`,
-    "web release metadata must be generated by the Studio DSUB S3 publisher"
-  );
-  expectIncludes(
-    webWorkflowPath,
-    metadataStep,
-    "--dry-run",
-    "web release metadata generation must remain a secretless dry run"
-  );
-
-  const publishStep = requireStep(webWorkflowPath, webWorkflow, "Publish Studio web artifacts to DSUB S3");
-  expectIncludes(
-    webWorkflowPath,
-    publishStep,
+    studioReleaseWorkflowPath,
+    webPublishStep,
     `${webPublisherPath} \\`,
     "web release publish step must use the Studio DSUB S3 publisher"
   );
   expectIncludes(
-    webWorkflowPath,
-    publishStep,
+    studioReleaseWorkflowPath,
+    webPublishStep,
     "--use-existing-manifest",
     "web release publish step must reuse the dry-run manifest before uploading"
   );
 
-  const uploadStep = requireStep(webWorkflowPath, webWorkflow, "Upload DSUB web artifact index to GitHub Release");
+  const webStatusStep = requireStep(studioReleaseWorkflowPath, studioReleaseWorkflow, "Mark release as web artifact evidence");
   expectIncludes(
-    webWorkflowPath,
-    uploadStep,
-    "INDEX_PATH: ${{ steps.publish.outputs.index_path }}",
-    "web GitHub Release upload must receive only the DSUB web index path"
+    studioReleaseWorkflowPath,
+    webStatusStep,
+    "SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}",
+    "web release status must receive the DSUB public base URL"
   );
-}
 
-function checkDesktopReleaseWorkflow() {
-  const publishStep = requireStep(desktopWorkflowPath, desktopWorkflow, "Publish skenion studio desktop package to DSUB S3");
+  const packageStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Collect skenion studio desktop installers");
   expectIncludes(
-    desktopWorkflowPath,
-    publishStep,
+    desktopReleaseWorkflowPath,
+    packageStep,
+    "pnpm run package-studio-desktop",
+    "desktop release workflow must collect real Tauri installer artifacts"
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    packageStep,
+    "--target \"${TARGET}\"",
+    "desktop installer collection must keep the internal Rust target only as a build input"
+  );
+
+  const runtimeVerifyStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Stage Runtime binary from release manifest (verify HTTP)");
+  checkRuntimeStagingWorkflowStep(runtimeVerifyStep, "http");
+
+  const runtimePublishStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Stage Runtime binary from release manifest (publish S3)");
+  checkRuntimeStagingWorkflowStep(runtimePublishStep, "s3");
+
+  const desktopPublishStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Publish skenion studio desktop package to DSUB S3");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopPublishStep,
     `${desktopPublisherPath} \\`,
     "desktop package publish step must use the Studio desktop DSUB S3 publisher"
   );
-
-  const uploadStep = requireStep(desktopWorkflowPath, desktopWorkflow, "Upload DSUB desktop artifact index to GitHub Release");
   expectIncludes(
-    desktopWorkflowPath,
-    uploadStep,
-    "INDEX_PATH: ${{ steps.publish_desktop.outputs.index_path }}",
-    "desktop GitHub Release upload must receive only the per-target DSUB index path"
+    desktopReleaseWorkflowPath,
+    desktopPublishStep,
+    "${{ steps.package_studio_desktop.outputs.manifest_path }}",
+    "desktop publisher must consume the installer manifest rather than a wrapper archive"
   );
 
-  expectPattern(
-    desktopWorkflowPath,
-    desktopWorkflow,
-    /desktop-signing-mode:[\s\S]*?default:\s*signed-required/,
-    "desktop signing must default to the fail-closed signed-required mode"
+  const desktopStatusStep = requireStep(desktopReleaseWorkflowPath, desktopReleaseWorkflow, "Mark release as desktop artifact evidence");
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopStatusStep,
+    "SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}",
+    "desktop release status must receive the DSUB public base URL"
   );
-  expectPattern(
-    desktopWorkflowPath,
-    desktopWorkflow,
-    /macOS release-completion status: blocked[\s\S]*?unsigned internal\/pre-alpha artifact evidence does not satisfy signed\/notarized desktop release completion/,
-    "unsigned macOS preview artifacts must be explicitly marked non-release-complete"
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    desktopStatusStep,
+    "--mode desktop-artifacts-published",
+    "desktop release completion path must use the status updater's desktop artifact mode"
   );
-  expectPattern(
-    desktopWorkflowPath,
-    desktopWorkflow,
-    /unsigned-preview\)[\s\S]*?release_completion="blocked"/,
-    "unsigned Windows preview artifacts must be explicitly marked non-release-complete"
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    desktopReleaseWorkflow,
+    /unsigned-preview[\s\S]{0,120}non-release-complete|non-release-complete[\s\S]{0,120}unsigned-preview/,
+    "desktop release workflow must not describe unsigned-preview as inherently non-release-complete"
   );
-  expectPattern(
-    desktopWorkflowPath,
-    desktopWorkflow,
-    /signed-required\|azure-trusted-signing\)[\s\S]*?does not yet configure Tauri Windows signing[\s\S]*?exit 1/,
-    "Windows signed desktop modes must fail closed until signing is wired"
+}
+
+function checkRuntimeStagingWorkflowStep(step, artifactSource) {
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    step,
+    "pnpm run stage-runtime-sidecar",
+    "desktop release workflow must stage Runtime through the sidecar manifest stager"
   );
-  expectPattern(
-    desktopWorkflowPath,
-    desktopWorkflow,
-    /Preflight macOS signing and notarization secrets[\s\S]*?desktop_signing_mode != 'unsigned-preview'[\s\S]*?APPLE_CERTIFICATE[\s\S]*?APPLE_TEAM_ID[\s\S]*?exit 1/,
-    "macOS signed desktop publish mode must fail closed when signing or notarization secrets are missing"
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    step,
+    `--runtime-artifact-source ${artifactSource}`,
+    `Runtime staging workflow step must use ${artifactSource} artifact source`
+  );
+  expectIncludes(
+    desktopReleaseWorkflowPath,
+    step,
+    "GH_TOKEN: ${{ secrets.GH_TOKEN }}",
+    "Runtime release manifest staging must have GH_TOKEN for GitHub-hosted manifest evidence"
+  );
+  rejectPattern(
+    desktopReleaseWorkflowPath,
+    step,
+    /--runtime-release-json|--release-json/,
+    "desktop release workflow must not stage Runtime from release-body JSON"
   );
 }
 
@@ -284,7 +268,7 @@ function checkPublisherScripts() {
       relativePath,
       content,
       'upload_object "${index_path}"',
-      `${label} publisher must upload the compact index through DSUB S3/CDN`
+      `${label} publisher must upload compact index metadata through DSUB S3/CDN`
     );
   }
 
@@ -302,88 +286,296 @@ function checkPublisherScripts() {
       "web bundle, desktop manifest metadata, and checksums must publish through the web DSUB S3 publisher"
     );
   }
-  expectIncludes(
-    webPublisherPath,
-    webPublisher,
-    '"binarySource": "skenion-runtime-release-manifest"',
-    "web artifact index must record Runtime as release-manifest evidence"
-  );
-  expectIncludes(
-    webPublisherPath,
-    webPublisher,
-    '"bundledByStudioWebArtifacts": False',
-    "web artifacts must not bundle Runtime sidecars"
-  );
 
   for (const requiredUpload of ['upload_object "${asset_path}"', 'upload_object "${checksum_path}"']) {
     expectIncludes(
       desktopPublisherPath,
       desktopPublisher,
       requiredUpload,
-      "desktop packages and checksums must publish through the desktop DSUB S3 publisher"
+      "desktop installers and checksums must publish through the desktop DSUB S3 publisher"
     );
   }
   expectIncludes(
     desktopPublisherPath,
     desktopPublisher,
-    "require_env RUNTIME_TAG",
-    "desktop publisher must record the exact Runtime release tag"
+    "package-id=${package_id}",
+    "desktop publisher S3 metadata must use the user-facing package id instead of public Rust triple names"
   );
-  expectIncludes(
+  rejectPattern(
     desktopPublisherPath,
     desktopPublisher,
-    "require_env DESKTOP_SIGNING_MODE",
-    "desktop publisher must record the desktop signing mode"
+    /desktop\/\$\{target\}|desktop-\$\{target\}|skenion-studio-\$\{target\}/,
+    "desktop publisher public paths and asset names must not expose internal Rust target triples"
   );
 }
 
+function checkDesktopPackaging() {
+  rejectPattern(
+    packageDesktopPath,
+    packageDesktop,
+    /archiveExtension|writeZipArchive|validateZipArchive|validateTarGzArchive|\btar\b.*-czf|\.zip["'`]|\.tar\.gz["'`]/,
+    "desktop package script must copy real Tauri installers directly, not wrap them into canonical zip/tar.gz archives"
+  );
+  for (const packageId of [
+    "macos-apple-silicon",
+    "macos-intel",
+    "windows-x64",
+    "windows-arm64",
+    "linux-x64-deb",
+    "linux-x64-rpm",
+    "linux-arm64-deb",
+    "linux-arm64-rpm"
+  ]) {
+    expectIncludes(
+      packageDesktopPath,
+      packageDesktop,
+      packageId,
+      `desktop package script must expose user-facing package id ${packageId}`
+    );
+  }
+  for (const filenamePattern of [
+    "skenion-studio-v${version}-${installer.filenamePlatform}${installer.extension}",
+    "filenamePlatform: \"macos-apple-silicon\"",
+    "filenamePlatform: \"windows-x64\"",
+    "filenamePlatform: \"linux-x64\""
+  ]) {
+    expectIncludes(
+      packageDesktopPath,
+      packageDesktop,
+      filenamePattern,
+      "desktop package script must emit versioned user-facing installer filenames"
+    );
+  }
+}
+
+function checkPrepareArtifactsPolicy() {
+  rejectPattern(
+    prepareArtifactsPath,
+    publicPrepareMetadata(prepareArtifacts),
+    /skenion-studio-<target>|desktop\/<target>|<tar\.gz\|zip>|"checksum-pattern"|"github-release-asset-pattern"|github-release-asset-and-dsub-s3|releases\/download\/\$\{releaseTagValue\}\/|unknown-linux-gnu|\.(?:tar\.gz|zip)/,
+    "prepare script desktop manifest must describe direct DSUB installers, not wrapper archives or GitHub Release asset evidence"
+  );
+  expectIncludes(
+    prepareArtifactsPath,
+    prepareArtifacts,
+    '"installer-path-pattern": "skenion-studio/<release-tag>/desktop/<package-id>/<filename>"',
+    "prepare script desktop manifest must use package-id installer paths"
+  );
+  expectIncludes(
+    prepareArtifactsPath,
+    prepareArtifacts,
+    '"checksum-path-pattern": "skenion-studio/<release-tag>/desktop/<package-id>/<filename>.sha256"',
+    "prepare script desktop manifest must use package-id checksum paths"
+  );
+  expectIncludes(
+    prepareArtifactsPath,
+    prepareArtifacts,
+    "GitHub Release body records DSUB download and checksum links; GitHub Release assets are not artifact evidence.",
+    "prepare script desktop manifest must document release body DSUB evidence"
+  );
+  for (const packageId of [
+    "macos-apple-silicon",
+    "macos-intel",
+    "windows-x64",
+    "linux-x64-deb",
+    "linux-x64-rpm",
+    "linux-arm64-deb",
+    "linux-arm64-rpm"
+  ]) {
+    expectIncludes(
+      prepareArtifactsPath,
+      prepareArtifacts,
+      packageId,
+      `prepare script desktop manifest must expose user-facing package id ${packageId}`
+    );
+  }
+  for (const installerName of [
+    "skenion-studio-v<version>-macos-apple-silicon.dmg",
+    "skenion-studio-v<version>-macos-intel.dmg",
+    "skenion-studio-v<version>-windows-x64-setup.exe",
+    "skenion-studio-v<version>-windows-x64.msi",
+    "skenion-studio-v<version>-linux-x64.deb",
+    "skenion-studio-v<version>-linux-x64.rpm",
+    "skenion-studio-v<version>-windows-arm64-setup.exe",
+    "skenion-studio-v<version>-windows-arm64.msi",
+    "skenion-studio-v<version>-linux-arm64.deb",
+    "skenion-studio-v<version>-linux-arm64.rpm"
+  ]) {
+    expectIncludes(
+      prepareArtifactsPath,
+      prepareArtifacts,
+      installerName,
+      `prepare script must publish expected installer name ${installerName}`
+    );
+  }
+  expectIncludes(
+    prepareArtifactsPath,
+    prepareArtifacts,
+    '"artifact-binary-format": "raw-binary"',
+    "prepare script runtime metadata must describe raw Runtime binaries"
+  );
+}
+
+function checkRuntimeSidecarPolicy() {
+  rejectPattern(
+    stageRuntimePath,
+    stageRuntime,
+    /archiveFormat|extractRuntimeArchive|extractZipArchive|safeArchiveEntryPath|inflateRawSync|\btar\b|\.tar\.gz|\.zip|Runtime downloads table archive/i,
+    "Runtime sidecar staging must consume raw Runtime binaries, not archive wrappers"
+  );
+  expectIncludes(
+    stageRuntimePath,
+    stageRuntime,
+    'assertEqual(artifact.binaryFormat, "raw-binary", "manifest.artifact.binaryFormat");',
+    "Runtime sidecar staging must require raw-binary manifest artifacts"
+  );
+  expectIncludes(
+    stageRuntimePath,
+    stageRuntime,
+    'assertEqual(artifact.executableName, executableName, "manifest.artifact.executableName");',
+    "Runtime sidecar staging must validate the raw binary executable name"
+  );
+  expectIncludes(
+    stageRuntimePath,
+    stageRuntime,
+    "function defaultRuntimeManifestUrl()",
+    "Runtime sidecar staging must derive manifest evidence from Runtime tag and platform slug when no override is supplied"
+  );
+  expectIncludes(
+    stageRuntimePath,
+    stageRuntime,
+    "release-body fallback is only allowed with --mode local",
+    "Runtime sidecar staging must fail closed instead of using release-body fallback in release modes"
+  );
+  rejectPattern(
+    stageRuntimePath,
+    stageRuntime,
+    /if \(releaseModeNames\.has\(mode\)\)[\s\S]{0,400}runtimeArtifactFromReleaseBody/,
+    "Runtime sidecar release modes must not call release-body fallback"
+  );
+  for (const publicRuntimeName of [
+    "skenion-runtime-v<version>-macos-apple-silicon",
+    "skenion-runtime-v<version>-macos-intel",
+    "skenion-runtime-v<version>-windows-x64.exe",
+    "skenion-runtime-v<version>-windows-arm64.exe",
+    "skenion-runtime-v<version>-linux-x64",
+    "skenion-runtime-v<version>-linux-arm64"
+  ]) {
+    expectIncludes(
+      stageRuntimePath,
+      stageRuntime,
+      publicRuntimeName,
+      `Runtime sidecar staging must know public raw binary name ${publicRuntimeName}`
+    );
+  }
+}
+
 function checkReleaseStatusPolicy() {
-  const expectedWebAssets = extractFunctionBody(statusScriptPath, statusScript, "expectedWebAssets");
-  expectIncludes(
+  rejectPattern(
     statusScriptPath,
-    expectedWebAssets,
-    "skenion-studio-web-artifacts-v${versionValue}.index.json",
-    "current web release policy must expect only the compact DSUB web index on GitHub Releases"
+    statusScript,
+    /\brelease\.assets\b|\bassetNameSet\b|\bmissingAssets\b|gh release (?:view|download)|--json assets/,
+    "release status must not inspect GitHub Release assets for artifact completeness"
   );
   rejectPattern(
     statusScriptPath,
-    expectedWebAssets,
-    /web-bundle|desktop-manifest|sha256/,
-    "large legacy web assets and checksums must not be current web release policy assets"
-  );
-
-  const expectedDesktopAssets = extractFunctionBody(statusScriptPath, statusScript, "expectedDesktopAssets");
-  expectIncludes(
-    statusScriptPath,
-    expectedDesktopAssets,
-    "skenion-studio-desktop-${target}-v${version}.index.json",
-    "current desktop release policy must expect only compact per-target DSUB indexes on GitHub Releases"
+    statusScript,
+    /unknown-linux-gnu|apple-darwin|pc-windows-msvc|skenion-studio-desktop-\$\{target\}/,
+    "release status public links must use user-facing package names, not Rust target triples"
   );
   rejectPattern(
     statusScriptPath,
-    expectedDesktopAssets,
-    /skenion-studio-\$\{target\}\.|\bsha256\b/,
-    "large legacy desktop packages and checksums must not be current desktop release policy assets"
+    statusScript,
+    /unsigned-preview[\s\S]{0,120}(?:blocked|blocker|not release-complete|release completion remains blocked)|(?:blocked|blocker|not release-complete)[\s\S]{0,120}unsigned-preview/,
+    "unsigned-preview may be recorded but must not make the Studio release incomplete"
   );
+  expectIncludes(
+    statusScriptPath,
+    statusScript,
+    "GitHub Release assets are not used as artifact evidence",
+    "release status text must state that GitHub Release assets are not artifact evidence"
+  );
+  expectIncludes(
+    statusScriptPath,
+    statusScript,
+    'if (mode === "desktop-artifacts-published")',
+    "desktop release status update must have a dedicated publish-mode evidence gate"
+  );
+  expectIncludes(
+    statusScriptPath,
+    statusScript,
+    "await verifyRequiredWebArtifactEvidence();",
+    "desktop release completion must verify web artifact evidence before patching the GitHub Release"
+  );
+  expectIncludes(
+    statusScriptPath,
+    statusScript,
+    "skenion-studio-web-artifacts-v${version}.index.json",
+    "web artifact evidence check must include the DSUB web artifact index"
+  );
+  expectIncludes(
+    statusScriptPath,
+    statusScript,
+    'fetch(url,',
+    "web artifact evidence check must use deterministic DSUB public URL existence checks"
+  );
+  for (const packageId of ["macos-apple-silicon", "macos-intel", "windows-x64", "linux-x64-deb", "linux-x64-rpm"]) {
+    expectIncludes(
+      statusScriptPath,
+      statusScript,
+      packageId,
+      `release status must list release-blocking desktop package ${packageId}`
+    );
+  }
+}
 
+function checkDocsPolicy() {
+  for (const [relativePath, content] of [
+    [desktopReadmePath, desktopReadme],
+    [ciPolicyPath, ciPolicy]
+  ]) {
+    rejectPattern(
+      relativePath,
+      content,
+      /canonical DSUB (?:S3 )?release archives|skenion-studio-<target>|\.tar\.gz`? for macOS\/Linux|\.zip`? for Windows|GitHub Release carries only compact per-target desktop package index JSON assets|Runtime tarball|Runtime archive|Windows `zip` archives|tarball size/,
+      "desktop release docs must describe direct installer distribution, not wrapper archives or GitHub index assets"
+    );
+  }
   expectIncludes(
-    statusScriptPath,
-    statusScript,
-    'const hasReleaseCompleteSigning = signingMode !== "unsigned-preview";',
-    "unsigned-preview must not satisfy desktop release-complete signing evidence"
+    desktopReadmePath,
+    desktopReadme,
+    "real Tauri installer artifacts",
+    "desktop README must document direct installer artifacts"
   );
   expectIncludes(
-    statusScriptPath,
-    statusScript,
-    'blockers.push("desktop-signing-mode is unsigned-preview");',
-    "desktop release status must explain unsigned-preview as a release-completion blocker"
+    webReadmePath,
+    webReadme,
+    "GitHub Release body records the DSUB links",
+    "web README must document release body DSUB links instead of GitHub index assets"
   );
   expectIncludes(
-    statusScriptPath,
-    statusScript,
-    "large web artifacts are not GitHub Release assets",
-    "release status text must preserve the compact-index-only GitHub Release policy"
+    ciPolicyPath,
+    ciPolicy,
+    "GitHub Release body records DSUB download and checksum links",
+    "CI policy must document DSUB links in the release body"
   );
+}
+
+function publicPrepareMetadata(content) {
+  return [
+    stringLiteralInitializer(content, "name"),
+    stringLiteralInitializer(content, '"installer-path-pattern"'),
+    stringLiteralInitializer(content, '"checksum-path-pattern"'),
+    stringLiteralInitializer(content, '"release-body-evidence"'),
+    stringLiteralInitializer(content, '"artifact-filename"')
+  ].join("\n");
+}
+
+function stringLiteralInitializer(content, key) {
+  return content
+    .split(/\r?\n/)
+    .filter((line) => line.includes(`${key}:`) || line.includes(`${key}"`))
+    .join("\n");
 }
 
 function readRequired(relativePath) {
@@ -401,37 +593,6 @@ function shellCommandLines(content) {
     line: index + 1,
     text: text.trim()
   }));
-}
-
-function collectReleaseUploadCommands(content) {
-  const lines = content.split(/\r?\n/);
-  const commands = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/\bgh\s+release\s+upload\b/.test(lines[index])) {
-      continue;
-    }
-
-    const parts = [];
-    let cursor = index;
-    while (cursor < lines.length) {
-      const line = lines[cursor].trim();
-      parts.push(line.replace(/\\\s*$/, "").trim());
-      if (!/\\\s*$/.test(line)) {
-        break;
-      }
-      cursor += 1;
-    }
-
-    commands.push({
-      line: index + 1,
-      command: parts.join(" ")
-    });
-  }
-  return commands;
-}
-
-function findStepForLine(content, lineNumber) {
-  return splitSteps(content).find((step) => step.startLine <= lineNumber && lineNumber <= step.endLine);
 }
 
 function requireStep(relativePath, content, stepName) {
@@ -481,44 +642,8 @@ function splitSteps(content) {
   return steps;
 }
 
-function extractFunctionBody(relativePath, content, functionName) {
-  const start = content.indexOf(`function ${functionName}(`);
-  if (start === -1) {
-    fail(relativePath, 1, `missing required function: ${functionName}`);
-    return "";
-  }
-
-  const openBrace = content.indexOf("{", start);
-  if (openBrace === -1) {
-    fail(relativePath, lineForIndex(content, start), `cannot parse function body: ${functionName}`);
-    return "";
-  }
-
-  let depth = 0;
-  for (let index = openBrace; index < content.length; index += 1) {
-    const character = content[index];
-    if (character === "{") {
-      depth += 1;
-    } else if (character === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        return content.slice(openBrace + 1, index);
-      }
-    }
-  }
-
-  fail(relativePath, lineForIndex(content, openBrace), `unterminated function body: ${functionName}`);
-  return "";
-}
-
 function expectIncludes(relativePath, content, needle, message) {
   if (!content.includes(needle)) {
-    fail(relativePath, 1, message);
-  }
-}
-
-function expectPattern(relativePath, content, pattern, message) {
-  if (!pattern.test(content)) {
     fail(relativePath, 1, message);
   }
 }

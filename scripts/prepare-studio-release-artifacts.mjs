@@ -27,33 +27,109 @@ const artifactPackageDefinitions = [
 const desktopTargets = [
   {
     target: "aarch64-apple-darwin",
+    platformSlug: "macos-apple-silicon",
+    executableName: "skenion-runtime",
     tier: "release-blocking",
     tauriBundleArgs: []
   },
   {
     target: "x86_64-apple-darwin",
+    platformSlug: "macos-intel",
+    executableName: "skenion-runtime",
     tier: "release-blocking",
     tauriBundleArgs: []
   },
   {
     target: "x86_64-pc-windows-msvc",
+    platformSlug: "windows-x64",
+    executableName: "skenion-runtime.exe",
     tier: "release-blocking",
     tauriBundleArgs: []
   },
   {
     target: "x86_64-unknown-linux-gnu",
+    platformSlug: "linux-x64",
+    executableName: "skenion-runtime",
     tier: "release-blocking",
     tauriBundleArgs: ["--bundles", "deb,rpm"]
   },
   {
     target: "aarch64-pc-windows-msvc",
+    platformSlug: "windows-arm64",
+    executableName: "skenion-runtime.exe",
     tier: "preview",
     tauriBundleArgs: []
   },
   {
     target: "aarch64-unknown-linux-gnu",
+    platformSlug: "linux-arm64",
+    executableName: "skenion-runtime",
     tier: "preview",
     tauriBundleArgs: ["--bundles", "deb,rpm"]
+  }
+];
+const desktopInstallers = [
+  {
+    "package-id": "macos-apple-silicon",
+    family: "dmg",
+    tier: "release-blocking",
+    name: "skenion-studio-v<version>-macos-apple-silicon.dmg"
+  },
+  {
+    "package-id": "macos-intel",
+    family: "dmg",
+    tier: "release-blocking",
+    name: "skenion-studio-v<version>-macos-intel.dmg"
+  },
+  {
+    "package-id": "windows-x64",
+    family: "nsis-setup",
+    tier: "release-blocking",
+    name: "skenion-studio-v<version>-windows-x64-setup.exe"
+  },
+  {
+    "package-id": "windows-x64-msi",
+    family: "msi",
+    tier: "release-blocking",
+    optional: true,
+    name: "skenion-studio-v<version>-windows-x64.msi"
+  },
+  {
+    "package-id": "linux-x64-deb",
+    family: "deb",
+    tier: "release-blocking",
+    name: "skenion-studio-v<version>-linux-x64.deb"
+  },
+  {
+    "package-id": "linux-x64-rpm",
+    family: "rpm",
+    tier: "release-blocking",
+    name: "skenion-studio-v<version>-linux-x64.rpm"
+  },
+  {
+    "package-id": "windows-arm64",
+    family: "nsis-setup",
+    tier: "preview",
+    name: "skenion-studio-v<version>-windows-arm64-setup.exe"
+  },
+  {
+    "package-id": "windows-arm64-msi",
+    family: "msi",
+    tier: "preview",
+    optional: true,
+    name: "skenion-studio-v<version>-windows-arm64.msi"
+  },
+  {
+    "package-id": "linux-arm64-deb",
+    family: "deb",
+    tier: "preview",
+    name: "skenion-studio-v<version>-linux-arm64.deb"
+  },
+  {
+    "package-id": "linux-arm64-rpm",
+    family: "rpm",
+    tier: "preview",
+    name: "skenion-studio-v<version>-linux-arm64.rpm"
   }
 ];
 
@@ -77,6 +153,7 @@ const desktopManifest = createDesktopManifest(
   runtimeVersion,
   rootPackage.dependencies["@skenion/contracts"]
 );
+validateDesktopManifestPolicy(desktopManifest);
 
 if (!checkOnly) {
   await copyWebDist(distDir, path.join(rootDir, "packages/studio-web/dist"));
@@ -213,14 +290,15 @@ function createDesktopManifest(versionValue, releaseTagValue, runtimeTagValue, r
       url: `https://github.com/${studioRepo}/releases/tag/${releaseTagValue}`
     },
     artifact: {
-      kind: "tauri-desktop-release",
+      kind: "tauri-desktop-installers",
       distribution: "dsub-s3",
-      "desktop-package-path-pattern": "skenion-studio/<release-tag>/desktop/<target>/skenion-studio-<target>.<tar.gz|zip>",
-      "checksum-pattern": "skenion-studio-<target>.<tar.gz|zip>.sha256",
-      "index-pattern": "skenion-studio-desktop-<target>-v<version>.index.json",
-      "github-release-asset-pattern": "skenion-studio-desktop-<target>-v<version>.index.json",
-      "linux-package-contents": ["deb", "rpm"],
-      "windows-package-contents": ["nsis-setup-exe", "msi-if-emitted"]
+      "installer-path-pattern": "skenion-studio/<release-tag>/desktop/<package-id>/<filename>",
+      "checksum-path-pattern": "skenion-studio/<release-tag>/desktop/<package-id>/<filename>.sha256",
+      "index-path-pattern": "skenion-studio/<release-tag>/desktop/<package-id>/skenion-studio-desktop-<package-id>-v<version>.index.json",
+      "release-body-evidence": "GitHub Release body records DSUB download and checksum links; GitHub Release assets are not artifact evidence.",
+      "macos-installer-families": ["dmg"],
+      "linux-installer-families": ["deb", "rpm"],
+      "windows-installer-families": ["nsis-setup-exe", "msi-if-emitted"]
     },
     runtime: {
       repository: runtimeRepo,
@@ -232,28 +310,29 @@ function createDesktopManifest(versionValue, releaseTagValue, runtimeTagValue, r
       "api-baseline": runtimeApiBaseline,
       "protocol-baseline": runtimeProtocolBaseline
     },
-    "desktop-packages": desktopTargets.map((target) => createDesktopPackageTarget(releaseTagValue, target)),
+    "desktop-packages": desktopInstallers.map((installer) => createDesktopPackageTarget(versionValue, releaseTagValue, installer)),
     "runtime-release-manifests": desktopTargets.map((target) =>
       createRuntimeManifestTarget(runtimeVersionValue, runtimeTagValue, target)
     )
   };
 }
 
-function createDesktopPackageTarget(releaseTagValue, targetConfig) {
-  const packageAssetName = `skenion-studio-${targetConfig.target}.${desktopPackageExtension(targetConfig.target)}`;
-  const packageChecksumName = `${packageAssetName}.sha256`;
-  const indexName = `skenion-studio-desktop-${targetConfig.target}-${releaseTagValue}.index.json`;
-  const distribution = createDesktopDsubDistribution(releaseTagValue, targetConfig.target, {
-    assetName: packageAssetName,
+function createDesktopPackageTarget(versionValue, releaseTagValue, installer) {
+  const installerName = installer.name.replace("<version>", versionValue);
+  const packageChecksumName = `${installerName}.sha256`;
+  const indexName = `skenion-studio-desktop-${installer["package-id"]}-v${versionValue}.index.json`;
+  const distribution = createDesktopDsubDistribution(releaseTagValue, installer["package-id"], {
+    assetName: installerName,
     checksumName: packageChecksumName,
     indexName
   });
   return {
-    target: targetConfig.target,
-    tier: targetConfig.tier,
-    "tauri-bundle-args": targetConfig.tauriBundleArgs,
-    "package-asset": {
-      name: packageAssetName,
+    "package-id": installer["package-id"],
+    family: installer.family,
+    tier: installer.tier,
+    optional: installer.optional === true,
+    "desktop-installer": {
+      name: installerName,
       "checksum-name": packageChecksumName,
       distribution: "dsub-s3",
       url: distribution.asset.url,
@@ -263,19 +342,19 @@ function createDesktopPackageTarget(releaseTagValue, targetConfig) {
     },
     "desktop-index": {
       name: indexName,
-      distribution: "github-release-asset-and-dsub-s3",
-      url: `https://github.com/${studioRepo}/releases/download/${releaseTagValue}/${indexName}`,
-      "dsub-url": distribution.index.url,
+      distribution: "dsub-s3",
+      url: distribution.index.url,
       dsub: distribution.index.dsub
     }
   };
 }
 
 function createRuntimeManifestTarget(versionValue, runtimeTag, targetConfig) {
-  const runtimeAssetName = `skenion-runtime-v${versionValue}-${targetConfig.target}.tar.gz`;
+  const executableSuffix = targetConfig.executableName.endsWith(".exe") ? ".exe" : "";
+  const runtimeAssetName = `skenion-runtime-v${versionValue}-${targetConfig.platformSlug}${executableSuffix}`;
   const runtimeManifestName = `${runtimeAssetName}.manifest.json`;
   return {
-    target: targetConfig.target,
+    "platform-slug": targetConfig.platformSlug,
     tier: targetConfig.tier,
     "tauri-bundle-args": targetConfig.tauriBundleArgs,
     "runtime-release-artifact-manifest": {
@@ -284,13 +363,11 @@ function createRuntimeManifestTarget(versionValue, runtimeTag, targetConfig) {
       name: runtimeManifestName,
       url: `https://github.com/${runtimeRepo}/releases/download/${runtimeTag}/${runtimeManifestName}`,
       "artifact-filename": runtimeAssetName,
+      "artifact-binary-format": "raw-binary",
+      "artifact-executable-name": targetConfig.executableName,
       "checksum-filename": `${runtimeAssetName}.sha256`
     }
   };
-}
-
-function desktopPackageExtension(target) {
-  return target.includes("windows") ? "zip" : "tar.gz";
 }
 
 function createWebDsubDistribution(releaseTagValue, assetName, checksumName) {
@@ -340,6 +417,42 @@ function createDsubObjectDistribution(publicBaseUrl, bucket, prefix, objectPath)
       key
     }
   };
+}
+
+function validateDesktopManifestPolicy(manifest) {
+  const artifactJson = JSON.stringify(manifest.artifact);
+  const desktopPackagesJson = JSON.stringify(manifest["desktop-packages"]);
+  const manifestJson = JSON.stringify(manifest);
+  const publicDesktopJson = `${artifactJson}\n${desktopPackagesJson}`;
+  const stalePatterns = [
+    "skenion-studio-" + "<target>",
+    "desktop/" + "<target>",
+    "<tar.gz" + "|zip>",
+    "github-release" + "-asset",
+    "github.com/skenion/skenion-studio/releases/download"
+  ];
+  for (const stalePattern of stalePatterns) {
+    if (publicDesktopJson.includes(stalePattern)) {
+      fail(`desktop manifest public distribution metadata contains stale pattern: ${stalePattern}`);
+    }
+  }
+  for (const targetTriple of [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu"
+  ]) {
+    if (manifestJson.includes(targetTriple)) {
+      fail(`desktop manifest metadata exposes public Linux Rust target triple: ${targetTriple}`);
+    }
+  }
+  for (const desktopPackage of manifest["desktop-packages"]) {
+    const name = desktopPackage["desktop-installer"]?.name;
+    if (!name?.includes(`-v${manifest.version}-`)) {
+      fail(`desktop installer filename must include Studio version ${manifest.version}: ${name ?? "<missing>"}`);
+    }
+    if (/\.(?:tar\.gz|zip)$/.test(name)) {
+      fail(`desktop installer filename must be a real installer, not a wrapper archive: ${name}`);
+    }
+  }
 }
 
 function normalizeBaseUrl(value) {

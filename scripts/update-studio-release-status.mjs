@@ -5,22 +5,14 @@ const semverTagPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const statusStart = "<!-- skenion-studio-release-status:start -->";
 const statusEnd = "<!-- skenion-studio-release-status:end -->";
 const studioRepo = process.env.GITHUB_REPOSITORY || "skenion/skenion-studio";
-const releaseBlockingTargets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
-  "x86_64-pc-windows-msvc",
-  "x86_64-unknown-linux-gnu"
-];
-const allDesktopTargets = [
-  ...releaseBlockingTargets,
-  "aarch64-pc-windows-msvc",
-  "aarch64-unknown-linux-gnu"
-];
+const defaultPublicBaseUrl = "https://cdn.dsub.io/skenion/releases";
 
 const options = parseArgs(process.argv.slice(2));
 const mode = requireOption(options.mode, "--mode");
 const releaseTag = requireOption(options.tag, "--tag");
 const version = versionFromTag(releaseTag);
+const publicBaseUrl = (options.publicBaseUrl || process.env.SKENION_RELEASE_PUBLIC_BASE_URL || defaultPublicBaseUrl).replace(/\/+$/, "");
+const releaseBlockingDesktopPackages = createReleaseBlockingDesktopPackages(version);
 
 if (options.check) {
   runCheckMode();
@@ -33,8 +25,12 @@ async function updateRelease() {
     fail("GH_TOKEN is required to update Studio GitHub release status.");
   }
 
+  if (mode === "desktop-artifacts-published") {
+    await verifyRequiredWebArtifactEvidence();
+  }
+
   const release = await ghJson(["api", `repos/${studioRepo}/releases/tags/${releaseTag}`]);
-  const update = createStatusUpdate(release);
+  const update = createStatusUpdate();
   const body = prependStatusBlock(release.body ?? "", update.statusBlock);
   await ghJson(
     ["api", "--method", "PATCH", `repos/${studioRepo}/releases/${release.id}`, "--input", "-"],
@@ -53,13 +49,8 @@ async function updateRelease() {
 }
 
 function runCheckMode() {
-  const release = {
-    id: 1,
-    body: "## Release notes\n\nSynthetic check release.",
-    assets: syntheticAssetsForMode()
-  };
-  const update = createStatusUpdate(release);
-  const body = prependStatusBlock(release.body, update.statusBlock);
+  const update = createStatusUpdate();
+  const body = prependStatusBlock("## Release notes\n\nSynthetic check release.", update.statusBlock);
   if (!body.includes(statusStart) || !body.includes(statusEnd)) {
     fail("release status marker was not inserted.");
   }
@@ -68,14 +59,14 @@ function runCheckMode() {
   console.log(`prerelease: ${update.prerelease}`);
 }
 
-function createStatusUpdate(release) {
+function createStatusUpdate() {
   switch (mode) {
     case "release-please-created":
-      return releasePleaseCreatedStatus(release);
+      return releasePleaseCreatedStatus();
     case "web-artifacts-published":
-      return webArtifactsPublishedStatus(release);
+      return webArtifactsPublishedStatus();
     case "desktop-artifacts-published":
-      return desktopArtifactsPublishedStatus(release);
+      return desktopArtifactsPublishedStatus();
     default:
       fail(
         "--mode must be release-please-created, web-artifacts-published, or desktop-artifacts-published."
@@ -83,164 +74,178 @@ function createStatusUpdate(release) {
   }
 }
 
-function releasePleaseCreatedStatus(release) {
-  const assetNames = assetNameSet(release);
-  const productAssets = [
-    ...legacyExpectedWebAssets(version),
-    ...expectedWebAssets(version),
-    ...legacyExpectedDesktopAssets(allDesktopTargets),
-    ...expectedDesktopAssets(allDesktopTargets)
-  ].filter((assetName) => assetNames.has(assetName));
-
-  if (productAssets.length > 0) {
-    fail(
-      `refusing to mark ${releaseTag} as metadata-only because product assets already exist: ${productAssets.join(", ")}`
-    );
-  }
-
+function releasePleaseCreatedStatus() {
   return {
     title: `skenion-studio: v${version} (metadata only)`,
     prerelease: true,
-    summary: "Release Please metadata only; no product artifacts are present",
+    summary: "Release Please metadata only; product artifacts are not recorded yet",
     statusBlock: statusBlock([
       "**Studio release status:** Release Please metadata only.",
       "",
-      `This GitHub Release is marked as a prerelease/unpromoted release because no Studio web artifact index or desktop package indexes have been published for \`${releaseTag}\` yet.`,
+      `This GitHub Release is marked as a prerelease/unpromoted release because no Studio DSUB distribution links have been recorded for \`${releaseTag}\` yet.`,
       "It is not a Studio distribution release and must not be treated as release-complete or product-ledger promoted."
     ])
   };
 }
 
-function webArtifactsPublishedStatus(release) {
-  const missing = missingAssets(release, expectedWebAssets(version));
-  if (missing.length > 0) {
-    fail(`cannot mark ${releaseTag} as web-artifact evidence; missing assets: ${missing.join(", ")}`);
-  }
-
+function webArtifactsPublishedStatus() {
   const runtimeTag = validateRuntimeTag(requireOption(options.runtimeTag, "--runtime-tag"));
+  const web = webLinks();
   return {
     title: `skenion-studio: v${version} (web artifacts published)`,
     prerelease: true,
-    summary: "DSUB web artifact index is present; desktop distribution is still pending",
+    summary: "DSUB web artifact links recorded; desktop installers are still pending",
     statusBlock: statusBlock([
       "**Studio release status:** Web artifact evidence published.",
       "",
-      `GitHub Actions published the canonical Studio web bundle, checksum, desktop manifest metadata, and combined checksum manifest for \`${releaseTag}\` to DSUB release storage.`,
-      `This GitHub Release carries the compact DSUB artifact index for those web artifacts; large web artifacts are not GitHub Release assets.`,
+      `GitHub Actions published the Studio web bundle and metadata for \`${releaseTag}\` to DSUB release storage. GitHub Release assets are not used as artifact evidence.`,
       `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
-      "This release remains prerelease/unpromoted until release-blocking desktop package indexes and signing evidence are present."
+      "",
+      "**Web downloads:**",
+      linkLine("Web artifact index", web.index),
+      linkLine("Web bundle", web.bundle, web.bundleChecksum),
+      linkLine("Desktop release metadata", web.desktopManifest, web.desktopManifestChecksum),
+      linkLine("Combined checksum manifest", web.combinedChecksum),
+      "",
+      "This release remains prerelease/unpromoted until release-blocking desktop installer links are recorded."
     ])
   };
 }
 
-function desktopArtifactsPublishedStatus(release) {
+function desktopArtifactsPublishedStatus() {
+  const runtimeTag = validateRuntimeTag(requireOption(options.runtimeTag, "--runtime-tag"));
   const signingMode = requireOption(options.desktopSigningMode, "--desktop-signing-mode");
   if (!["unsigned-preview", "signed-required", "azure-trusted-signing"].includes(signingMode)) {
-    fail(
-      "--desktop-signing-mode must be unsigned-preview, signed-required, or azure-trusted-signing."
-    );
+    fail("--desktop-signing-mode must be unsigned-preview, signed-required, or azure-trusted-signing.");
   }
 
-  const missingDesktop = missingAssets(release, expectedDesktopAssets(releaseBlockingTargets));
-  if (missingDesktop.length > 0) {
-    fail(
-      `cannot mark ${releaseTag} as desktop-artifact evidence; missing release-blocking desktop indexes: ${missingDesktop.join(", ")}`
-    );
-  }
-
-  const missingWeb = missingAssets(release, expectedWebAssets(version));
-  const hasReleaseCompleteSigning = signingMode !== "unsigned-preview";
-  const releaseCompleteAssets = missingWeb.length === 0 && hasReleaseCompleteSigning;
-  const runtimeTag = validateRuntimeTag(requireOption(options.runtimeTag, "--runtime-tag"));
-
-  if (releaseCompleteAssets) {
-    return {
-      title: `skenion-studio: v${version}`,
-      prerelease: false,
-      summary: "canonical web index and signed release-blocking desktop indexes are present",
-      statusBlock: statusBlock([
-        "**Studio release status:** Canonical product artifact set present.",
-        "",
-        `GitHub Actions verified the Studio web artifact index and release-blocking DSUB desktop package indexes for \`${releaseTag}\`.`,
-        `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
-        "This release has the Studio artifact set required for distribution evidence. Product promotion must still be recorded in the product release ledger before reporting a promoted product line."
-      ])
-    };
-  }
-
-  const blockers = [];
-  if (missingWeb.length > 0) {
-    blockers.push(`missing web assets: ${missingWeb.join(", ")}`);
-  }
-  if (!hasReleaseCompleteSigning) {
-    blockers.push("desktop-signing-mode is unsigned-preview");
-  }
+  const web = webLinks();
+  const desktop = releaseBlockingDesktopPackages.flatMap((desktopPackage) => {
+    const links = desktopLinks(desktopPackage);
+    return [linkLine(desktopPackage.label, links.installer, links.checksum)];
+  });
 
   return {
-    title: `skenion-studio: v${version} (desktop artifacts published; unpromoted)`,
-    prerelease: true,
-    summary: `desktop indexes are present but release completion is blocked (${blockers.join("; ")})`,
+    title: `skenion-studio: v${version}`,
+    prerelease: false,
+    summary: "DSUB web and release-blocking desktop installer links recorded",
     statusBlock: statusBlock([
-      "**Studio release status:** Desktop artifact evidence published, not release-complete.",
+      "**Studio release status:** Product distribution artifact links recorded.",
       "",
-      `GitHub Actions verified release-blocking Studio desktop package indexes for \`${releaseTag}\`.`,
+      `GitHub Actions recorded the Studio web artifact set and release-blocking desktop installer set for \`${releaseTag}\`. GitHub Release assets are not used as artifact evidence.`,
       `Runtime release metadata target: \`${runtimeTag}\`; Runtime binaries remain sourced from Runtime release artifacts.`,
-      `Release completion remains blocked because ${blockers.join("; ")}.`,
-      "This release stays prerelease/unpromoted until the missing release-completion evidence is present."
+      `Desktop signing mode recorded: \`${signingMode}\`.`,
+      "",
+      "**Web downloads:**",
+      linkLine("Web artifact index", web.index),
+      linkLine("Web bundle", web.bundle, web.bundleChecksum),
+      linkLine("Desktop release metadata", web.desktopManifest, web.desktopManifestChecksum),
+      linkLine("Combined checksum manifest", web.combinedChecksum),
+      "",
+      "**Desktop downloads:**",
+      ...desktop,
+      "",
+      "Product promotion must still be recorded in the product release ledger before reporting a promoted product line."
     ])
   };
 }
 
-function expectedWebAssets(versionValue) {
-  return [`skenion-studio-web-artifacts-v${versionValue}.index.json`];
+function webLinks() {
+  const base = `${publicBaseUrl}/skenion-studio/${releaseTag}/web`;
+  const webBundle = `skenion-studio-web-bundle-v${version}.tar.gz`;
+  const desktopManifest = `skenion-studio-desktop-manifest-v${version}.json`;
+  return {
+    index: `${base}/skenion-studio-web-artifacts-v${version}.index.json`,
+    bundle: `${base}/${webBundle}`,
+    bundleChecksum: `${base}/${webBundle}.sha256`,
+    desktopManifest: `${base}/${desktopManifest}`,
+    desktopManifestChecksum: `${base}/${desktopManifest}.sha256`,
+    combinedChecksum: `${base}/skenion-studio-release-artifacts-v${version}.sha256`
+  };
 }
 
-function legacyExpectedWebAssets(versionValue) {
-  const webAsset = `skenion-studio-web-bundle-v${versionValue}.tar.gz`;
-  const desktopManifestAsset = `skenion-studio-desktop-manifest-v${versionValue}.json`;
+function createReleaseBlockingDesktopPackages(versionValue) {
   return [
-    webAsset,
-    `${webAsset}.sha256`,
-    desktopManifestAsset,
-    `${desktopManifestAsset}.sha256`,
-    `skenion-studio-release-artifacts-v${versionValue}.sha256`
+    {
+      id: "macos-apple-silicon",
+      label: "macOS Apple Silicon",
+      filename: `skenion-studio-v${versionValue}-macos-apple-silicon.dmg`
+    },
+    {
+      id: "macos-intel",
+      label: "macOS Intel",
+      filename: `skenion-studio-v${versionValue}-macos-intel.dmg`
+    },
+    {
+      id: "windows-x64",
+      label: "Windows x64",
+      filename: `skenion-studio-v${versionValue}-windows-x64-setup.exe`
+    },
+    {
+      id: "linux-x64-deb",
+      label: "Linux x64 deb",
+      filename: `skenion-studio-v${versionValue}-linux-x64.deb`
+    },
+    {
+      id: "linux-x64-rpm",
+      label: "Linux x64 rpm",
+      filename: `skenion-studio-v${versionValue}-linux-x64.rpm`
+    }
   ];
 }
 
-function expectedDesktopAssets(targets) {
-  return targets.map((target) => `skenion-studio-desktop-${target}-v${version}.index.json`);
-}
+async function verifyRequiredWebArtifactEvidence() {
+  const web = webLinks();
+  const requiredUrls = [
+    ["web artifact index", web.index],
+    ["web bundle", web.bundle],
+    ["web bundle checksum", web.bundleChecksum],
+    ["desktop release metadata", web.desktopManifest],
+    ["desktop release metadata checksum", web.desktopManifestChecksum],
+    ["combined checksum manifest", web.combinedChecksum]
+  ];
 
-function legacyExpectedDesktopAssets(targets) {
-  return targets.flatMap((target) => {
-    const desktopAsset = `skenion-studio-${target}.${target.includes("windows") ? "zip" : "tar.gz"}`;
-    return [desktopAsset, `${desktopAsset}.sha256`];
-  });
-}
-
-function syntheticAssetsForMode() {
-  switch (mode) {
-    case "release-please-created":
-      return [];
-    case "web-artifacts-published":
-      return expectedWebAssets(version).map((name) => ({ name }));
-    case "desktop-artifacts-published":
-      return [
-        ...expectedWebAssets(version),
-        ...expectedDesktopAssets(releaseBlockingTargets)
-      ].map((name) => ({ name }));
-    default:
-      return [];
+  for (const [label, url] of requiredUrls) {
+    await verifyPublicUrlExists(label, url);
   }
 }
 
-function missingAssets(release, expectedAssets) {
-  const assetNames = assetNameSet(release);
-  return expectedAssets.filter((assetName) => !assetNames.has(assetName));
+async function verifyPublicUrlExists(label, url) {
+  let response;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      response = await fetch(url, {
+        method: "HEAD",
+        redirect: "follow",
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch (error) {
+    fail(`cannot mark ${releaseTag} release-complete; required DSUB ${label} is not reachable: ${url} (${error.message})`);
+  }
+
+  if (!response.ok) {
+    fail(`cannot mark ${releaseTag} release-complete; required DSUB ${label} returned HTTP ${response.status}: ${url}`);
+  }
 }
 
-function assetNameSet(release) {
-  return new Set((release.assets ?? []).map((asset) => asset.name).filter(Boolean));
+function desktopLinks(desktopPackage) {
+  const base = `${publicBaseUrl}/skenion-studio/${releaseTag}/desktop/${desktopPackage.id}`;
+  return {
+    installer: `${base}/${desktopPackage.filename}`,
+    checksum: `${base}/${desktopPackage.filename}.sha256`
+  };
+}
+
+function linkLine(label, primaryUrl, checksumUrl) {
+  if (!checksumUrl) {
+    return `- ${label}: ${primaryUrl}`;
+  }
+  return `- ${label}: ${primaryUrl} (checksum: ${checksumUrl})`;
 }
 
 function statusBlock(lines) {

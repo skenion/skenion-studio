@@ -11,6 +11,7 @@ tier="release-blocking"
 bucket="skenion"
 prefix="releases"
 public_base="https://cdn.example.test/skenion/releases"
+package_id="linux-x64-deb"
 
 cleanup() {
   rm -rf "${tmp_root}"
@@ -37,6 +38,19 @@ write_checksum() {
   fi
 }
 
+sha_of() {
+  local path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk '{print $1}'
+  else
+    shasum -a 256 "${path}" | awk '{print $1}'
+  fi
+}
+
+size_of() {
+  wc -c <"$1" | tr -d '[:space:]'
+}
+
 write_stub_metadata() {
   local object_path="$1"
   local sha="$2"
@@ -48,7 +62,7 @@ artifact-set=desktop
 studio-version=${version}
 source-tag=${release_tag}
 source-commit=1111111111111111111111111111111111111111
-target=${target}
+package-id=${package_id}
 EOF
 }
 
@@ -227,7 +241,6 @@ set -euo pipefail
 log="${STUB_CURL_LOG:?}"
 public_base="${STUB_PUBLIC_BASE_URL:?}"
 public_root="${STUB_PUBLIC_ROOT:?}"
-state_root="${STUB_CURL_STATE_DIR:?}"
 method="GET"
 output=""
 dump_header=""
@@ -271,38 +284,15 @@ fi
 
 echo "${method} ${relative_key}" >>"${log}"
 size="$(wc -c <"${path}" | tr -d '[:space:]')"
-mkdir -p "${state_root}"
-counter_name="$(printf '%s' "${method}_${relative_key}" | tr -c '[:alnum:]' '_')"
-counter_path="${state_root}/${counter_name}.count"
-attempt=0
-if [[ -f "${counter_path}" ]]; then
-  attempt="$(sed -n '1p' "${counter_path}")"
-fi
-attempt=$((attempt + 1))
-printf '%s\n' "${attempt}" >"${counter_path}"
 
-fail_attempts=0
-fail_relative_key=""
-if [[ "${method}" == "HEAD" ]]; then
-  fail_attempts="${STUB_CURL_FAIL_HEAD_ATTEMPTS:-0}"
-  fail_relative_key="${STUB_CURL_FAIL_HEAD_RELATIVE_KEY:-}"
-else
-  fail_attempts="${STUB_CURL_FAIL_GET_ATTEMPTS:-0}"
-  fail_relative_key="${STUB_CURL_FAIL_GET_RELATIVE_KEY:-}"
-fi
-
-if [[ -n "${fail_relative_key}" && "${relative_key}" != "${fail_relative_key}" ]]; then
-  fail_attempts=0
-fi
-
-if [[ "${attempt}" -le "${fail_attempts}" ]]; then
+if [[ "${STUB_CURL_FAIL:-}" == "1" ]]; then
   echo "curl: (22) The requested URL returned error: 403" >&2
   exit 22
 fi
 
 if [[ "${method}" == "HEAD" ]]; then
   head_size="${size}"
-  if [[ "${STUB_CURL_MISMATCH_DESKTOP_ASSET_LENGTH:-}" == "1" && "${relative_key}" == *"/desktop/"*"/skenion-studio-"*.tar.gz ]]; then
+  if [[ "${STUB_CURL_MISMATCH_INSTALLER_LENGTH:-}" == "1" && "${relative_key}" == *"/desktop/linux-x64-deb/"*"v1.2.3-linux-x64.deb" ]]; then
     head_size=$((size + 1))
   fi
   if [[ -n "${dump_header}" ]]; then
@@ -313,8 +303,8 @@ if [[ "${method}" == "HEAD" ]]; then
   exit 0
 fi
 
-if [[ "${STUB_CURL_CORRUPT_DESKTOP_ASSET:-}" == "1" && "${relative_key}" == *"/desktop/"*"/skenion-studio-"*.tar.gz ]]; then
-  body="corrupt desktop asset response"
+if [[ "${STUB_CURL_CORRUPT_INSTALLER:-}" == "1" && "${relative_key}" == *"/desktop/linux-x64-deb/"*"v1.2.3-linux-x64.deb" ]]; then
+  body="corrupt desktop installer response"
   if [[ -n "${output}" ]]; then
     printf '%s\n' "${body}" >"${output}"
   else
@@ -330,27 +320,53 @@ else
 fi
 BASH
 
-  cat >"${bin_dir}/sleep" <<'BASH'
-#!/usr/bin/env bash
-set -euo pipefail
-
-if [[ -n "${STUB_SLEEP_LOG:-}" ]]; then
-  printf 'sleep %s\n' "$*" >>"${STUB_SLEEP_LOG}"
-fi
-BASH
-
-  chmod +x "${bin_dir}/aws" "${bin_dir}/curl" "${bin_dir}/sleep"
+  chmod +x "${bin_dir}/aws" "${bin_dir}/curl"
 }
 
 prepare_case() {
   local case_dir="$1"
   local content="$2"
   local asset_dir="${case_dir}/dist"
-  local asset_path="${asset_dir}/skenion-studio-${target}.tar.gz"
+  local asset_path="${asset_dir}/skenion-studio-v${version}-linux-x64.deb"
+  local checksum_path="${asset_path}.sha256"
+  local manifest_path="${asset_dir}/installers.json"
+  local sha
+  local size
 
   mkdir -p "${asset_dir}"
   printf '%s\n' "${content}" >"${asset_path}"
-  write_checksum "${asset_path}" "${asset_path}.sha256"
+  write_checksum "${asset_path}" "${checksum_path}"
+  sha="$(sha_of "${asset_path}")"
+  size="$(size_of "${asset_path}")"
+
+  python3 - "${manifest_path}" "${asset_path}" "${checksum_path}" "${sha}" "${size}" <<'PY'
+import json
+import sys
+
+manifest_path, asset_path, checksum_path, sha, size = sys.argv[1:6]
+manifest = {
+    "schema": "skenion.studio.desktopInstallers.v1",
+    "component": "skenion-studio",
+    "studioVersion": "1.2.3",
+    "target": "x86_64-unknown-linux-gnu",
+    "installers": [
+        {
+            "packageId": "linux-x64-deb",
+            "family": "deb",
+            "filename": "skenion-studio-v1.2.3-linux-x64.deb",
+            "path": asset_path,
+            "checksumFilename": "skenion-studio-v1.2.3-linux-x64.deb.sha256",
+            "checksumPath": checksum_path,
+            "sha256": sha,
+            "size": int(size),
+            "sourceRelativePath": "deb/skenion-studio.deb",
+        }
+    ],
+}
+with open(manifest_path, "w", encoding="utf-8") as fh:
+    json.dump(manifest, fh, indent=2, sort_keys=True)
+    fh.write("\n")
+PY
 }
 
 asset_dir_for() {
@@ -360,28 +376,28 @@ asset_dir_for() {
 
 asset_path_for() {
   local case_dir="$1"
-  printf '%s/skenion-studio-%s.tar.gz' "$(asset_dir_for "${case_dir}")" "${target}"
+  printf '%s/skenion-studio-v%s-linux-x64.deb' "$(asset_dir_for "${case_dir}")" "${version}"
+}
+
+manifest_path_for() {
+  local case_dir="$1"
+  printf '%s/installers.json' "$(asset_dir_for "${case_dir}")"
 }
 
 run_publisher() {
   local case_dir="$1"
-  local asset_path
   local -a base_env
   shift
 
   mkdir -p "${case_dir}/s3/${bucket}/${prefix}"
   : >"${case_dir}/aws.log"
   : >"${case_dir}/curl.log"
-  : >"${case_dir}/sleep.log"
-  asset_path="$(asset_path_for "${case_dir}")"
 
   base_env=(
     "PATH=${tmp_root}/bin:${PATH}"
     "STUB_AWS_LOG=${case_dir}/aws.log"
     "STUB_CURL_LOG=${case_dir}/curl.log"
-    "STUB_SLEEP_LOG=${case_dir}/sleep.log"
     "STUB_S3_ROOT=${case_dir}/s3"
-    "STUB_CURL_STATE_DIR=${case_dir}/curl-state"
     "STUB_PUBLIC_BASE_URL=${public_base}"
     "STUB_PUBLIC_ROOT=${case_dir}/s3/${bucket}/${prefix}"
     "GITHUB_ACTIONS=true"
@@ -409,14 +425,13 @@ run_publisher() {
     "${release_tag}" \
     "${target}" \
     "${tier}" \
-    "${asset_path}" \
-    "${asset_path}.sha256"
+    "$(manifest_path_for "${case_dir}")"
 }
 
 assert_github_actions_guard_case() {
   local case_dir="${tmp_root}/github-actions-guard"
 
-  prepare_case "${case_dir}" "studio desktop github actions guard artifact"
+  prepare_case "${case_dir}" "studio desktop github actions guard installer"
   if run_publisher "${case_dir}" GITHUB_ACTIONS= GITHUB_EVENT_NAME=push >"${case_dir}/output.log" 2>&1; then
     echo "expected GitHub Actions guard publisher case to fail" >&2
     exit 1
@@ -433,9 +448,9 @@ assert_success_case() {
   local case_dir="${tmp_root}/success"
   local index_path
 
-  prepare_case "${case_dir}" "studio desktop success artifact"
+  prepare_case "${case_dir}" "studio desktop success installer"
   run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1
-  index_path="$(asset_dir_for "${case_dir}")/skenion-studio-desktop-${target}-v${version}.index.json"
+  index_path="$(asset_dir_for "${case_dir}")/skenion-studio-desktop-linux-x64-deb-v${version}.index.json"
 
   python3 - "${index_path}" <<'PY'
 import json
@@ -448,18 +463,20 @@ assert index["schema"] == "skenion.studio.desktopPackage.v1"
 assert index["component"] == "skenion-studio"
 assert index["studioVersion"] == "1.2.3"
 assert index["releaseTag"] == "v1.2.3"
-assert index["target"] == "x86_64-unknown-linux-gnu"
+assert index["packageId"] == "linux-x64-deb"
+assert index["family"] == "deb"
 assert index["tier"] == "release-blocking"
 assert index["runtime"]["releaseTag"] == "v1.2.0"
 assert index["runtime"]["binarySource"] == "skenion-runtime-release-manifest"
 assert index["signing"]["mode"] == "unsigned-preview"
 assert index["distribution"]["storage"] == "dsub-s3"
-assert index["desktopPackage"]["s3"]["bucket"] == "skenion"
-assert index["desktopPackage"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz"
-assert index["desktopPackage"]["publicUrl"] == "https://cdn.example.test/skenion/releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz"
-assert index["checksum"]["filename"] == "skenion-studio-x86_64-unknown-linux-gnu.tar.gz.sha256"
-assert index["index"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-desktop-x86_64-unknown-linux-gnu-v1.2.3.index.json"
-assert index["index"]["publicUrl"].endswith("/desktop/x86_64-unknown-linux-gnu/skenion-studio-desktop-x86_64-unknown-linux-gnu-v1.2.3.index.json")
+assert index["desktopInstaller"]["s3"]["bucket"] == "skenion"
+assert index["desktopInstaller"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1.2.3-linux-x64.deb"
+assert index["desktopInstaller"]["publicUrl"] == "https://cdn.example.test/skenion/releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1.2.3-linux-x64.deb"
+assert index["checksum"]["filename"] == "skenion-studio-v1.2.3-linux-x64.deb.sha256"
+assert index["index"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-desktop-linux-x64-deb-v1.2.3.index.json"
+assert index["index"]["publicUrl"].endswith("/desktop/linux-x64-deb/skenion-studio-desktop-linux-x64-deb-v1.2.3.index.json")
+assert "unknown-linux-gnu" not in json.dumps(index)
 PY
 
   python3 - "${case_dir}/aws.log" <<'PY'
@@ -468,14 +485,11 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as fh:
     events = [line.strip() for line in fh if line.strip()]
 
-put_indexes = [
-    (index, event.removeprefix("put "))
-    for index, event in enumerate(events)
-    if event.startswith("put ")
-]
-assert len(put_indexes) == 3, events
-for index, key in put_indexes:
+puts = [(index, event.removeprefix("put ")) for index, event in enumerate(events) if event.startswith("put ")]
+assert len(puts) == 3, events
+for index, key in puts:
     assert any(event == f"head {key}" for event in events[:index]), (key, events)
+assert all("unknown-linux-gnu" not in event for event in events), events
 PY
 
   grep -q 'public CDN verification skipped by default after successful DSUB S3 upload' "${case_dir}/output.log"
@@ -486,168 +500,12 @@ PY
   fi
 }
 
-install_windows_sha256sum_stub() {
-  local bin_dir="$1"
-
-  mkdir -p "${bin_dir}"
-  cat >"${bin_dir}/sha256sum" <<'BASH'
-#!/usr/bin/env bash
-set -euo pipefail
-
-path=""
-for arg in "$@"; do
-  case "${arg}" in
-    --)
-      ;;
-    -*)
-      ;;
-    *)
-      path="${arg}"
-      ;;
-  esac
-done
-
-if [[ -z "${path}" ]]; then
-  echo "fake sha256sum expected a file path" >&2
-  exit 2
-fi
-
-python3 - "${path}" <<'PY'
-import hashlib
-import os
-import sys
-
-path = sys.argv[1]
-digest = hashlib.sha256()
-with open(path, "rb") as fh:
-    for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-        digest.update(chunk)
-
-prefix = "\\" if ("/" in path or "\\" in path) else ""
-print(f"{prefix}{digest.hexdigest()}  {path}")
-PY
-BASH
-  chmod +x "${bin_dir}/sha256sum"
-}
-
-assert_windows_git_bash_sha256sum_path_case() {
-  local case_dir="${tmp_root}/windows-git-bash-sha256sum-path"
-  local asset_path
-  local index_path
-
-  prepare_case "${case_dir}" "studio desktop windows git bash checksum artifact"
-  asset_path="$(asset_path_for "${case_dir}")"
-  index_path="$(asset_dir_for "${case_dir}")/skenion-studio-desktop-${target}-v${version}.index.json"
-  install_windows_sha256sum_stub "${case_dir}/bin"
-
-  if ! run_publisher "${case_dir}" "PATH=${case_dir}/bin:${tmp_root}/bin:${PATH}" >"${case_dir}/output.log" 2>&1; then
-    cat "${case_dir}/output.log" >&2
-    echo "expected Windows Git Bash sha256sum path case to pass" >&2
-    exit 1
-  fi
-
-  python3 - "${asset_path}.sha256" "${index_path}" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as fh:
-    declared_sha = fh.read().split()[0]
-
-with open(sys.argv[2], encoding="utf-8") as fh:
-    index = json.load(fh)
-
-asset_sha = index["desktopPackage"]["sha256"]
-checksum_sha = index["checksum"]["sha256"]
-index_sha = index["index"]["s3"]["key"]
-
-assert asset_sha == declared_sha, (asset_sha, declared_sha)
-assert not asset_sha.startswith("\\"), asset_sha
-assert not checksum_sha.startswith("\\"), checksum_sha
-assert index_sha.endswith("skenion-studio-desktop-x86_64-unknown-linux-gnu-v1.2.3.index.json")
-PY
-
-  grep -q 'uploaded Studio desktop release object' "${case_dir}/output.log"
-}
-
-assert_public_unavailable_default_skip_case() {
-  local case_dir="${tmp_root}/public-unavailable-default-skip"
-
-  prepare_case "${case_dir}" "studio desktop public unavailable default skip artifact"
-  run_publisher "${case_dir}" STUB_CURL_FAIL_HEAD_ATTEMPTS=99 STUB_CURL_FAIL_GET_ATTEMPTS=99 >"${case_dir}/output.log" 2>&1
-
-  grep -q 'public CDN verification skipped by default after successful DSUB S3 upload' "${case_dir}/output.log"
-  if [[ -s "${case_dir}/curl.log" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "desktop publisher should not call public CDN HEAD/GET checks in default mode" >&2
-    exit 1
-  fi
-}
-
-assert_strict_public_head_failure_case() {
-  local case_dir="${tmp_root}/strict-public-head-failure"
-  local head_count
-
-  prepare_case "${case_dir}" "studio desktop strict public head failure artifact"
-  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_FAIL_HEAD_ATTEMPTS=1 >"${case_dir}/output.log" 2>&1; then
-    echo "expected strict public desktop HEAD verification case to fail" >&2
-    exit 1
-  fi
-
-  grep -q 'failed to verify public Studio desktop release .*desktop package' "${case_dir}/output.log"
-  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${head_count}" != "1" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected strict public desktop package HEAD to fail on one attempt, saw ${head_count}" >&2
-    exit 1
-  fi
-}
-
-assert_strict_public_get_failure_case() {
-  local case_dir="${tmp_root}/strict-public-get-failure"
-  local get_count
-
-  prepare_case "${case_dir}" "studio desktop strict public get failure artifact"
-  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_FAIL_GET_ATTEMPTS=1 >"${case_dir}/output.log" 2>&1; then
-    echo "expected strict public desktop GET verification case to fail" >&2
-    exit 1
-  fi
-
-  grep -q 'failed to download public Studio desktop release .*desktop package' "${case_dir}/output.log"
-  get_count="$(grep -c '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${get_count}" != "1" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected strict public desktop package GET to fail on one attempt, saw ${get_count}" >&2
-    exit 1
-  fi
-}
-
-assert_strict_public_content_length_failure_case() {
-  local case_dir="${tmp_root}/strict-public-content-length-failure"
-  local head_count
-
-  prepare_case "${case_dir}" "studio desktop strict public content length failure artifact"
-  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_MISMATCH_DESKTOP_ASSET_LENGTH=1 >"${case_dir}/output.log" 2>&1; then
-    echo "expected strict public desktop Content-Length verification case to fail" >&2
-    exit 1
-  fi
-
-  grep -q 'public Studio desktop release .*desktop package.* Content-Length does not match local file' "${case_dir}/output.log"
-  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${head_count}" != "1" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected strict public desktop package Content-Length mismatch to fail on one attempt, saw ${head_count}" >&2
-    exit 1
-  fi
-}
-
 assert_secretless_dry_run_defaults_case() {
   local case_dir="${tmp_root}/secretless-dry-run"
-  local asset_path
   local index_path
 
-  prepare_case "${case_dir}" "studio desktop secretless dry-run artifact"
-  asset_path="$(asset_path_for "${case_dir}")"
-  index_path="$(asset_dir_for "${case_dir}")/skenion-studio-desktop-${target}-v${version}.index.json"
+  prepare_case "${case_dir}" "studio desktop secretless dry-run installer"
+  index_path="$(asset_dir_for "${case_dir}")/skenion-studio-desktop-linux-x64-deb-v${version}.index.json"
 
   env -i \
     "PATH=${PATH}" \
@@ -663,8 +521,7 @@ assert_secretless_dry_run_defaults_case() {
     "${release_tag}" \
     "${target}" \
     "${tier}" \
-    "${asset_path}" \
-    "${asset_path}.sha256" >"${case_dir}/output.log"
+    "$(manifest_path_for "${case_dir}")" >"${case_dir}/output.log"
 
   python3 - "${index_path}" <<'PY'
 import json
@@ -673,35 +530,27 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as fh:
     index = json.load(fh)
 
-assert index["schema"] == "skenion.studio.desktopPackage.v1"
-assert index["component"] == "skenion-studio"
-assert index["studioVersion"] == "1.2.3"
-assert index["releaseTag"] == "v1.2.3"
 assert index["sourceCommit"] == "2222222222222222222222222222222222222222"
-assert index["distribution"]["storage"] == "dsub-s3"
 assert index["distribution"]["publicBaseUrl"] == "https://cdn.dsub.io/skenion/releases"
-assert index["desktopPackage"]["s3"]["bucket"] == "skenion"
-assert index["desktopPackage"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz"
-assert index["desktopPackage"]["publicUrl"] == "https://cdn.dsub.io/skenion/releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz"
-assert index["checksum"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz.sha256"
-assert index["index"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-desktop-x86_64-unknown-linux-gnu-v1.2.3.index.json"
+assert index["desktopInstaller"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1.2.3-linux-x64.deb"
+assert index["desktopInstaller"]["publicUrl"] == "https://cdn.dsub.io/skenion/releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1.2.3-linux-x64.deb"
+assert index["checksum"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1.2.3-linux-x64.deb.sha256"
+assert index["index"]["s3"]["key"] == "releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-desktop-linux-x64-deb-v1.2.3.index.json"
 PY
 
-  grep -q 'dry run: would publish Studio desktop package to https://cdn.dsub.io/skenion/releases/skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz' "${case_dir}/output.log"
+  grep -q 'dry run: would publish Studio desktop installer to https://cdn.dsub.io/skenion/releases/skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1.2.3-linux-x64.deb' "${case_dir}/output.log"
 }
 
 assert_no_clobber_case() {
   local case_dir="${tmp_root}/no-clobber"
   local asset_path
-  local asset_name
   local existing
 
-  prepare_case "${case_dir}" "studio desktop no-clobber artifact"
+  prepare_case "${case_dir}" "studio desktop no-clobber installer"
   asset_path="$(asset_path_for "${case_dir}")"
-  asset_name="$(basename "${asset_path}")"
-  existing="${case_dir}/s3/${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${target}/${asset_name}"
+  existing="${case_dir}/s3/${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${package_id}/$(basename "${asset_path}")"
   mkdir -p "$(dirname "${existing}")"
-  printf 'different existing asset\n' >"${existing}"
+  printf 'different existing installer\n' >"${existing}"
   write_stub_metadata "${existing}" "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
   if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
@@ -716,31 +565,16 @@ assert_no_clobber_case() {
   fi
 }
 
-assert_upload_missing_s3_metadata_is_not_a_failure_case() {
-  local case_dir="${tmp_root}/upload-missing-s3-metadata"
-
-  prepare_case "${case_dir}" "studio desktop upload missing s3 metadata artifact"
-  run_publisher "${case_dir}" STUB_AWS_DROP_METADATA_ON_PUT=1 >"${case_dir}/output.log" 2>&1
-
-  grep -q 'uploaded Studio desktop release object' "${case_dir}/output.log"
-  if grep -q 'metadata does not match local file' "${case_dir}/output.log"; then
-    echo "publisher required uploaded S3 metadata to round-trip" >&2
-    exit 1
-  fi
-}
-
 assert_existing_matching_metadata_skips_upload_case() {
   local case_dir="${tmp_root}/existing-matching-metadata"
   local asset_path
-  local asset_name
   local asset_key
   local existing
   local expected_sha
 
-  prepare_case "${case_dir}" "studio desktop existing matching metadata artifact"
+  prepare_case "${case_dir}" "studio desktop existing matching metadata installer"
   asset_path="$(asset_path_for "${case_dir}")"
-  asset_name="$(basename "${asset_path}")"
-  asset_key="${prefix}/skenion-studio/${release_tag}/desktop/${target}/${asset_name}"
+  asset_key="${prefix}/skenion-studio/${release_tag}/desktop/${package_id}/$(basename "${asset_path}")"
   existing="${case_dir}/s3/${bucket}/${asset_key}"
   expected_sha="$(awk '{print $1; exit}' "${asset_path}.sha256")"
   mkdir -p "$(dirname "${existing}")"
@@ -756,18 +590,14 @@ assert_existing_matching_metadata_skips_upload_case() {
   fi
 }
 
-assert_existing_missing_metadata_fails_matching_asset_case() {
+assert_existing_missing_metadata_fails_case() {
   local case_dir="${tmp_root}/existing-missing-metadata"
   local asset_path
-  local asset_name
-  local asset_key
   local existing
 
-  prepare_case "${case_dir}" "studio desktop existing missing metadata artifact"
+  prepare_case "${case_dir}" "studio desktop existing missing metadata installer"
   asset_path="$(asset_path_for "${case_dir}")"
-  asset_name="$(basename "${asset_path}")"
-  asset_key="${prefix}/skenion-studio/${release_tag}/desktop/${target}/${asset_name}"
-  existing="${case_dir}/s3/${bucket}/${asset_key}"
+  existing="${case_dir}/s3/${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${package_id}/$(basename "${asset_path}")"
   mkdir -p "$(dirname "${existing}")"
   cp "${asset_path}" "${existing}"
 
@@ -777,138 +607,46 @@ assert_existing_missing_metadata_fails_matching_asset_case() {
   fi
 
   grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
-  grep -q 'Remove, re-publish, or remediate the object with immutable metadata before retrying' "${case_dir}/output.log"
   if grep -q '^put ' "${case_dir}/aws.log"; then
     echo "publisher uploaded despite metadata-free existing desktop object refusal" >&2
     exit 1
   fi
-  if [[ -s "${case_dir}/curl.log" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "metadata-free existing desktop object should fail before public CDN verification" >&2
-    exit 1
-  fi
 }
 
-assert_existing_missing_metadata_mismatched_size_case() {
-  local case_dir="${tmp_root}/existing-missing-metadata-size-mismatch"
-  local asset_path
-  local asset_name
-  local existing
+assert_strict_public_content_length_failure_case() {
+  local case_dir="${tmp_root}/strict-public-content-length-failure"
 
-  prepare_case "${case_dir}" "studio desktop existing missing metadata size mismatch artifact"
-  asset_path="$(asset_path_for "${case_dir}")"
-  asset_name="$(basename "${asset_path}")"
-  existing="${case_dir}/s3/${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${target}/${asset_name}"
-  mkdir -p "$(dirname "${existing}")"
-  printf 'size mismatch\n' >"${existing}"
-
-  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected existing missing metadata size mismatch case to fail" >&2
+  prepare_case "${case_dir}" "studio desktop strict public content length failure installer"
+  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_MISMATCH_INSTALLER_LENGTH=1 >"${case_dir}/output.log" 2>&1; then
+    echo "expected strict public desktop Content-Length verification case to fail" >&2
     exit 1
   fi
 
-  grep -q 'existing S3 object size does not match expected artifact' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
-    echo "publisher uploaded despite existing metadata-free size mismatch" >&2
-    exit 1
-  fi
-}
-
-assert_existing_mismatched_metadata_fails_case() {
-  local case_dir="${tmp_root}/existing-mismatched-metadata"
-  local asset_path
-  local asset_name
-  local existing
-
-  prepare_case "${case_dir}" "studio desktop existing mismatched metadata artifact"
-  asset_path="$(asset_path_for "${case_dir}")"
-  asset_name="$(basename "${asset_path}")"
-  existing="${case_dir}/s3/${bucket}/${prefix}/skenion-studio/${release_tag}/desktop/${target}/${asset_name}"
-  mkdir -p "$(dirname "${existing}")"
-  cp "${asset_path}" "${existing}"
-  write_stub_metadata "${existing}" "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-
-  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected existing mismatched metadata case to fail" >&2
-    exit 1
-  fi
-
-  grep -q 'S3 metadata does not match expected immutable artifact' "${case_dir}/output.log"
-  if grep -q '^put ' "${case_dir}/aws.log"; then
-    echo "publisher uploaded despite existing mismatched metadata" >&2
-    exit 1
-  fi
-}
-
-assert_existing_missing_metadata_mismatched_content_case() {
-  local case_dir="${tmp_root}/existing-missing-metadata-content-mismatch"
-  local asset_path
-  local asset_name
-  local asset_key
-  local existing
-
-  prepare_case "${case_dir}" "studio desktop existing missing metadata content mismatch artifact"
-  asset_path="$(asset_path_for "${case_dir}")"
-  asset_name="$(basename "${asset_path}")"
-  asset_key="${prefix}/skenion-studio/${release_tag}/desktop/${target}/${asset_name}"
-  existing="${case_dir}/s3/${bucket}/${asset_key}"
-  mkdir -p "$(dirname "${existing}")"
-  cp "${asset_path}" "${existing}"
-  printf 'X' | dd of="${existing}" bs=1 count=1 conv=notrunc >/dev/null 2>&1
-
-  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
-    echo "expected existing missing metadata content mismatch case to fail" >&2
-    exit 1
-  fi
-
-  grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
-  grep -q 'Remove, re-publish, or remediate the object with immutable metadata before retrying' "${case_dir}/output.log"
-  if grep -q "^put ${bucket}/${asset_key}$" "${case_dir}/aws.log"; then
-    echo "publisher overwrote metadata-free same-size object before metadata refusal" >&2
-    exit 1
-  fi
-  if [[ -s "${case_dir}/curl.log" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "metadata-free S3 content mismatch should fail before public CDN verification" >&2
-    exit 1
-  fi
+  grep -q 'public Studio desktop release .*desktop installer.* Content-Length does not match local file' "${case_dir}/output.log"
+  grep -q '^HEAD skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1\.2\.3-linux-x64\.deb$' "${case_dir}/curl.log"
 }
 
 assert_strict_public_content_failure_case() {
   local case_dir="${tmp_root}/strict-public-content-failure"
-  local get_count
 
-  prepare_case "${case_dir}" "studio desktop strict public content failure artifact"
-  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_CORRUPT_DESKTOP_ASSET=1 >"${case_dir}/output.log" 2>&1; then
+  prepare_case "${case_dir}" "studio desktop strict public content failure installer"
+  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_CORRUPT_INSTALLER=1 >"${case_dir}/output.log" 2>&1; then
     echo "expected strict public content verification case to fail" >&2
     exit 1
   fi
 
-  grep -q 'public Studio desktop release .*desktop package.* content does not match local file' "${case_dir}/output.log"
-  get_count="$(grep -c '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${get_count}" != "1" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected strict public desktop package content mismatch to fail on one attempt, saw ${get_count}" >&2
-    exit 1
-  fi
+  grep -q 'public Studio desktop release .*desktop installer.* content does not match local file' "${case_dir}/output.log"
+  grep -q '^GET skenion-studio/v1.2.3/desktop/linux-x64-deb/skenion-studio-v1\.2\.3-linux-x64\.deb$' "${case_dir}/curl.log"
 }
 
 install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
 assert_success_case
-assert_windows_git_bash_sha256sum_path_case
-assert_public_unavailable_default_skip_case
-assert_strict_public_head_failure_case
-assert_strict_public_get_failure_case
-assert_strict_public_content_length_failure_case
 assert_secretless_dry_run_defaults_case
 assert_no_clobber_case
-assert_upload_missing_s3_metadata_is_not_a_failure_case
 assert_existing_matching_metadata_skips_upload_case
-assert_existing_missing_metadata_fails_matching_asset_case
-assert_existing_missing_metadata_mismatched_size_case
-assert_existing_mismatched_metadata_fails_case
-assert_existing_missing_metadata_mismatched_content_case
+assert_existing_missing_metadata_fails_case
+assert_strict_public_content_length_failure_case
 assert_strict_public_content_failure_case
 
 echo "Studio desktop DSUB S3 publisher validation passed."

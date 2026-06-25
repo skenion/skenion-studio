@@ -48,7 +48,6 @@ jobs:
       checksum_asset: ${{ steps.release_assets.outputs.checksum_asset }}
       web_asset_url: ${{ steps.dsub_metadata.outputs.web_asset_url }}
       desktop_manifest_url: ${{ steps.dsub_metadata.outputs.desktop_manifest_url }}
-      dsub_index_asset: ${{ steps.dsub_metadata.outputs.index_asset }}
       dsub_index_url: ${{ steps.dsub_metadata.outputs.index_url }}
     steps:
       - id: validate
@@ -448,43 +447,6 @@ jobs:
             "${{ steps.release_assets.outputs.desktop_manifest_checksum_path }}" \
             "${{ steps.release_assets.outputs.checksum_path }}"
 
-      - name: Upload DSUB web artifact index to GitHub Release
-        if: steps.validate.outputs.upload_release_assets == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          INDEX_PATH: ${{ steps.publish.outputs.index_path }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::GH_TOKEN organization Actions secret is required for GitHub Release mutation."
-            exit 1
-          fi
-
-          index_name="$(basename "${INDEX_PATH}")"
-          release_assets="$(mktemp)"
-          download_dir="$(mktemp -d)"
-          cleanup_release_asset_check() {
-            rm -f "${release_assets}"
-            rm -rf "${download_dir}"
-          }
-          trap cleanup_release_asset_check EXIT
-
-          gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name' >"${release_assets}"
-          if grep -Fxq "${index_name}" "${release_assets}"; then
-            gh release download "${RELEASE_TAG}" --pattern "${index_name}" --dir "${download_dir}"
-            if cmp -s "${INDEX_PATH}" "${download_dir}/${index_name}"; then
-              echo "GitHub Release DSUB web artifact index already exists with identical content: ${index_name}"
-              exit 0
-            fi
-
-            echo "::error::GitHub Release DSUB web artifact index already exists with different content: ${index_name}"
-            exit 1
-          fi
-
-          gh release upload "${RELEASE_TAG}" "${INDEX_PATH}"
-
       - name: Checkout release status tools
         if: steps.validate.outputs.upload_release_assets == 'true'
         uses: actions/checkout@v6
@@ -496,6 +458,7 @@ jobs:
         if: steps.validate.outputs.upload_release_assets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SKENION_RELEASE_PUBLIC_BASE_URL: ${{ secrets.SKENION_RELEASE_PUBLIC_BASE_URL }}
         run: |
           node .release-tools/scripts/update-studio-release-status.mjs \
             --mode web-artifacts-published \
@@ -517,7 +480,7 @@ jobs:
             echo "- Desktop release metadata DSUB URL: ${{ steps.dsub_metadata.outputs.desktop_manifest_url }}"
             echo "- Desktop release metadata checksum: ${{ steps.release_assets.outputs.desktop_manifest_checksum_asset }}"
             echo "- Combined artifact checksum manifest: ${{ steps.release_assets.outputs.checksum_asset }}"
-            echo "- DSUB web artifact index: ${{ steps.dsub_metadata.outputs.index_asset }}"
+            echo "- DSUB web artifact index: ${{ steps.dsub_metadata.outputs.index_url }}"
             echo "- DSUB web artifact index URL: ${{ steps.dsub_metadata.outputs.index_url }}"
             echo "- Provenance: ${{ steps.attest.outputs.attestation-url }}"
             echo "- Mode: ${RELEASE_MODE}"

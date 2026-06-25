@@ -10,5 +10,5 @@ tarball name, DSUB release storage path/URL, and web-bundle checksum asset used
 for the build.
 
 Do not publish this package to npm. skenion studio web is distributed as a
-deployable DSUB web bundle product artifact; the GitHub Release keeps only the
-compact DSUB artifact index.
+deployable DSUB web bundle product artifact. The GitHub Release body records the DSUB links
+and checksums; GitHub Release assets are not used as artifact evidence.
