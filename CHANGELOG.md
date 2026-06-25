@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.18](https://github.com/skenion/skenion-studio/compare/v0.44.17...v0.44.18) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** trim Windows desktop manifest rows ([6ce2483](https://github.com/skenion/skenion-studio/commit/6ce2483149e49320969a6ba54de1065de6c2dca8)), refs [#116](https://github.com/skenion/skenion-studio/issues/116)
+
 ## [0.44.17](https://github.com/skenion/skenion-studio/compare/v0.44.16...v0.44.17) (2026-06-25)
 
 
