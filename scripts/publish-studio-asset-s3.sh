@@ -431,6 +431,17 @@ else
     aws configure set default.s3.addressing_style path
   fi
 
+  public_verify_attempts="${SKENION_PUBLIC_VERIFY_ATTEMPTS:-12}"
+  public_verify_sleep_seconds="${SKENION_PUBLIC_VERIFY_SLEEP_SECONDS:-5}"
+  if [[ ! "${public_verify_attempts}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "SKENION_PUBLIC_VERIFY_ATTEMPTS must be a positive integer." >&2
+    exit 1
+  fi
+  if [[ ! "${public_verify_sleep_seconds}" =~ ^[0-9]+$ ]]; then
+    echo "SKENION_PUBLIC_VERIFY_SLEEP_SECONDS must be a non-negative integer." >&2
+    exit 1
+  fi
+
   head_json="$(mktemp)"
   head_err="$(mktemp)"
   cleanup_head() {
@@ -584,12 +595,25 @@ PY
     echo "uploaded Studio release object: s3://${SKENION_RELEASE_S3_BUCKET}/${key}"
   }
 
-  verify_public_content_length() {
+  public_verify_failure=""
+  public_verify_actual_size=""
+  public_verify_expected_sha=""
+  public_verify_actual_sha=""
+
+  maybe_sleep_before_public_retry() {
+    if ((public_verify_sleep_seconds > 0)); then
+      sleep "${public_verify_sleep_seconds}"
+    fi
+  }
+
+  verify_public_content_length_attempt() {
     local url="$1"
     local expected_size="$2"
-    local label="$3"
     local headers_path
     local actual_size
+
+    public_verify_failure=""
+    public_verify_actual_size=""
 
     headers_path="$(mktemp)"
     if ! curl --fail --silent --show-error --location --head \
@@ -597,54 +621,112 @@ PY
       --output /dev/null \
       "${url}"; then
       rm -f "${headers_path}"
-      echo "failed to verify public Studio release ${label}: ${url}" >&2
-      exit 1
+      public_verify_failure="HEAD request failed"
+      return 1
     fi
 
     actual_size="$(awk 'BEGIN { IGNORECASE = 1 } /^Content-Length:/ { gsub("\r", "", $2); value = $2 } END { print value }' "${headers_path}")"
     rm -f "${headers_path}"
 
     if [[ -z "${actual_size}" ]]; then
-      echo "public Studio release ${label} is missing Content-Length: ${url}" >&2
-      exit 1
+      public_verify_failure="missing Content-Length"
+      return 1
     fi
 
     if [[ "${actual_size}" != "${expected_size}" ]]; then
-      echo "public Studio release ${label} Content-Length does not match local file: ${url}" >&2
-      echo "expected size=${expected_size}" >&2
-      echo "actual size=${actual_size}" >&2
-      exit 1
+      public_verify_failure="Content-Length mismatch"
+      public_verify_actual_size="${actual_size}"
+      return 1
     fi
   }
 
-  verify_public_file_matches() {
+  verify_public_content_length() {
+    local url="$1"
+    local expected_size="$2"
+    local label="$3"
+    local attempt
+
+    for ((attempt = 1; attempt <= public_verify_attempts; attempt++)); do
+      if verify_public_content_length_attempt "${url}" "${expected_size}"; then
+        return 0
+      fi
+
+      if ((attempt < public_verify_attempts)); then
+        echo "public Studio release ${label} is not ready on attempt ${attempt}/${public_verify_attempts}: ${public_verify_failure}; retrying in ${public_verify_sleep_seconds}s: ${url}" >&2
+        maybe_sleep_before_public_retry
+      fi
+    done
+
+    if [[ "${public_verify_failure}" == "HEAD request failed" ]]; then
+      echo "failed to verify public Studio release ${label}: ${url}" >&2
+    elif [[ "${public_verify_failure}" == "missing Content-Length" ]]; then
+      echo "public Studio release ${label} is missing Content-Length: ${url}" >&2
+    else
+      echo "public Studio release ${label} Content-Length does not match local file: ${url}" >&2
+      echo "expected size=${expected_size}" >&2
+      echo "actual size=${public_verify_actual_size:-<missing>}" >&2
+    fi
+    exit 1
+  }
+
+  verify_public_file_matches_attempt() {
     local url="$1"
     local expected_path="$2"
-    local label="$3"
     local body_path
     local expected_sha
     local actual_sha
+
+    public_verify_failure=""
+    public_verify_expected_sha=""
+    public_verify_actual_sha=""
 
     body_path="$(mktemp)"
     if ! curl --fail --silent --show-error --location \
       --output "${body_path}" \
       "${url}"; then
       rm -f "${body_path}"
-      echo "failed to download public Studio release ${label}: ${url}" >&2
-      exit 1
+      public_verify_failure="GET request failed"
+      return 1
     fi
 
     if ! cmp -s "${expected_path}" "${body_path}"; then
       expected_sha="$(sha256_file "${expected_path}")"
       actual_sha="$(sha256_file "${body_path}")"
       rm -f "${body_path}"
-      echo "public Studio release ${label} content does not match local file: ${url}" >&2
-      echo "expected sha256=${expected_sha}" >&2
-      echo "actual sha256=${actual_sha}" >&2
-      exit 1
+      public_verify_failure="content mismatch"
+      public_verify_expected_sha="${expected_sha}"
+      public_verify_actual_sha="${actual_sha}"
+      return 1
     fi
 
     rm -f "${body_path}"
+  }
+
+  verify_public_file_matches() {
+    local url="$1"
+    local expected_path="$2"
+    local label="$3"
+    local attempt
+
+    for ((attempt = 1; attempt <= public_verify_attempts; attempt++)); do
+      if verify_public_file_matches_attempt "${url}" "${expected_path}"; then
+        return 0
+      fi
+
+      if ((attempt < public_verify_attempts)); then
+        echo "public Studio release ${label} is not ready on attempt ${attempt}/${public_verify_attempts}: ${public_verify_failure}; retrying in ${public_verify_sleep_seconds}s: ${url}" >&2
+        maybe_sleep_before_public_retry
+      fi
+    done
+
+    if [[ "${public_verify_failure}" == "GET request failed" ]]; then
+      echo "failed to download public Studio release ${label}: ${url}" >&2
+    else
+      echo "public Studio release ${label} content does not match local file: ${url}" >&2
+      echo "expected sha256=${public_verify_expected_sha:-<missing>}" >&2
+      echo "actual sha256=${public_verify_actual_sha:-<missing>}" >&2
+    fi
+    exit 1
   }
 
   upload_object "${web_asset_path}" "${web_asset_key}" "${web_asset_sha}" "${web_asset_size}" "application/gzip"

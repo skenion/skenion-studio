@@ -227,6 +227,7 @@ set -euo pipefail
 log="${STUB_CURL_LOG:?}"
 public_base="${STUB_PUBLIC_BASE_URL:?}"
 public_root="${STUB_PUBLIC_ROOT:?}"
+state_root="${STUB_CURL_STATE_DIR:?}"
 method="GET"
 output=""
 dump_header=""
@@ -270,12 +271,37 @@ fi
 
 echo "${method} ${relative_key}" >>"${log}"
 size="$(wc -c <"${path}" | tr -d '[:space:]')"
+mkdir -p "${state_root}"
+counter_name="$(printf '%s' "${method}_${relative_key}" | tr -c '[:alnum:]' '_')"
+counter_path="${state_root}/${counter_name}.count"
+attempt=0
+if [[ -f "${counter_path}" ]]; then
+  attempt="$(sed -n '1p' "${counter_path}")"
+fi
+attempt=$((attempt + 1))
+printf '%s\n' "${attempt}" >"${counter_path}"
+
+fail_attempts=0
+if [[ "${method}" == "HEAD" ]]; then
+  fail_attempts="${STUB_CURL_FAIL_HEAD_ATTEMPTS:-0}"
+else
+  fail_attempts="${STUB_CURL_FAIL_GET_ATTEMPTS:-0}"
+fi
+
+if [[ "${attempt}" -le "${fail_attempts}" ]]; then
+  echo "curl: (22) The requested URL returned error: 403" >&2
+  exit 22
+fi
 
 if [[ "${method}" == "HEAD" ]]; then
+  head_size="${size}"
+  if [[ "${STUB_CURL_MISMATCH_DESKTOP_ASSET_LENGTH:-}" == "1" && "${relative_key}" == *"/desktop/"*"/skenion-studio-"*.tar.gz ]]; then
+    head_size=$((size + 1))
+  fi
   if [[ -n "${dump_header}" ]]; then
-    printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "${size}" >"${dump_header}"
+    printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "${head_size}" >"${dump_header}"
   else
-    printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "${size}"
+    printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "${head_size}"
   fi
   exit 0
 fi
@@ -337,6 +363,7 @@ run_publisher() {
     "STUB_AWS_LOG=${case_dir}/aws.log"
     "STUB_CURL_LOG=${case_dir}/curl.log"
     "STUB_S3_ROOT=${case_dir}/s3"
+    "STUB_CURL_STATE_DIR=${case_dir}/curl-state"
     "STUB_PUBLIC_BASE_URL=${public_base}"
     "STUB_PUBLIC_ROOT=${case_dir}/s3/${bucket}/${prefix}"
     "GITHUB_ACTIONS=true"
@@ -349,6 +376,8 @@ run_publisher() {
     "SKENION_RELEASE_S3_SECRET_ACCESS_KEY=test-secret-key"
     "SKENION_RELEASE_S3_FORCE_PATH_STYLE=true"
     "SKENION_RELEASE_PUBLIC_BASE_URL=${public_base}"
+    "SKENION_PUBLIC_VERIFY_ATTEMPTS=3"
+    "SKENION_PUBLIC_VERIFY_SLEEP_SECONDS=0"
     "SOURCE_COMMIT=1111111111111111111111111111111111111111"
     "CONTRACTS_VERSION=1.2.0"
     "CONTRACTS_LINE=1.2"
@@ -436,6 +465,91 @@ PY
   grep -q '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log"
   grep -q '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log"
   grep -q '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-desktop-x86_64-unknown-linux-gnu-v1.2.3\.index\.json$' "${case_dir}/curl.log"
+}
+
+assert_public_retry_case() {
+  local case_dir="${tmp_root}/public-retry"
+  local head_count
+  local get_count
+
+  prepare_case "${case_dir}" "studio desktop public retry artifact"
+  run_publisher "${case_dir}" STUB_CURL_FAIL_HEAD_ATTEMPTS=2 STUB_CURL_FAIL_GET_ATTEMPTS=2 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'public Studio desktop release .*desktop package.* is not ready on attempt 1/3: HEAD request failed; retrying in 0s' "${case_dir}/output.log"
+  grep -q 'public Studio desktop release .*desktop package.* is not ready on attempt 2/3: HEAD request failed; retrying in 0s' "${case_dir}/output.log"
+  grep -q 'public Studio desktop release .*desktop package.* is not ready on attempt 1/3: GET request failed; retrying in 0s' "${case_dir}/output.log"
+  grep -q 'public Studio desktop release .*desktop package.* is not ready on attempt 2/3: GET request failed; retrying in 0s' "${case_dir}/output.log"
+
+  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${head_count}" != "3" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package HEAD to retry until third attempt, saw ${head_count}" >&2
+    exit 1
+  fi
+
+  get_count="$(grep -c '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${get_count}" != "3" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package GET to retry until third attempt, saw ${get_count}" >&2
+    exit 1
+  fi
+}
+
+assert_public_head_failure_case() {
+  local case_dir="${tmp_root}/public-head-failure"
+  local head_count
+
+  prepare_case "${case_dir}" "studio desktop public head failure artifact"
+  if run_publisher "${case_dir}" STUB_CURL_FAIL_HEAD_ATTEMPTS=3 >"${case_dir}/output.log" 2>&1; then
+    echo "expected public desktop HEAD verification case to fail" >&2
+    exit 1
+  fi
+
+  grep -q 'failed to verify public Studio desktop release .*desktop package' "${case_dir}/output.log"
+  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${head_count}" != "3" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package HEAD to fail after third attempt, saw ${head_count}" >&2
+    exit 1
+  fi
+}
+
+assert_public_get_failure_case() {
+  local case_dir="${tmp_root}/public-get-failure"
+  local get_count
+
+  prepare_case "${case_dir}" "studio desktop public get failure artifact"
+  if run_publisher "${case_dir}" STUB_CURL_FAIL_GET_ATTEMPTS=3 >"${case_dir}/output.log" 2>&1; then
+    echo "expected public desktop GET verification case to fail" >&2
+    exit 1
+  fi
+
+  grep -q 'failed to download public Studio desktop release .*desktop package' "${case_dir}/output.log"
+  get_count="$(grep -c '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${get_count}" != "3" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package GET to fail after third attempt, saw ${get_count}" >&2
+    exit 1
+  fi
+}
+
+assert_public_content_length_failure_case() {
+  local case_dir="${tmp_root}/public-content-length-failure"
+  local head_count
+
+  prepare_case "${case_dir}" "studio desktop public content length failure artifact"
+  if run_publisher "${case_dir}" STUB_CURL_MISMATCH_DESKTOP_ASSET_LENGTH=1 >"${case_dir}/output.log" 2>&1; then
+    echo "expected public desktop Content-Length verification case to fail" >&2
+    exit 1
+  fi
+
+  grep -q 'public Studio desktop release .*desktop package.* Content-Length does not match local file' "${case_dir}/output.log"
+  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${head_count}" != "3" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package Content-Length mismatch to fail after third attempt, saw ${head_count}" >&2
+    exit 1
+  fi
 }
 
 assert_secretless_dry_run_defaults_case() {
@@ -660,6 +774,7 @@ assert_existing_missing_metadata_mismatched_content_case() {
 
 assert_public_content_failure_case() {
   local case_dir="${tmp_root}/public-content-failure"
+  local get_count
 
   prepare_case "${case_dir}" "studio desktop public content failure artifact"
   if run_publisher "${case_dir}" STUB_CURL_CORRUPT_DESKTOP_ASSET=1 >"${case_dir}/output.log" 2>&1; then
@@ -668,11 +783,21 @@ assert_public_content_failure_case() {
   fi
 
   grep -q 'public Studio desktop release .*desktop package.* content does not match local file' "${case_dir}/output.log"
+  get_count="$(grep -c '^GET skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${get_count}" != "3" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package content mismatch to fail after third attempt, saw ${get_count}" >&2
+    exit 1
+  fi
 }
 
 install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
 assert_success_case
+assert_public_retry_case
+assert_public_head_failure_case
+assert_public_get_failure_case
+assert_public_content_length_failure_case
 assert_secretless_dry_run_defaults_case
 assert_no_clobber_case
 assert_upload_missing_s3_metadata_is_not_a_failure_case
