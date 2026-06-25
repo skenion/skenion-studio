@@ -472,6 +472,12 @@ function checkPublisherScripts() {
     "package-id=${package_id}",
     "desktop publisher S3 metadata must use the user-facing package id instead of public Rust triple names"
   );
+  expectIncludes(
+    desktopPublisherPath,
+    desktopPublisher,
+    'manifest_sha="${manifest_sha%$\'\\r\'}"',
+    "desktop publisher must trim Windows CRLF from manifest TSV rows before checksum comparison"
+  );
   rejectPattern(
     desktopPublisherPath,
     desktopPublisher,

@@ -316,7 +316,8 @@ for installer in manifest.get("installers") or []:
     ]
     if any("\t" in value or "\n" in value for value in fields):
         raise SystemExit(f"installer packageId {package_id} contains unsupported tab/newline field data")
-    print("\t".join(fields))
+    row_ending = "\r\n" if os.environ.get("SKENION_TEST_STUDIO_DESKTOP_INSTALLER_ROWS_CRLF") == "1" else "\n"
+    sys.stdout.write("\t".join(fields) + row_ending)
 
 if not seen:
     raise SystemExit("installer manifest must contain at least one installer")
@@ -587,6 +588,16 @@ verify_public_file_matches() {
 }
 
 while IFS=$'\t' read -r package_id family asset_path checksum_path asset_name checksum_name manifest_size manifest_sha; do
+  # Windows runners can preserve CRLF on the final TSV field emitted by Python.
+  package_id="${package_id%$'\r'}"
+  family="${family%$'\r'}"
+  asset_path="${asset_path%$'\r'}"
+  checksum_path="${checksum_path%$'\r'}"
+  asset_name="${asset_name%$'\r'}"
+  checksum_name="${checksum_name%$'\r'}"
+  manifest_size="${manifest_size%$'\r'}"
+  manifest_sha="${manifest_sha%$'\r'}"
+
   require_file "${asset_path}"
   require_file "${checksum_path}"
 

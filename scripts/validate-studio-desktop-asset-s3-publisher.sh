@@ -527,6 +527,19 @@ PY
   fi
 }
 
+assert_windows_crlf_manifest_rows_case() {
+  local case_dir="${tmp_root}/windows-crlf-manifest-rows"
+
+  prepare_case "${case_dir}" "studio desktop windows crlf manifest row installer"
+  run_publisher "${case_dir}" SKENION_TEST_STUDIO_DESKTOP_INSTALLER_ROWS_CRLF=1 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'uploaded Studio desktop release object' "${case_dir}/output.log"
+  if grep -q 'installer manifest sha256 .* does not match' "${case_dir}/output.log"; then
+    echo "publisher treated a CRLF-terminated installer manifest row as a checksum mismatch" >&2
+    exit 1
+  fi
+}
+
 assert_secretless_dry_run_defaults_case() {
   local case_dir="${tmp_root}/secretless-dry-run"
   local index_path
@@ -706,6 +719,7 @@ install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
 assert_github_event_allowlist_case
 assert_success_case
+assert_windows_crlf_manifest_rows_case
 assert_secretless_dry_run_defaults_case
 assert_no_clobber_case
 assert_existing_matching_metadata_skips_upload_case
