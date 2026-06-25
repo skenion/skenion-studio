@@ -344,10 +344,6 @@ else
     echo "aws CLI is required for Studio desktop artifact publishing." >&2
     exit 1
   fi
-  if ! command -v curl >/dev/null 2>&1; then
-    echo "curl is required for Studio desktop artifact public-read verification." >&2
-    exit 1
-  fi
 
   export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${SKENION_RELEASE_S3_ACCESS_KEY_ID}}"
   export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${SKENION_RELEASE_S3_SECRET_ACCESS_KEY}}"
@@ -358,14 +354,21 @@ else
     aws configure set default.s3.addressing_style path
   fi
 
-  public_verify_attempts="${SKENION_PUBLIC_VERIFY_ATTEMPTS:-36}"
-  public_verify_sleep_seconds="${SKENION_PUBLIC_VERIFY_SLEEP_SECONDS:-5}"
-  if [[ ! "${public_verify_attempts}" =~ ^[1-9][0-9]*$ ]]; then
-    echo "SKENION_PUBLIC_VERIFY_ATTEMPTS must be a positive integer." >&2
-    exit 1
-  fi
-  if [[ ! "${public_verify_sleep_seconds}" =~ ^[0-9]+$ ]]; then
-    echo "SKENION_PUBLIC_VERIFY_SLEEP_SECONDS must be a non-negative integer." >&2
+  strict_public_cdn_verify="${SKENION_STRICT_PUBLIC_CDN_VERIFY:-false}"
+  case "${strict_public_cdn_verify}" in
+    1|true|TRUE|yes|YES)
+      strict_public_cdn_verify=true
+      ;;
+    0|false|FALSE|no|NO|"")
+      strict_public_cdn_verify=false
+      ;;
+    *)
+      echo "SKENION_STRICT_PUBLIC_CDN_VERIFY must be true or false." >&2
+      exit 1
+      ;;
+  esac
+  if [[ "${strict_public_cdn_verify}" == "true" ]] && ! command -v curl >/dev/null 2>&1; then
+    echo "curl is required when SKENION_STRICT_PUBLIC_CDN_VERIFY=true." >&2
     exit 1
   fi
 
@@ -469,8 +472,9 @@ PY
     fi
 
     if [[ -z "${actual_sha}${actual_component}${actual_artifact_set}${actual_version}${actual_tag}${actual_commit}${actual_target}" ]]; then
-      echo "object already exists without immutable metadata and matching size: s3://${SKENION_RELEASE_S3_BUCKET}/${key}"
-      return 0
+      echo "Studio desktop release existing S3 object lacks immutable metadata; refusing reuse: s3://${SKENION_RELEASE_S3_BUCKET}/${key}" >&2
+      echo "Remove, re-publish, or remediate the object with immutable metadata before retrying." >&2
+      return 1
     fi
 
     s3_head_metadata_matches_expected "${key}" "${expected_sha}" "${expected_size}" "existing object"
@@ -532,12 +536,6 @@ PY
   public_verify_expected_sha=""
   public_verify_actual_sha=""
 
-  maybe_sleep_before_public_retry() {
-    if ((public_verify_sleep_seconds > 0)); then
-      sleep "${public_verify_sleep_seconds}"
-    fi
-  }
-
   verify_public_content_length_attempt() {
     local url="$1"
     local expected_size="$2"
@@ -576,18 +574,10 @@ PY
     local url="$1"
     local expected_size="$2"
     local label="$3"
-    local attempt
 
-    for ((attempt = 1; attempt <= public_verify_attempts; attempt++)); do
-      if verify_public_content_length_attempt "${url}" "${expected_size}"; then
-        return 0
-      fi
-
-      if ((attempt < public_verify_attempts)); then
-        echo "public Studio desktop release ${label} is not ready on attempt ${attempt}/${public_verify_attempts}: ${public_verify_failure}; retrying in ${public_verify_sleep_seconds}s: ${url}" >&2
-        maybe_sleep_before_public_retry
-      fi
-    done
+    if verify_public_content_length_attempt "${url}" "${expected_size}"; then
+      return 0
+    fi
 
     if [[ "${public_verify_failure}" == "HEAD request failed" ]]; then
       echo "failed to verify public Studio desktop release ${label}: ${url}" >&2
@@ -638,18 +628,10 @@ PY
     local url="$1"
     local expected_path="$2"
     local label="$3"
-    local attempt
 
-    for ((attempt = 1; attempt <= public_verify_attempts; attempt++)); do
-      if verify_public_file_matches_attempt "${url}" "${expected_path}"; then
-        return 0
-      fi
-
-      if ((attempt < public_verify_attempts)); then
-        echo "public Studio desktop release ${label} is not ready on attempt ${attempt}/${public_verify_attempts}: ${public_verify_failure}; retrying in ${public_verify_sleep_seconds}s: ${url}" >&2
-        maybe_sleep_before_public_retry
-      fi
-    done
+    if verify_public_file_matches_attempt "${url}" "${expected_path}"; then
+      return 0
+    fi
 
     if [[ "${public_verify_failure}" == "GET request failed" ]]; then
       echo "failed to download public Studio desktop release ${label}: ${url}" >&2
@@ -670,12 +652,16 @@ PY
   upload_object "${checksum_path}" "${checksum_key}" "${checksum_sha}" "${checksum_size}" "text/plain"
   upload_object "${index_path}" "${index_key}" "${index_sha}" "${index_size}" "application/json"
 
-  verify_public_content_length "${asset_url}" "${asset_size}" "desktop package ${asset_name}"
-  verify_public_content_length "${checksum_url}" "${checksum_size}" "desktop checksum ${checksum_name}"
-  verify_public_content_length "${index_url}" "${index_size}" "desktop index ${index_name}"
-  verify_public_file_matches "${asset_url}" "${asset_path}" "desktop package ${asset_name}"
-  verify_public_file_matches "${checksum_url}" "${checksum_path}" "desktop checksum ${checksum_name}"
-  verify_public_file_matches "${index_url}" "${index_path}" "desktop index ${index_name}"
+  if [[ "${strict_public_cdn_verify}" == "true" ]]; then
+    verify_public_content_length "${asset_url}" "${asset_size}" "desktop package ${asset_name}"
+    verify_public_content_length "${checksum_url}" "${checksum_size}" "desktop checksum ${checksum_name}"
+    verify_public_content_length "${index_url}" "${index_size}" "desktop index ${index_name}"
+    verify_public_file_matches "${asset_url}" "${asset_path}" "desktop package ${asset_name}"
+    verify_public_file_matches "${checksum_url}" "${checksum_path}" "desktop checksum ${checksum_name}"
+    verify_public_file_matches "${index_url}" "${index_path}" "desktop index ${index_name}"
+  else
+    echo "public CDN verification skipped by default after successful DSUB S3 upload; public URLs remain in the Studio desktop artifact index: ${index_url}"
+  fi
 fi
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then

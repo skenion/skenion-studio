@@ -417,8 +417,6 @@ run_publisher() {
     "SKENION_RELEASE_S3_SECRET_ACCESS_KEY=test-secret-key"
     "SKENION_RELEASE_S3_FORCE_PATH_STYLE=true"
     "SKENION_RELEASE_PUBLIC_BASE_URL=${public_base}"
-    "SKENION_PUBLIC_VERIFY_ATTEMPTS=3"
-    "SKENION_PUBLIC_VERIFY_SLEEP_SECONDS=0"
     "SOURCE_COMMIT=1111111111111111111111111111111111111111"
     "CONTRACTS_VERSION=1.2.0"
     "CONTRACTS_LINE=1.2"
@@ -512,120 +510,81 @@ for index, key in put_indexes:
     assert any(event == f"head {key}" for event in events[:index]), (key, events)
 PY
 
-  grep -q '^HEAD skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log"
-  grep -q '^GET skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log"
-  grep -q '^GET skenion-studio/v1.2.3/web/skenion-studio-web-artifacts-v1.2.3\.index\.json$' "${case_dir}/curl.log"
-}
-
-assert_public_retry_case() {
-  local case_dir="${tmp_root}/public-retry"
-  local head_count
-  local get_count
-
-  prepare_case "${case_dir}" "studio public retry artifact"
-  run_publisher "${case_dir}" STUB_CURL_FAIL_HEAD_ATTEMPTS=2 STUB_CURL_FAIL_GET_ATTEMPTS=2 >"${case_dir}/output.log" 2>&1
-
-  grep -q 'public Studio release .*web bundle.* is not ready on attempt 1/3: HEAD request failed; retrying in 0s' "${case_dir}/output.log"
-  grep -q 'public Studio release .*web bundle.* is not ready on attempt 2/3: HEAD request failed; retrying in 0s' "${case_dir}/output.log"
-  grep -q 'public Studio release .*web bundle.* is not ready on attempt 1/3: GET request failed; retrying in 0s' "${case_dir}/output.log"
-  grep -q 'public Studio release .*web bundle.* is not ready on attempt 2/3: GET request failed; retrying in 0s' "${case_dir}/output.log"
-
-  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${head_count}" != "3" ]]; then
+  grep -q 'public CDN verification skipped by default after successful DSUB S3 upload' "${case_dir}/output.log"
+  if [[ -s "${case_dir}/curl.log" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle HEAD to retry until third attempt, saw ${head_count}" >&2
-    exit 1
-  fi
-
-  get_count="$(grep -c '^GET skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${get_count}" != "3" ]]; then
-    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle GET to retry until third attempt, saw ${get_count}" >&2
+    echo "publisher should skip public CDN curl checks by default" >&2
     exit 1
   fi
 }
 
-assert_public_default_retry_window_case() {
-  local case_dir="${tmp_root}/public-default-retry-window"
-  local head_count
-  local sleep_count
+assert_public_unavailable_default_skip_case() {
+  local case_dir="${tmp_root}/public-unavailable-default-skip"
 
-  prepare_case "${case_dir}" "studio public default retry window artifact"
-  run_publisher "${case_dir}" \
-    SKENION_PUBLIC_VERIFY_ATTEMPTS= \
-    SKENION_PUBLIC_VERIFY_SLEEP_SECONDS= \
-    STUB_CURL_FAIL_HEAD_RELATIVE_KEY=skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3.tar.gz \
-    STUB_CURL_FAIL_HEAD_ATTEMPTS=35 >"${case_dir}/output.log" 2>&1
+  prepare_case "${case_dir}" "studio public unavailable default skip artifact"
+  run_publisher "${case_dir}" STUB_CURL_FAIL_HEAD_ATTEMPTS=99 STUB_CURL_FAIL_GET_ATTEMPTS=99 >"${case_dir}/output.log" 2>&1
 
-  grep -q 'public Studio release .*web bundle.* is not ready on attempt 35/36: HEAD request failed; retrying in 5s' "${case_dir}/output.log"
-  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${head_count}" != "36" ]]; then
+  grep -q 'public CDN verification skipped by default after successful DSUB S3 upload' "${case_dir}/output.log"
+  if [[ -s "${case_dir}/curl.log" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle HEAD to use the 36-attempt default, saw ${head_count}" >&2
-    exit 1
-  fi
-
-  sleep_count="$(grep -c '^sleep 5$' "${case_dir}/sleep.log" || true)"
-  if [[ "${sleep_count}" != "35" ]]; then
-    sed 's/^/[sleep] /' "${case_dir}/sleep.log" >&2
-    echo "expected public web bundle default retries to sleep 5s between 35 attempts, saw ${sleep_count}" >&2
+    echo "publisher should not call public CDN HEAD/GET checks in default mode" >&2
     exit 1
   fi
 }
 
-assert_public_head_failure_case() {
-  local case_dir="${tmp_root}/public-head-failure"
+assert_strict_public_head_failure_case() {
+  local case_dir="${tmp_root}/strict-public-head-failure"
   local head_count
 
-  prepare_case "${case_dir}" "studio public head failure artifact"
-  if run_publisher "${case_dir}" STUB_CURL_FAIL_HEAD_ATTEMPTS=3 >"${case_dir}/output.log" 2>&1; then
-    echo "expected public HEAD verification case to fail" >&2
+  prepare_case "${case_dir}" "studio strict public head failure artifact"
+  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_FAIL_HEAD_ATTEMPTS=1 >"${case_dir}/output.log" 2>&1; then
+    echo "expected strict public HEAD verification case to fail" >&2
     exit 1
   fi
 
   grep -q 'failed to verify public Studio release .*web bundle' "${case_dir}/output.log"
   head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${head_count}" != "3" ]]; then
+  if [[ "${head_count}" != "1" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle HEAD to fail after third attempt, saw ${head_count}" >&2
+    echo "expected strict public web bundle HEAD to fail on one attempt, saw ${head_count}" >&2
     exit 1
   fi
 }
 
-assert_public_get_failure_case() {
-  local case_dir="${tmp_root}/public-get-failure"
+assert_strict_public_get_failure_case() {
+  local case_dir="${tmp_root}/strict-public-get-failure"
   local get_count
 
-  prepare_case "${case_dir}" "studio public get failure artifact"
-  if run_publisher "${case_dir}" STUB_CURL_FAIL_GET_ATTEMPTS=3 >"${case_dir}/output.log" 2>&1; then
-    echo "expected public GET verification case to fail" >&2
+  prepare_case "${case_dir}" "studio strict public get failure artifact"
+  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_FAIL_GET_ATTEMPTS=1 >"${case_dir}/output.log" 2>&1; then
+    echo "expected strict public GET verification case to fail" >&2
     exit 1
   fi
 
   grep -q 'failed to download public Studio release .*web bundle' "${case_dir}/output.log"
   get_count="$(grep -c '^GET skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${get_count}" != "3" ]]; then
+  if [[ "${get_count}" != "1" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle GET to fail after third attempt, saw ${get_count}" >&2
+    echo "expected strict public web bundle GET to fail on one attempt, saw ${get_count}" >&2
     exit 1
   fi
 }
 
-assert_public_content_length_failure_case() {
-  local case_dir="${tmp_root}/public-content-length-failure"
+assert_strict_public_content_length_failure_case() {
+  local case_dir="${tmp_root}/strict-public-content-length-failure"
   local head_count
 
-  prepare_case "${case_dir}" "studio public content length failure artifact"
-  if run_publisher "${case_dir}" STUB_CURL_MISMATCH_WEB_ASSET_LENGTH=1 >"${case_dir}/output.log" 2>&1; then
-    echo "expected public Content-Length verification case to fail" >&2
+  prepare_case "${case_dir}" "studio strict public content length failure artifact"
+  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_MISMATCH_WEB_ASSET_LENGTH=1 >"${case_dir}/output.log" 2>&1; then
+    echo "expected strict public Content-Length verification case to fail" >&2
     exit 1
   fi
 
   grep -q 'public Studio release .*web bundle.* Content-Length does not match local file' "${case_dir}/output.log"
   head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${head_count}" != "3" ]]; then
+  if [[ "${head_count}" != "1" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle Content-Length mismatch to fail after third attempt, saw ${head_count}" >&2
+    echo "expected strict public web bundle Content-Length mismatch to fail on one attempt, saw ${head_count}" >&2
     exit 1
   fi
 }
@@ -751,7 +710,7 @@ assert_existing_matching_metadata_skips_upload_case() {
   fi
 }
 
-assert_existing_missing_metadata_skips_matching_asset_case() {
+assert_existing_missing_metadata_fails_matching_asset_case() {
   local case_dir="${tmp_root}/existing-missing-metadata"
   local web_asset_path
   local web_asset_name
@@ -766,11 +725,20 @@ assert_existing_missing_metadata_skips_matching_asset_case() {
   mkdir -p "$(dirname "${existing}")"
   cp "${web_asset_path}" "${existing}"
 
-  run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1
+  if run_publisher "${case_dir}" >"${case_dir}/output.log" 2>&1; then
+    echo "expected metadata-free existing object case to fail" >&2
+    exit 1
+  fi
 
-  grep -q 'object already exists without immutable metadata and matching size' "${case_dir}/output.log"
-  if grep -q "^put ${bucket}/${web_asset_key}$" "${case_dir}/aws.log"; then
-    echo "publisher re-uploaded an existing metadata-free object with matching size" >&2
+  grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
+  grep -q 'Remove, re-publish, or remediate the object with immutable metadata before retrying' "${case_dir}/output.log"
+  if grep -q '^put ' "${case_dir}/aws.log"; then
+    echo "publisher uploaded despite metadata-free existing object refusal" >&2
+    exit 1
+  fi
+  if [[ -s "${case_dir}/curl.log" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "metadata-free existing object should fail before public CDN verification" >&2
     exit 1
   fi
 }
@@ -847,29 +815,34 @@ assert_existing_missing_metadata_mismatched_content_case() {
     exit 1
   fi
 
-  grep -q 'object already exists without immutable metadata and matching size' "${case_dir}/output.log"
-  grep -q 'public Studio release .*web bundle.* content does not match local file' "${case_dir}/output.log"
+  grep -q 'existing S3 object lacks immutable metadata; refusing reuse' "${case_dir}/output.log"
+  grep -q 'Remove, re-publish, or remediate the object with immutable metadata before retrying' "${case_dir}/output.log"
   if grep -q "^put ${bucket}/${web_asset_key}$" "${case_dir}/aws.log"; then
-    echo "publisher overwrote metadata-free same-size object before public content verification" >&2
+    echo "publisher overwrote metadata-free same-size object before metadata refusal" >&2
+    exit 1
+  fi
+  if [[ -s "${case_dir}/curl.log" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "metadata-free S3 content mismatch should fail before public CDN verification" >&2
     exit 1
   fi
 }
 
-assert_public_content_failure_case() {
-  local case_dir="${tmp_root}/public-content-failure"
+assert_strict_public_content_failure_case() {
+  local case_dir="${tmp_root}/strict-public-content-failure"
   local get_count
 
-  prepare_case "${case_dir}" "studio public content failure artifact"
-  if run_publisher "${case_dir}" STUB_CURL_CORRUPT_WEB_ASSET=1 >"${case_dir}/output.log" 2>&1; then
-    echo "expected public content verification case to fail" >&2
+  prepare_case "${case_dir}" "studio strict public content failure artifact"
+  if run_publisher "${case_dir}" SKENION_STRICT_PUBLIC_CDN_VERIFY=true STUB_CURL_CORRUPT_WEB_ASSET=1 >"${case_dir}/output.log" 2>&1; then
+    echo "expected strict public content verification case to fail" >&2
     exit 1
   fi
 
   grep -q 'public Studio release .*web bundle.* content does not match local file' "${case_dir}/output.log"
   get_count="$(grep -c '^GET skenion-studio/v1.2.3/web/skenion-studio-web-bundle-v1.2.3\.tar\.gz$' "${case_dir}/curl.log" || true)"
-  if [[ "${get_count}" != "3" ]]; then
+  if [[ "${get_count}" != "1" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
-    echo "expected public web bundle content mismatch to fail after third attempt, saw ${get_count}" >&2
+    echo "expected strict public web bundle content mismatch to fail on one attempt, saw ${get_count}" >&2
     exit 1
   fi
 }
@@ -877,19 +850,18 @@ assert_public_content_failure_case() {
 install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
 assert_success_case
-assert_public_retry_case
-assert_public_default_retry_window_case
-assert_public_head_failure_case
-assert_public_get_failure_case
-assert_public_content_length_failure_case
+assert_public_unavailable_default_skip_case
+assert_strict_public_head_failure_case
+assert_strict_public_get_failure_case
+assert_strict_public_content_length_failure_case
 assert_secretless_dry_run_defaults_case
 assert_no_clobber_case
 assert_upload_missing_s3_metadata_is_not_a_failure_case
 assert_existing_matching_metadata_skips_upload_case
-assert_existing_missing_metadata_skips_matching_asset_case
+assert_existing_missing_metadata_fails_matching_asset_case
 assert_existing_missing_metadata_mismatched_size_case
 assert_existing_mismatched_metadata_fails_case
 assert_existing_missing_metadata_mismatched_content_case
-assert_public_content_failure_case
+assert_strict_public_content_failure_case
 
 echo "Studio DSUB S3 publisher validation passed."
