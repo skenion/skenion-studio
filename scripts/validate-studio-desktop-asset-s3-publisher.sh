@@ -282,10 +282,17 @@ attempt=$((attempt + 1))
 printf '%s\n' "${attempt}" >"${counter_path}"
 
 fail_attempts=0
+fail_relative_key=""
 if [[ "${method}" == "HEAD" ]]; then
   fail_attempts="${STUB_CURL_FAIL_HEAD_ATTEMPTS:-0}"
+  fail_relative_key="${STUB_CURL_FAIL_HEAD_RELATIVE_KEY:-}"
 else
   fail_attempts="${STUB_CURL_FAIL_GET_ATTEMPTS:-0}"
+  fail_relative_key="${STUB_CURL_FAIL_GET_RELATIVE_KEY:-}"
+fi
+
+if [[ -n "${fail_relative_key}" && "${relative_key}" != "${fail_relative_key}" ]]; then
+  fail_attempts=0
 fi
 
 if [[ "${attempt}" -le "${fail_attempts}" ]]; then
@@ -323,7 +330,16 @@ else
 fi
 BASH
 
-  chmod +x "${bin_dir}/aws" "${bin_dir}/curl"
+  cat >"${bin_dir}/sleep" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${STUB_SLEEP_LOG:-}" ]]; then
+  printf 'sleep %s\n' "$*" >>"${STUB_SLEEP_LOG}"
+fi
+BASH
+
+  chmod +x "${bin_dir}/aws" "${bin_dir}/curl" "${bin_dir}/sleep"
 }
 
 prepare_case() {
@@ -356,12 +372,14 @@ run_publisher() {
   mkdir -p "${case_dir}/s3/${bucket}/${prefix}"
   : >"${case_dir}/aws.log"
   : >"${case_dir}/curl.log"
+  : >"${case_dir}/sleep.log"
   asset_path="$(asset_path_for "${case_dir}")"
 
   base_env=(
     "PATH=${tmp_root}/bin:${PATH}"
     "STUB_AWS_LOG=${case_dir}/aws.log"
     "STUB_CURL_LOG=${case_dir}/curl.log"
+    "STUB_SLEEP_LOG=${case_dir}/sleep.log"
     "STUB_S3_ROOT=${case_dir}/s3"
     "STUB_CURL_STATE_DIR=${case_dir}/curl-state"
     "STUB_PUBLIC_BASE_URL=${public_base}"
@@ -491,6 +509,34 @@ assert_public_retry_case() {
   if [[ "${get_count}" != "3" ]]; then
     sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
     echo "expected public desktop package GET to retry until third attempt, saw ${get_count}" >&2
+    exit 1
+  fi
+}
+
+assert_public_default_retry_window_case() {
+  local case_dir="${tmp_root}/public-default-retry-window"
+  local head_count
+  local sleep_count
+
+  prepare_case "${case_dir}" "studio desktop public default retry window artifact"
+  run_publisher "${case_dir}" \
+    SKENION_PUBLIC_VERIFY_ATTEMPTS= \
+    SKENION_PUBLIC_VERIFY_SLEEP_SECONDS= \
+    STUB_CURL_FAIL_HEAD_RELATIVE_KEY=skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu.tar.gz \
+    STUB_CURL_FAIL_HEAD_ATTEMPTS=35 >"${case_dir}/output.log" 2>&1
+
+  grep -q 'public Studio desktop release .*desktop package.* is not ready on attempt 35/36: HEAD request failed; retrying in 5s' "${case_dir}/output.log"
+  head_count="$(grep -c '^HEAD skenion-studio/v1.2.3/desktop/x86_64-unknown-linux-gnu/skenion-studio-x86_64-unknown-linux-gnu\.tar\.gz$' "${case_dir}/curl.log" || true)"
+  if [[ "${head_count}" != "36" ]]; then
+    sed 's/^/[curl] /' "${case_dir}/curl.log" >&2
+    echo "expected public desktop package HEAD to use the 36-attempt default, saw ${head_count}" >&2
+    exit 1
+  fi
+
+  sleep_count="$(grep -c '^sleep 5$' "${case_dir}/sleep.log" || true)"
+  if [[ "${sleep_count}" != "35" ]]; then
+    sed 's/^/[sleep] /' "${case_dir}/sleep.log" >&2
+    echo "expected public desktop package default retries to sleep 5s between 35 attempts, saw ${sleep_count}" >&2
     exit 1
   fi
 }
@@ -795,6 +841,7 @@ install_stubs "${tmp_root}/bin"
 assert_github_actions_guard_case
 assert_success_case
 assert_public_retry_case
+assert_public_default_retry_window_case
 assert_public_head_failure_case
 assert_public_get_failure_case
 assert_public_content_length_failure_case

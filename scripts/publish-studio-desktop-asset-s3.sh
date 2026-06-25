@@ -358,7 +358,7 @@ else
     aws configure set default.s3.addressing_style path
   fi
 
-  public_verify_attempts="${SKENION_PUBLIC_VERIFY_ATTEMPTS:-12}"
+  public_verify_attempts="${SKENION_PUBLIC_VERIFY_ATTEMPTS:-36}"
   public_verify_sleep_seconds="${SKENION_PUBLIC_VERIFY_SLEEP_SECONDS:-5}"
   if [[ ! "${public_verify_attempts}" =~ ^[1-9][0-9]*$ ]]; then
     echo "SKENION_PUBLIC_VERIFY_ATTEMPTS must be a positive integer." >&2
