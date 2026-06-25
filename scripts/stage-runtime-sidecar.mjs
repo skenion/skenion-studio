@@ -33,6 +33,7 @@ const runtimeRepo = options.repo ?? "skenion/skenion-runtime";
 const outputDir = path.resolve(rootDir, options.outputDir ?? defaultOutputDir);
 const manifestUrl = options.runtimeManifestUrl ?? options.manifestUrl;
 const runtimeReleaseJson = options.runtimeReleaseJson ?? options.releaseJson;
+const runtimeArtifactSource = options.runtimeArtifactSource ?? options.runtimeDownloadSource ?? "http";
 
 if (options.version && options.version !== version) {
   fail(`--version (${options.version}) must match Runtime release tag version (${version}).`);
@@ -42,6 +43,12 @@ if (!supportedTargets.has(target)) {
 }
 if (!releaseModeNames.has(mode) && mode !== "local") {
   fail("--mode must be publish, verify, or local.");
+}
+if (options.runtimeArtifactSource && options.runtimeDownloadSource) {
+  fail("--runtime-artifact-source cannot be combined with --runtime-download-source.");
+}
+if (!["http", "s3"].includes(runtimeArtifactSource)) {
+  fail("--runtime-artifact-source must be http or s3.");
 }
 if (options.manifest && manifestUrl) {
   fail("--manifest cannot be combined with --manifest-url or --runtime-manifest-url.");
@@ -72,8 +79,7 @@ const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-runtime-artifac
 
 try {
   const artifactPath = path.join(tempDir, assetName);
-  const expectedSha256 = runtimeArtifact.sha256 ?? await downloadSha256(runtimeArtifact.checksumUrl, assetName);
-  await downloadUrl(runtimeArtifact.publicUrl, artifactPath, assetName);
+  const expectedSha256 = await stageRuntimeArchive(runtimeArtifact, artifactPath, tempDir);
   if (runtimeArtifact.size !== undefined) {
     await verifyFileSize(artifactPath, runtimeArtifact.size, assetName);
   }
@@ -235,7 +241,7 @@ function validateRuntimeManifest(manifest, expected) {
 
   const checksum = assertPlainObject(manifest.checksum, "manifest.checksum");
   assertEqual(checksum.filename, expected.expectedChecksumName, "manifest.checksum.filename");
-  requireHttpUrl(checksum.publicUrl, "manifest.checksum.publicUrl");
+  const checksumUrl = requireHttpUrl(checksum.publicUrl, "manifest.checksum.publicUrl");
   requireEvidence(checksum.s3, "manifest.checksum.s3");
 
   const manifestArtifact = assertPlainObject(manifest.manifest, "manifest.manifest");
@@ -250,6 +256,7 @@ function validateRuntimeManifest(manifest, expected) {
 
   return {
     publicUrl,
+    checksumUrl,
     sha256,
     size,
     manifestFilename
@@ -278,6 +285,159 @@ function runtimeArtifactFromReleaseBody(release, source) {
     checksumUrl,
     manifestFilename: `${source} downloads table`
   };
+}
+
+async function stageRuntimeArchive(runtimeArtifact, artifactPath, tempDirPath) {
+  if (runtimeArtifactSource === "http") {
+    const expectedSha256 = runtimeArtifact.sha256 ?? await downloadSha256(runtimeArtifact.checksumUrl, assetName);
+    await downloadUrl(runtimeArtifact.publicUrl, artifactPath, assetName);
+    return expectedSha256;
+  }
+
+  const s3Config = await loadS3DownloadConfig(tempDirPath);
+  const checksumPath = path.join(tempDirPath, checksumAssetName);
+  const archiveKey = deriveS3Key(runtimeArtifact.publicUrl, assetName, s3Config);
+  const checksumKey = deriveS3Key(runtimeArtifact.checksumUrl, checksumAssetName, s3Config);
+  await downloadS3Object(s3Config, archiveKey, artifactPath, assetName);
+  await downloadS3Object(s3Config, checksumKey, checksumPath, checksumAssetName);
+  return parseSha256File(await fs.readFile(checksumPath, "utf8"), assetName, `s3://${s3Config.bucket}/${checksumKey}`);
+}
+
+async function loadS3DownloadConfig(tempDirPath) {
+  const endpoint = requireEnv("SKENION_RELEASE_S3_ENDPOINT");
+  const region = requireEnv("SKENION_RELEASE_S3_REGION");
+  const bucket = requireEnv("SKENION_RELEASE_S3_BUCKET");
+  const prefix = normalizeS3Prefix(requireEnv("SKENION_RELEASE_S3_PREFIX"));
+  const accessKeyId = requireEnv("SKENION_RELEASE_S3_ACCESS_KEY_ID");
+  const secretAccessKey = requireEnv("SKENION_RELEASE_S3_SECRET_ACCESS_KEY");
+  const forcePathStyle = parseBooleanEnv(
+    requireEnv("SKENION_RELEASE_S3_FORCE_PATH_STYLE"),
+    "SKENION_RELEASE_S3_FORCE_PATH_STYLE"
+  );
+  const publicBaseUrl = requireEnv("SKENION_RELEASE_PUBLIC_BASE_URL");
+  const awsConfigFile = forcePathStyle ? await writeAwsPathStyleConfig(tempDirPath) : undefined;
+
+  return {
+    endpoint,
+    region,
+    bucket,
+    prefix,
+    accessKeyId,
+    secretAccessKey,
+    forcePathStyle,
+    publicBaseUrl,
+    awsConfigFile
+  };
+}
+
+function requireEnv(name) {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    fail(`${name} is required when --runtime-artifact-source s3 is used.`);
+  }
+  return value.trim();
+}
+
+function normalizeS3Prefix(value) {
+  const prefix = value.replace(/^\/+|\/+$/g, "");
+  if (prefix.length === 0) {
+    fail("SKENION_RELEASE_S3_PREFIX must not be empty when --runtime-artifact-source s3 is used.");
+  }
+  return prefix;
+}
+
+function parseBooleanEnv(value, name) {
+  const normalized = value.toLowerCase();
+  if (["1", "true", "yes"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no"].includes(normalized)) {
+    return false;
+  }
+  fail(`${name} must be true or false.`);
+}
+
+async function writeAwsPathStyleConfig(tempDirPath) {
+  const configPath = path.join(tempDirPath, "aws-config");
+  await fs.writeFile(configPath, "[default]\ns3 =\n    addressing_style = path\n", "utf8");
+  return configPath;
+}
+
+function deriveS3Key(publicUrl, filename, s3Config) {
+  const relativePath = `${runtimeComponent}/v${version}/${target}/${filename}`;
+  const key = `${s3Config.prefix}/${relativePath}`;
+  const parsed = new URL(publicUrl);
+  const decodedPath = decodeURIComponent(parsed.pathname);
+  const validPathSuffixes = [`/${relativePath}`, `/${key}`, `/${s3Config.bucket}/${key}`];
+  if (!validPathSuffixes.some((suffix) => decodedPath.endsWith(suffix))) {
+    fail(`Runtime artifact URL path ${decodedPath} does not match expected S3 key ${key}.`);
+  }
+
+  validatePublicBaseUrl(publicUrl, relativePath, key, s3Config);
+
+  return key;
+}
+
+function validatePublicBaseUrl(publicUrl, relativePath, key, s3Config) {
+  let base;
+  try {
+    base = new URL(s3Config.publicBaseUrl);
+  } catch {
+    fail("SKENION_RELEASE_PUBLIC_BASE_URL must be an absolute URL when set.");
+  }
+
+  const parsed = new URL(publicUrl);
+  if (parsed.origin !== base.origin) {
+    fail(`Runtime artifact URL origin ${parsed.origin} does not match SKENION_RELEASE_PUBLIC_BASE_URL origin ${base.origin}.`);
+  }
+
+  const basePath = decodeURIComponent(base.pathname).replace(/\/+$/g, "");
+  const decodedPath = decodeURIComponent(parsed.pathname);
+  if (basePath && decodedPath !== basePath && !decodedPath.startsWith(`${basePath}/`)) {
+    fail(`Runtime artifact URL path ${decodedPath} is outside SKENION_RELEASE_PUBLIC_BASE_URL path ${basePath}.`);
+  }
+
+  const pathAfterBase = decodedPath.slice(basePath.length).replace(/^\/+/, "");
+  const expectedPaths = new Set([
+    relativePath,
+    key,
+    `${s3Config.bucket}/${key}`
+  ]);
+  if (!expectedPaths.has(pathAfterBase)) {
+    fail(
+      `Runtime artifact URL path after SKENION_RELEASE_PUBLIC_BASE_URL is ${pathAfterBase}, expected ${[...expectedPaths].join(" or ")}.`
+    );
+  }
+}
+
+async function downloadS3Object(s3Config, key, destination, label) {
+  await run(
+    "aws",
+    [
+      "s3",
+      "cp",
+      `s3://${s3Config.bucket}/${key}`,
+      destination,
+      "--endpoint-url",
+      s3Config.endpoint,
+      "--region",
+      s3Config.region,
+      "--no-progress"
+    ],
+    {
+      env: {
+        ...process.env,
+        AWS_ACCESS_KEY_ID: s3Config.accessKeyId,
+        AWS_SECRET_ACCESS_KEY: s3Config.secretAccessKey,
+        AWS_DEFAULT_REGION: s3Config.region,
+        AWS_REGION: s3Config.region,
+        AWS_EC2_METADATA_DISABLED: "true",
+        ...(s3Config.awsConfigFile ? { AWS_CONFIG_FILE: s3Config.awsConfigFile } : {})
+      }
+    }
+  ).catch((error) => {
+    fail(`Could not download ${label} from s3://${s3Config.bucket}/${key}: ${error.message}`);
+  });
 }
 
 function runtimeDownloadsSection(body, source) {

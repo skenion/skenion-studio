@@ -15,6 +15,8 @@ const artifactName = `skenion-runtime-v${version}-${target}.tar.gz`;
 const checksumName = `${artifactName}.sha256`;
 const binaryName = "skenion-runtime";
 const artifactPathPrefix = `/skenion/releases/skenion-runtime/${releaseTag}/${target}`;
+const s3Bucket = "skenion";
+const s3Prefix = "releases";
 const failures = [];
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "skenion-stage-runtime-validation-"));
@@ -24,6 +26,9 @@ try {
   const server = await startFixtureServer(artifact);
   try {
     await validateReleaseBodyStaging(server.origin, artifact);
+    await validateS3ReleaseBodyStaging(server, artifact);
+    await validateS3MissingPublicBaseFails(server, artifact);
+    await validateS3MismatchedPublicBaseFails(server, artifact);
     await validateMissingTargetFails(server.origin);
     await validateMissingChecksumUrlFails(server.origin);
     await validateShaMismatchFails(server.origin);
@@ -77,6 +82,132 @@ async function validateReleaseBodyStaging(origin, artifact) {
   if (staged !== artifact.binaryContents) {
     failures.push("release body staging copied the wrong Runtime binary content.");
   }
+}
+
+async function validateS3ReleaseBodyStaging(server, artifact) {
+  const releaseJson = await writeReleaseJson(
+    "s3-release-body",
+    runtimeDownloadsBody({
+      archiveUrl: archiveUrl(server.origin),
+      checksumUrl: checksumUrl(server.origin)
+    })
+  );
+  const s3Fixture = await createS3Fixture(artifact);
+  const fakeAws = await createFakeAwsCli();
+  const outputDir = path.join(tempDir, "s3-output");
+  const requestsBefore = { ...server.requests };
+  const result = await runStage(
+    [
+      "--runtime-tag",
+      releaseTag,
+      "--target",
+      target,
+      "--mode",
+      "verify",
+      "--runtime-release-json",
+      releaseJson,
+      "--runtime-artifact-source",
+      "s3",
+      "--output-dir",
+      outputDir
+    ],
+    runtimeS3Env({
+      fakeAws,
+      s3Fixture,
+      publicBaseUrl: `${server.origin}/skenion/releases`
+    })
+  );
+
+  if (result.code !== 0) {
+    failures.push(`S3 release body staging should pass; got ${result.code}: ${result.stderr || result.stdout}`);
+    return;
+  }
+
+  if (server.requests.archive !== requestsBefore.archive || server.requests.checksum !== requestsBefore.checksum) {
+    failures.push("S3 release body staging should not download the Runtime archive or SHA-256 through public HTTP.");
+  }
+
+  const stagedBinary = path.join(outputDir, `skenion-runtime-${target}`);
+  const staged = await fs.readFile(stagedBinary, "utf8");
+  if (staged !== artifact.binaryContents) {
+    failures.push("S3 release body staging copied the wrong Runtime binary content.");
+  }
+
+  const awsLog = (await fs.readFile(fakeAws.logPath, "utf8"))
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const copiedSources = awsLog.map((entry) => entry.args.slice(0, 4).join(" "));
+  for (const expected of [
+    `s3 cp s3://${s3Bucket}/${s3Fixture.archiveKey}`,
+    `s3 cp s3://${s3Bucket}/${s3Fixture.checksumKey}`
+  ]) {
+    if (!copiedSources.some((source) => source.startsWith(expected))) {
+      failures.push(`S3 release body staging did not copy expected object: ${expected}`);
+    }
+  }
+}
+
+async function validateS3MissingPublicBaseFails(server, artifact) {
+  const releaseJson = await writeReleaseJson(
+    "s3-missing-public-base",
+    runtimeDownloadsBody({
+      archiveUrl: archiveUrl(server.origin),
+      checksumUrl: checksumUrl(server.origin)
+    })
+  );
+  const s3Fixture = await createS3Fixture(artifact);
+  const fakeAws = await createFakeAwsCli();
+  await expectStageFailure(
+    "S3 missing public base",
+    [
+      "--runtime-tag",
+      releaseTag,
+      "--target",
+      target,
+      "--mode",
+      "verify",
+      "--runtime-release-json",
+      releaseJson,
+      "--runtime-artifact-source",
+      "s3"
+    ],
+    "SKENION_RELEASE_PUBLIC_BASE_URL is required",
+    runtimeS3Env({ fakeAws, s3Fixture })
+  );
+}
+
+async function validateS3MismatchedPublicBaseFails(server, artifact) {
+  const releaseJson = await writeReleaseJson(
+    "s3-mismatched-public-base",
+    runtimeDownloadsBody({
+      archiveUrl: archiveUrl(server.origin),
+      checksumUrl: checksumUrl(server.origin)
+    })
+  );
+  const s3Fixture = await createS3Fixture(artifact);
+  const fakeAws = await createFakeAwsCli();
+  await expectStageFailure(
+    "S3 mismatched public base",
+    [
+      "--runtime-tag",
+      releaseTag,
+      "--target",
+      target,
+      "--mode",
+      "verify",
+      "--runtime-release-json",
+      releaseJson,
+      "--runtime-artifact-source",
+      "s3"
+    ],
+    "outside SKENION_RELEASE_PUBLIC_BASE_URL path",
+    runtimeS3Env({
+      fakeAws,
+      s3Fixture,
+      publicBaseUrl: `${server.origin}/wrong/releases`
+    })
+  );
 }
 
 async function validateMissingTargetFails(origin) {
@@ -188,8 +319,8 @@ async function validateManifestCheckOnly(origin, artifact) {
   }
 }
 
-async function expectStageFailure(label, args, expectedOutput) {
-  const result = await runStage(args);
+async function expectStageFailure(label, args, expectedOutput, extraEnv = {}) {
+  const result = await runStage(args, extraEnv);
   const output = `${result.stdout}\n${result.stderr}`;
   if (result.code === 0) {
     failures.push(`${label} should fail closed but exited 0.`);
@@ -198,6 +329,22 @@ async function expectStageFailure(label, args, expectedOutput) {
   if (!output.includes(expectedOutput)) {
     failures.push(`${label} failed with unexpected output: ${output}`);
   }
+}
+
+function runtimeS3Env({ fakeAws, s3Fixture, publicBaseUrl }) {
+  return {
+    PATH: `${fakeAws.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    FAKE_AWS_LOG: fakeAws.logPath,
+    FAKE_S3_ROOT: s3Fixture.root,
+    SKENION_RELEASE_S3_ENDPOINT: "https://s3.example.test",
+    SKENION_RELEASE_S3_REGION: "us-east-1",
+    SKENION_RELEASE_S3_BUCKET: s3Bucket,
+    SKENION_RELEASE_S3_PREFIX: s3Prefix,
+    SKENION_RELEASE_S3_ACCESS_KEY_ID: "fixture-access-key",
+    SKENION_RELEASE_S3_SECRET_ACCESS_KEY: "fixture-secret-key",
+    SKENION_RELEASE_S3_FORCE_PATH_STYLE: "true",
+    SKENION_RELEASE_PUBLIC_BASE_URL: publicBaseUrl ?? ""
+  };
 }
 
 async function createRuntimeArchive(baseDir) {
@@ -218,15 +365,73 @@ async function createRuntimeArchive(baseDir) {
   };
 }
 
+async function createS3Fixture(artifact) {
+  const root = path.join(tempDir, "fake-s3");
+  const keyPrefix = `${s3Prefix}/skenion-runtime/${releaseTag}/${target}`;
+  const objectDir = path.join(root, s3Bucket, keyPrefix);
+  await fs.mkdir(objectDir, { recursive: true });
+  await fs.copyFile(artifact.archivePath, path.join(objectDir, artifactName));
+  await fs.writeFile(path.join(objectDir, checksumName), `${artifact.sha256}  ${artifactName}\n`, "utf8");
+  return {
+    root,
+    archiveKey: `${keyPrefix}/${artifactName}`,
+    checksumKey: `${keyPrefix}/${checksumName}`
+  };
+}
+
+async function createFakeAwsCli() {
+  const binDir = path.join(tempDir, "fake-aws-bin");
+  const awsPath = path.join(binDir, "aws");
+  const logPath = path.join(tempDir, "fake-aws.log");
+  await fs.mkdir(binDir, { recursive: true });
+  await fs.writeFile(logPath, "", "utf8");
+  await fs.writeFile(
+    awsPath,
+    `#!/usr/bin/env node
+const { copyFileSync, appendFileSync } = require("node:fs");
+const path = require("node:path");
+
+const args = process.argv.slice(2);
+appendFileSync(process.env.FAKE_AWS_LOG, JSON.stringify({ args }) + "\\n");
+
+if (args[0] === "--version") {
+  console.log("aws-cli/2.15.0 fixture");
+  process.exit(0);
+}
+if (args[0] !== "s3" || args[1] !== "cp") {
+  console.error("fake aws only supports s3 cp");
+  process.exit(2);
+}
+const source = args[2];
+const destination = args[3];
+const match = source.match(/^s3:\\/\\/([^/]+)\\/(.+)$/);
+if (!match) {
+  console.error(\`fake aws expected s3 source, got \${source}\`);
+  process.exit(2);
+}
+copyFileSync(path.join(process.env.FAKE_S3_ROOT, match[1], match[2]), destination);
+`,
+    "utf8"
+  );
+  await fs.chmod(awsPath, 0o755);
+  return { binDir, logPath };
+}
+
 async function startFixtureServer(artifact) {
+  const requests = {
+    archive: 0,
+    checksum: 0
+  };
   const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
     if (requestUrl.pathname === `${artifactPathPrefix}/${artifactName}`) {
+      requests.archive += 1;
       response.writeHead(200, { "content-type": "application/gzip" });
       createReadStream(artifact.archivePath).pipe(response);
       return;
     }
     if (requestUrl.pathname === `${artifactPathPrefix}/${checksumName}`) {
+      requests.checksum += 1;
       const digest = requestUrl.searchParams.get("case") === "bad-sha"
         ? "0".repeat(64)
         : artifact.sha256;
@@ -245,7 +450,8 @@ async function startFixtureServer(artifact) {
   const address = server.address();
   return {
     instance: server,
-    origin: `http://127.0.0.1:${address.port}`
+    origin: `http://127.0.0.1:${address.port}`,
+    requests
   };
 }
 
@@ -280,12 +486,13 @@ function checksumUrl(origin) {
   return `${origin}${artifactPathPrefix}/${checksumName}`;
 }
 
-async function runStage(args) {
+async function runStage(args, extraEnv = {}) {
   return run(process.execPath, ["scripts/stage-runtime-sidecar.mjs", ...args], {
     cwd: rootDir,
     env: {
       ...process.env,
-      GH_TOKEN: ""
+      GH_TOKEN: "",
+      ...extraEnv
     }
   });
 }
