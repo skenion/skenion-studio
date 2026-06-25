@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.5](https://github.com/skenion/skenion-studio/compare/v0.44.4...v0.44.5) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** retry studio public artifact verification ([52ea0c9](https://github.com/skenion/skenion-studio/commit/52ea0c9c4c067dbf0c62c36263f9e5573dbf13c6))
+
 ## [0.44.4](https://github.com/skenion/skenion-studio/compare/v0.44.3...v0.44.4) (2026-06-25)
 
 
