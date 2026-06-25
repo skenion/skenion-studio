@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.15](https://github.com/skenion/skenion-studio/compare/v0.44.14...v0.44.15) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** fetch runtime manifests from s3 in publish mode ([#183](https://github.com/skenion/skenion-studio/issues/183)) ([fca845b](https://github.com/skenion/skenion-studio/commit/fca845bd39c2f0eeabe222f8649757dcacda9fd2))
+
 ## [0.44.14](https://github.com/skenion/skenion-studio/compare/v0.44.13...v0.44.14) (2026-06-25)
 
 
