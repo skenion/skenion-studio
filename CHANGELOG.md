@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.13](https://github.com/skenion/skenion-studio/compare/v0.44.12...v0.44.13) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** auto publish studio releases ([#179](https://github.com/skenion/skenion-studio/issues/179)) ([eb26507](https://github.com/skenion/skenion-studio/commit/eb26507a4c3009df7dbbde2823da27b5fc69d4c2))
+
 ## [0.44.12](https://github.com/skenion/skenion-studio/compare/v0.44.11...v0.44.12) (2026-06-25)
 
 
