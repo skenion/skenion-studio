@@ -11,7 +11,7 @@
   "private": true,
   "sideEffects": false,
   "peerDependencies": {
-    "@skenion/contracts": ">=0.45.0 <0.46.0"
+    "@skenion/contracts": ">=0.49.0 <0.50.0"
   },
   "peerDependenciesMeta": {
     "@skenion/contracts": {

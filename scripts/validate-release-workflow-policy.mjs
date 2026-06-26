@@ -21,6 +21,9 @@ const runtimeReleasePinPath = "release/runtime-release.json";
 const desktopReadmePath = "packages/studio-desktop/README.md";
 const webReadmePath = "packages/studio-web/README.md";
 const ciPolicyPath = "docs/ci-release-policy.md";
+const rootPackagePath = "package.json";
+const desktopPackagePath = "packages/studio-desktop/package.json";
+const webPackagePath = "packages/studio-web/package.json";
 
 const workflowPaths = fs
   .readdirSync(workflowDir)
@@ -42,12 +45,29 @@ const runtimeReleasePin = readRequired(runtimeReleasePinPath);
 const desktopReadme = readRequired(desktopReadmePath);
 const webReadme = readRequired(webReadmePath);
 const ciPolicy = readRequired(ciPolicyPath);
+const rootPackage = readJsonRequired(rootPackagePath);
+const desktopPackage = readJsonRequired(desktopPackagePath);
+const webPackage = readJsonRequired(webPackagePath);
+const contractsPackageName = "@skenion/contracts";
+const expectedContractsVersion = rootPackage.dependencies?.[contractsPackageName];
+const expectedContractsLine = isExactSemver(expectedContractsVersion)
+  ? expectedContractsVersion.split(".").slice(0, 2).join(".")
+  : "";
+const expectedContractsNextMinor = isExactSemver(expectedContractsVersion)
+  ? `${expectedContractsVersion.split(".")[0]}.${Number(expectedContractsVersion.split(".")[1]) + 1}.0`
+  : "";
+const expectedContractsRange = isExactSemver(expectedContractsVersion)
+  ? `>=${expectedContractsVersion} <${expectedContractsNextMinor}`
+  : "";
 
 for (const workflowPath of workflowPaths) {
   const workflow = readRequired(workflowPath);
   checkTokenPolicy(workflowPath, workflow);
   checkNoLocalPublish(workflowPath, workflow);
   checkNoReleaseActionBypass(workflowPath, workflow);
+  if (isDefaultOrReleaseWorkflow(workflowPath)) {
+    checkNoLocalContractsOverride(workflowPath, workflow);
+  }
 }
 
 checkNoGithubReleaseUploads(studioReleaseWorkflowPath, studioReleaseWorkflow);
@@ -63,6 +83,8 @@ checkRuntimeSidecarPolicy();
 checkReleaseStatusPolicy();
 checkRuntimeReleasePinPolicy();
 checkDocsPolicy();
+checkContractsDependencyPolicy();
+checkReleaseContractsVersionPolicy();
 
 if (failures.length > 0) {
   console.error("Studio release workflow policy validation failed:");
@@ -110,6 +132,85 @@ function checkNoReleaseActionBypass(relativePath, content) {
     content,
     /\b(?:softprops\/action-gh-release|actions\/upload-release-asset|actions\/create-release|ncipollo\/release-action|svenstaro\/upload-release-action)\b/i,
     "release assets must not bypass the reviewed GH_TOKEN and DSUB publisher steps"
+  );
+}
+
+function checkNoLocalContractsOverride(relativePath, content) {
+  rejectPattern(
+    relativePath,
+    content,
+    /\b(?:SKENION_CONTRACTS_TS_PACKAGE|SKENION_CONTRACTS_PACKAGE|SKENION_LOCAL_CONTRACTS_INTEGRATION|check-local-contracts-integration)\b/,
+    "release and default CI workflows must not use local Contracts overrides"
+  );
+}
+
+function isDefaultOrReleaseWorkflow(relativePath) {
+  return /(?:^|\/)(?:ci|release-please|studio-release-artifacts|desktop-release|backfill-v0\.44\.1-canonical-tag)\.ya?ml$/.test(
+    relativePath
+  );
+}
+
+function checkContractsDependencyPolicy() {
+  const rootDependency = rootPackage.dependencies?.[contractsPackageName];
+  if (!isExactSemver(rootDependency)) {
+    fail(rootPackagePath, 1, "root @skenion/contracts dependency must be an exact registry SemVer version");
+    return;
+  }
+
+  for (const [relativePath, packageJson] of [
+    [desktopPackagePath, desktopPackage],
+    [webPackagePath, webPackage]
+  ]) {
+    const peerRange = packageJson.peerDependencies?.[contractsPackageName];
+    if (!isRegistryRange(peerRange)) {
+      fail(relativePath, 1, "@skenion/contracts peer dependency must be a registry SemVer range");
+      continue;
+    }
+    if (peerRange !== expectedContractsRange) {
+      fail(
+        relativePath,
+        1,
+        `@skenion/contracts peer dependency must match root Contracts line ${expectedContractsRange}`
+      );
+    }
+  }
+}
+
+function checkReleaseContractsVersionPolicy() {
+  if (!isExactSemver(expectedContractsVersion)) {
+    return;
+  }
+
+  for (const [relativePath, content] of [
+    [studioReleaseWorkflowPath, studioReleaseWorkflow],
+    [desktopReleaseWorkflowPath, desktopReleaseWorkflow],
+    [prepareArtifactsPath, prepareArtifacts]
+  ]) {
+    rejectPattern(
+      relativePath,
+      content,
+      /\b0\.45(?:\.0)?\b|\b0\.46\.0\b/,
+      "release validation sources must not enforce stale Contracts 0.45 constraints"
+    );
+    expectIncludes(
+      relativePath,
+      content,
+      expectedContractsVersion,
+      `release validation source must reference ${contractsPackageName}@${expectedContractsVersion}`
+    );
+    expectIncludes(
+      relativePath,
+      content,
+      expectedContractsRange,
+      `release validation source must enforce Contracts range ${expectedContractsRange}`
+    );
+  }
+
+  expectIncludes(
+    prepareArtifactsPath,
+    prepareArtifacts,
+    `const contractsLine = "${expectedContractsLine}";`,
+    `prepare script must derive release metadata for Contracts line ${expectedContractsLine}`
   );
 }
 
@@ -1204,6 +1305,28 @@ function readRequired(relativePath) {
     fail(relativePath, 1, `required policy file cannot be read: ${error.message}`);
     return "";
   }
+}
+
+function readJsonRequired(relativePath) {
+  const content = readRequired(relativePath);
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    fail(relativePath, 1, `required policy JSON cannot be parsed: ${error.message}`);
+    return {};
+  }
+}
+
+function isExactSemver(value) {
+  return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
+}
+
+function isRegistryRange(value) {
+  return (
+    typeof value === "string" &&
+    !/\b(?:file|link|workspace|github):|https?:|git\+/.test(value) &&
+    /^[\d\s.<>=~^*xX|-]+$/.test(value)
+  );
 }
 
 function shellCommandLines(content) {

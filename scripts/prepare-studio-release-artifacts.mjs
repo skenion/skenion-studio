@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const contractsLine = "0.45";
-const contractsRange = ">=0.45.0 <0.46.0";
+const contractsLine = "0.49";
+const contractsRange = ">=0.49.0 <0.50.0";
 const runtimeApiBaseline = "0.1.0";
 const runtimeProtocolBaseline = "0.1.0";
 const studioRepo = "skenion/skenion-studio";
@@ -492,7 +492,7 @@ function assertConcreteContractsVersion(version, label) {
 
 function versionSatisfiesContractsLine(version) {
   const [major, minor] = version.split(".").map(Number);
-  return major === 0 && minor === 45;
+  return major === 0 && minor === 49;
 }
 
 async function copyWebDist(source, destination) {

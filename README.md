@@ -22,20 +22,36 @@ React Flow is only the visual interaction layer. `skenion graph v0.1` remains th
 
 ## Development
 
-Default CI consumes the committed registry dependency for `@skenion/contracts`.
-Use a local `.deps/skenion-contracts` checkout only for explicit cross-repo
-integration work before a Contracts release exists.
+Default installs, CI, builds, tests, and release workflows consume the committed
+registry dependency for `@skenion/contracts`. A local Contracts checkout is only
+used when you run the explicit integration command below; simply cloning into
+`.deps` does not change Studio's dependency resolution.
 
 ```sh
-mkdir -p .deps
-gh repo clone skenion/skenion-contracts .deps/skenion-contracts
 pnpm install --frozen-lockfile
 pnpm run ci
 pnpm run dev
 ```
 
-If `.deps/skenion-contracts` already exists for manual integration work, update
-it before installing dependencies. Do not rely on `.deps` for default PR CI.
+For pre-release cross-repo integration, build the Contracts TypeScript package
+first, then run Studio validation through the local package without committing
+`file:`, `link:`, `workspace:`, or GitHub dependency overrides:
+
+```sh
+mkdir -p .deps
+gh repo clone skenion/skenion-contracts .deps/skenion-contracts
+pnpm --dir .deps/skenion-contracts/packages/ts install --frozen-lockfile
+pnpm --dir .deps/skenion-contracts/packages/ts run build
+pnpm run check-local-contracts-integration
+```
+
+The integration command defaults to `.deps/skenion-contracts/packages/ts` and
+the sibling `../Skenion-contracts/packages/ts` checkout. To use a different
+checkout, pass `--contracts-package <path>` or set
+`SKENION_CONTRACTS_TS_PACKAGE`. The command verifies the local package metadata,
+`dist/index.js`, Studio's declared version ranges, git branch/commit evidence
+where available, and then temporarily redirects `node_modules/@skenion/contracts`
+only for the validation run.
 
 Desktop sidecar diagnostics and profile behavior are documented in
 [`docs/desktop-runtime-profiles.md`](docs/desktop-runtime-profiles.md).
