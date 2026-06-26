@@ -421,8 +421,10 @@ fn runtime_executable(app: &tauri::AppHandle, requested: Option<&str>) -> PathBu
     if let Some(path) = bundled_runtime_binary(app) {
         return path;
     }
-    if let Some(path) = sibling_runtime_debug_binary() {
-        return path;
+    if sibling_runtime_debug_binary_enabled() {
+        if let Some(path) = sibling_runtime_debug_binary() {
+            return path;
+        }
     }
     PathBuf::from("skenion-runtime")
 }
@@ -436,6 +438,17 @@ fn bundled_runtime_binary(app: &tauri::AppHandle) -> Option<PathBuf> {
     let resource_dir = app.path().resource_dir().ok()?;
     let candidate = resource_dir.join(binary_name);
     candidate.exists().then_some(candidate)
+}
+
+fn sibling_runtime_debug_binary_enabled() -> bool {
+    env::var("SKENION_RUNTIME_USE_SIBLING_DEBUG")
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
 }
 
 fn sibling_runtime_debug_binary() -> Option<PathBuf> {

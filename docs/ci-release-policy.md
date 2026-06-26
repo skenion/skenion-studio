@@ -154,9 +154,20 @@ format, executable name, artifact/checksum/manifest filenames, public URLs, S3
 keys, artifact size, and SHA-256. It then downloads the raw Runtime binary from
 `manifest.artifact.publicUrl` and stages it for `bundle.externalBin`. Publish
 and verify modes fail closed when the Runtime manifest, artifact, size, or
-checksum is missing or mismatched. Local checks may pass a generated manifest fixture with
+checksum is missing or mismatched. They also fail closed when local Runtime
+overrides such as `SKENION_RUNTIME_BIN`,
+`SKENION_RUNTIME_USE_SIBLING_DEBUG`, or local-shared Runtime URL evidence
+variables are present. Local checks may pass a generated manifest fixture with
 `--manifest ... --check-manifest-only`; that path is for validation and tests,
 not for release publication.
+
+Local Runtime development evidence lives outside the release path in
+`pnpm run check-local-runtime-integration`. That command can start an explicit
+local Runtime binary, opt into the sibling `Skenion-runtime` debug binary, or
+health-check an already-running local-shared Runtime URL. It records local
+binary path, version, and checkout branch/commit/dirty evidence where
+available, but default CI and release workflows do not invoke it and must not
+use its local override environment variables.
 
 Windows studio distribution is installer-based. The primary v0 user-facing
 Windows artifact family is the Tauri NSIS setup executable ending in

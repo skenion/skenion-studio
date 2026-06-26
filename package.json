@@ -13,6 +13,7 @@
     "dev": "vite --host localhost",
     "lint": "eslint .",
     "check-local-contracts-integration": "node scripts/check-local-contracts-integration.mjs",
+    "check-local-runtime-integration": "node scripts/check-local-runtime-integration.mjs",
     "package-studio-desktop": "node scripts/package-studio-desktop.mjs",
     "prepare-studio-release-artifacts": "node scripts/prepare-studio-release-artifacts.mjs",
     "preview": "vite preview --host localhost",
