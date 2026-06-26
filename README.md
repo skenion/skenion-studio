@@ -53,6 +53,26 @@ checkout, pass `--contracts-package <path>` or set
 where available, and then temporarily redirects `node_modules/@skenion/contracts`
 only for the validation run.
 
+Local Runtime integration is also explicit. To validate a local-managed desktop
+sidecar binary, pass the binary path or opt into the sibling debug Runtime
+checkout:
+
+```sh
+pnpm run check-local-runtime-integration -- --runtime-bin /absolute/path/to/skenion-runtime
+pnpm run check-local-runtime-integration -- --sibling-debug-runtime
+```
+
+For browser development against an already-running Runtime, use the local-shared
+health check:
+
+```sh
+pnpm run check-local-runtime-integration -- --local-shared-url http://127.0.0.1:3761
+```
+
+The command records Runtime binary path, version, and git branch/commit/dirty
+evidence when the binary is from a checkout. It does not change default builds,
+CI, or release packaging.
+
 Desktop sidecar diagnostics and profile behavior are documented in
 [`docs/desktop-runtime-profiles.md`](docs/desktop-runtime-profiles.md).
 

@@ -59,6 +59,12 @@ const expectedContractsNextMinor = isExactSemver(expectedContractsVersion)
 const expectedContractsRange = isExactSemver(expectedContractsVersion)
   ? `>=${expectedContractsVersion} <${expectedContractsNextMinor}`
   : "";
+const localRuntimeOverrideTokenPattern =
+  /\b(?:SKENION_RUNTIME_BIN|SKENION_RUNTIME_USE_SIBLING_DEBUG|SKENION_LOCAL_RUNTIME_INTEGRATION|SKENION_LOCAL_SHARED_RUNTIME_URL|SKENION_RUNTIME_LOCAL_SHARED_URL|check-local-runtime-integration)\b/;
+const localRuntimeOverrideFlagPattern =
+  /(?<![\w-])(?:--runtime-bin|--sibling-debug-runtime|--use-sibling-debug-runtime|--local-shared-url|--runtime-url)(?=$|[=\s"'`),])/m;
+
+checkLocalRuntimeOverridePatternCoverage();
 
 for (const workflowPath of workflowPaths) {
   const workflow = readRequired(workflowPath);
@@ -67,6 +73,7 @@ for (const workflowPath of workflowPaths) {
   checkNoReleaseActionBypass(workflowPath, workflow);
   if (isDefaultOrReleaseWorkflow(workflowPath)) {
     checkNoLocalContractsOverride(workflowPath, workflow);
+    checkNoLocalRuntimeOverride(workflowPath, workflow);
   }
 }
 
@@ -142,6 +149,66 @@ function checkNoLocalContractsOverride(relativePath, content) {
     /\b(?:SKENION_CONTRACTS_TS_PACKAGE|SKENION_CONTRACTS_PACKAGE|SKENION_LOCAL_CONTRACTS_INTEGRATION|check-local-contracts-integration)\b/,
     "release and default CI workflows must not use local Contracts overrides"
   );
+}
+
+function checkNoLocalRuntimeOverride(relativePath, content) {
+  const match = localRuntimeOverrideMatch(content);
+  if (match) {
+    fail(
+      relativePath,
+      lineForIndex(content, match.index),
+      "release workflows must not set local Runtime overrides; Runtime release artifact manifest evidence is required"
+    );
+  }
+}
+
+function localRuntimeOverrideMatch(content) {
+  return localRuntimeOverrideTokenPattern.exec(content) ?? localRuntimeOverrideFlagPattern.exec(content);
+}
+
+function checkLocalRuntimeOverridePatternCoverage() {
+  const positiveSamples = [
+    "pnpm run check-local-runtime-integration",
+    "node scripts/check-local-runtime-integration.mjs",
+    "env:\n  SKENION_RUNTIME_BIN: /tmp/skenion-runtime",
+    "--runtime-bin",
+    "pnpm run local-runtime -- --runtime-bin /tmp/skenion-runtime",
+    "pnpm run local-runtime -- --runtime-bin=/tmp/skenion-runtime",
+    "--sibling-debug-runtime",
+    "args+=(--sibling-debug-runtime)",
+    "--use-sibling-debug-runtime",
+    "--local-shared-url",
+    "--local-shared-url http://127.0.0.1:3761",
+    "--runtime-url",
+    "--runtime-url=http://127.0.0.1:3761"
+  ];
+  const negativeSamples = [
+    "SKENION_RUNTIME_BINARY_CACHE=true",
+    "prefix--runtime-bin",
+    "---runtime-bin",
+    "--runtime-binary /tmp/skenion-runtime",
+    "--runtime-urlish",
+    "check-local-runtime-integrations"
+  ];
+
+  for (const sample of positiveSamples) {
+    if (!localRuntimeOverrideMatch(sample)) {
+      fail(
+        "scripts/validate-release-workflow-policy.mjs",
+        1,
+        `local Runtime override guard must match sample ${JSON.stringify(sample)}`
+      );
+    }
+  }
+  for (const sample of negativeSamples) {
+    if (localRuntimeOverrideMatch(sample)) {
+      fail(
+        "scripts/validate-release-workflow-policy.mjs",
+        1,
+        `local Runtime override guard must not match sample ${JSON.stringify(sample)}`
+      );
+    }
+  }
 }
 
 function isDefaultOrReleaseWorkflow(relativePath) {
@@ -1171,6 +1238,18 @@ function checkRuntimeSidecarPolicy() {
     stageRuntime,
     /if \(releaseModeNames\.has\(mode\)\)[\s\S]{0,400}runtimeArtifactFromReleaseBody/,
     "Runtime sidecar release modes must not call release-body fallback"
+  );
+  expectIncludes(
+    stageRuntimePath,
+    stageRuntime,
+    "assertNoLocalRuntimeOverrides(mode);",
+    "Runtime sidecar release modes must reject local Runtime overrides"
+  );
+  expectIncludes(
+    stageRuntimePath,
+    stageRuntime,
+    "Studio release packaging must stage Runtime from release artifact manifest evidence.",
+    "Runtime sidecar release modes must explain the released-artifact boundary"
   );
   for (const publicRuntimeName of [
     "skenion-runtime-v<version>-macos-apple-silicon",

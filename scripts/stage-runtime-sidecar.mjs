@@ -14,6 +14,17 @@ const runtimeComponent = "skenion-runtime";
 const runtimeDownloadsStartMarker = "<!-- skenion-runtime-downloads:start -->";
 const runtimeDownloadsEndMarker = "<!-- skenion-runtime-downloads:end -->";
 const releaseModeNames = new Set(["publish", "verify"]);
+const localRuntimeOverrideEnvNames = [
+  "SKENION_RUNTIME_BIN",
+  "SKENION_RUNTIME_USE_SIBLING_DEBUG",
+  "SKENION_LOCAL_RUNTIME_INTEGRATION",
+  "SKENION_LOCAL_SHARED_RUNTIME_URL",
+  "SKENION_RUNTIME_LOCAL_SHARED_URL"
+];
+const booleanLocalRuntimeOverrideEnvNames = new Set([
+  "SKENION_RUNTIME_USE_SIBLING_DEBUG",
+  "SKENION_LOCAL_RUNTIME_INTEGRATION"
+]);
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const targetConfigs = new Map([
   [
@@ -92,6 +103,9 @@ if (!targetConfig) {
 }
 if (!releaseModeNames.has(mode) && mode !== "local") {
   fail("--mode must be publish, verify, or local.");
+}
+if (releaseModeNames.has(mode)) {
+  assertNoLocalRuntimeOverrides(mode);
 }
 if (options.runtimeArtifactSource && options.runtimeDownloadSource) {
   fail("--runtime-artifact-source cannot be combined with --runtime-download-source.");
@@ -471,6 +485,26 @@ function requireEnv(name) {
     fail(`${name} is required when --runtime-artifact-source s3 is used.`);
   }
   return value.trim();
+}
+
+function assertNoLocalRuntimeOverrides(currentMode) {
+  const configured = localRuntimeOverrideEnvNames.filter((name) => localRuntimeOverrideEnabled(name));
+  if (configured.length > 0) {
+    fail(
+      `Local Runtime overrides (${configured.join(", ")}) are not allowed with --mode ${currentMode}. Studio release packaging must stage Runtime from release artifact manifest evidence.`
+    );
+  }
+}
+
+function localRuntimeOverrideEnabled(name) {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return false;
+  }
+  if (booleanLocalRuntimeOverrideEnvNames.has(name)) {
+    return parseBooleanEnv(value, name);
+  }
+  return true;
 }
 
 function normalizeS3Prefix(value) {
