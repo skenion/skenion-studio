@@ -165,9 +165,9 @@ stable. Runtime manifest evidence is not a Windows studio installer and is not
 uploaded as a Studio-owned Windows release asset.
 
 Desktop release packaging consumes `@skenion/contracts` from npm, not from a
-sibling checkout. Studio currently targets Contracts line `0.45`, expressed as
-`>=0.45.0 <0.46.0`; app builds may pin a concrete released patch such as
-`0.45.0`, and release metadata records the compatibility range. The selected
+sibling checkout. Studio currently targets Contracts line `0.49`, expressed as
+`>=0.49.0 <0.50.0`; app builds may pin a concrete released patch such as
+`0.49.0`, and release metadata records the compatibility range. The selected
 package must already exist on npm, and the installed package line is verified
 before Tauri packaging starts.
 
